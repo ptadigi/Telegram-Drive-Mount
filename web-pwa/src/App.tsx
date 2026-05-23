@@ -2,6 +2,7 @@ import { Cloud, Database, HardDrive, Radio, Share2, Smartphone, UploadCloud } fr
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentConfig, AgentInfo, AuthStatus, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo } from "./api/agent";
+import { FileManager } from "./components/FileManager";
 import { TelegramLoginPanel } from "./components/TelegramLoginPanel";
 
 type AgentState = "checking" | "online" | "offline";
@@ -95,13 +96,7 @@ export function App() {
         </dl>
       </section>
 
-      <section className="panel">
-        <div>
-          <h2>{t("sections.recentFiles")}</h2>
-          <p>{t("copy.emptyRecent")}</p>
-        </div>
-        <button className="button button--ghost">{t("actions.openDrive")}</button>
-      </section>
+      <FileManager />
     </main>
   );
 }

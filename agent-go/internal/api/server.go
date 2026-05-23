@@ -8,6 +8,7 @@ import (
 
 	agentauth "telegram-drive-agent/internal/auth"
 	"telegram-drive-agent/internal/config"
+	"telegram-drive-agent/internal/drive"
 )
 
 type Server struct {
@@ -15,14 +16,16 @@ type Server struct {
 	version   string
 	config    config.Config
 	auth      *agentauth.Service
+	drive     *drive.Service
 }
 
-func NewServer(version string, cfg config.Config, authService *agentauth.Service) *Server {
+func NewServer(version string, cfg config.Config, authService *agentauth.Service, driveService *drive.Service) *Server {
 	return &Server{
 		startedAt: time.Now(),
 		version:   version,
 		config:    cfg,
 		auth:      authService,
+		drive:     driveService,
 	}
 }
 
@@ -32,6 +35,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/info", s.handleInfo)
 	mux.HandleFunc("GET /v1/config", s.handleConfig)
 	mux.HandleFunc("GET /v1/database/status", s.handleDatabaseStatus)
+	mux.HandleFunc("GET /v1/files", s.handleListFiles)
+	mux.HandleFunc("POST /v1/files/demo", s.handleSeedDemoFile)
 	mux.HandleFunc("GET /v1/auth/status", s.handleAuthStatus)
 	mux.HandleFunc("PUT /v1/auth/config", s.handleAuthConfig)
 	mux.HandleFunc("POST /v1/auth/reset", s.handleAuthReset)
@@ -86,6 +91,28 @@ func (s *Server) handleDatabaseStatus(w http.ResponseWriter, r *http.Request) {
 		"path":   s.config.DatabasePath,
 		"exists": fileExists(s.config.DatabasePath),
 	})
+}
+
+func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
+	files, err := s.drive.ListFiles(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"files": files})
+}
+
+func (s *Server) handleSeedDemoFile(w http.ResponseWriter, r *http.Request) {
+	if err := s.drive.SeedDemoFile(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	files, err := s.drive.ListFiles(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"files": files})
 }
 
 func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {

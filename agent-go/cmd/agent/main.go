@@ -14,6 +14,7 @@ import (
 	agentauth "telegram-drive-agent/internal/auth"
 	"telegram-drive-agent/internal/config"
 	"telegram-drive-agent/internal/db"
+	"telegram-drive-agent/internal/drive"
 )
 
 const version = "0.1.0-dev"
@@ -31,7 +32,8 @@ func main() {
 	defer metadataDB.Close()
 
 	authService := agentauth.NewService(cfg)
-	apiServer := api.NewServer(version, cfg, authService)
+	driveService := drive.NewService(metadataDB)
+	apiServer := api.NewServer(version, cfg, authService, driveService)
 
 	srv := &http.Server{
 		Addr:    cfg.Addr(),

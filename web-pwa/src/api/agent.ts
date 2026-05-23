@@ -31,6 +31,17 @@ export type DatabaseStatus = {
   exists: boolean;
 };
 
+export type DriveFile = {
+  id: string;
+  folder_id?: string;
+  name: string;
+  size: number;
+  mime_type?: string;
+  sync_state: string;
+  created_at: number;
+  updated_at: number;
+};
+
 export type AuthStatus = {
   configured: boolean;
   session_exists: boolean;
@@ -115,4 +126,12 @@ export function submitTelegramCode(code: string) {
 
 export function submitTelegramPassword(password: string) {
   return sendJSON<{ success: boolean; next_step?: string }>("/v1/auth/password", { password });
+}
+
+export function listFiles(signal?: AbortSignal) {
+  return getJSON<{ files: DriveFile[] }>("/v1/files", signal);
+}
+
+export function seedDemoFile() {
+  return sendJSON<{ files: DriveFile[] }>("/v1/files/demo", {});
 }
