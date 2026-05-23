@@ -34,6 +34,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/database/status", s.handleDatabaseStatus)
 	mux.HandleFunc("GET /v1/auth/status", s.handleAuthStatus)
 	mux.HandleFunc("PUT /v1/auth/config", s.handleAuthConfig)
+	mux.HandleFunc("POST /v1/auth/reset", s.handleAuthReset)
 	mux.HandleFunc("POST /v1/auth/start", s.handleAuthStart)
 	mux.HandleFunc("POST /v1/auth/code", s.handleAuthCode)
 	mux.HandleFunc("POST /v1/auth/password", s.handleAuthPassword)
@@ -88,7 +89,15 @@ func (s *Server) handleDatabaseStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, s.auth.Status())
+	writeJSON(w, http.StatusOK, s.auth.Status(r.Context()))
+}
+
+func (s *Server) handleAuthReset(w http.ResponseWriter, r *http.Request) {
+	if err := s.auth.ResetLogin(); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.auth.Status(r.Context()))
 }
 
 func (s *Server) handleAuthConfig(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +113,7 @@ func (s *Server) handleAuthConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.auth.UpdateTelegramConfig(input.APIID, input.APIHash)
-	writeJSON(w, http.StatusOK, s.auth.Status())
+	writeJSON(w, http.StatusOK, s.auth.Status(r.Context()))
 }
 
 func (s *Server) handleAuthStart(w http.ResponseWriter, r *http.Request) {

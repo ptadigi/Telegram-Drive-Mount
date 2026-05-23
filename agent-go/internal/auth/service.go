@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -25,13 +26,16 @@ type Service struct {
 	mu       sync.Mutex
 	phone    string
 	codeHash string
+	codeType string
 }
 
 type Status struct {
 	Configured    bool   `json:"configured"`
 	SessionExists bool   `json:"session_exists"`
 	LoginStarted  bool   `json:"login_started"`
+	Authorized    bool   `json:"authorized"`
 	Phone         string `json:"phone,omitempty"`
+	CodeType      string `json:"code_type,omitempty"`
 }
 
 type StartLoginInput struct {
@@ -69,18 +73,32 @@ func (s *Service) UpdateTelegramConfig(apiID int, apiHash string) {
 	s.cfg.Telegram.APIHash = apiHash
 	s.phone = ""
 	s.codeHash = ""
+	s.codeType = ""
 }
 
-func (s *Service) Status() Status {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	return Status{
-		Configured:    s.cfg.Telegram.APIID != 0 && s.cfg.Telegram.APIHash != "",
-		SessionExists: fileExists(s.cfg.Telegram.SessionPath),
-		LoginStarted:  s.codeHash != "",
-		Phone:         s.phone,
+func (s *Service) Status(ctx context.Context) Status {
+	cfg := s.currentConfig()
+	phone, codeHash, codeType := s.loginState()
+	status := Status{
+		Configured:    cfg.Telegram.APIID != 0 && cfg.Telegram.APIHash != "",
+		SessionExists: fileExists(cfg.Telegram.SessionPath),
+		LoginStarted:  codeHash != "",
+		Phone:         phone,
+		CodeType:      codeType,
 	}
+	if status.Configured && status.SessionExists {
+		status.Authorized = s.checkAuthorized(ctx, cfg)
+	}
+	return status
+}
+
+func (s *Service) ResetLogin() error {
+	s.clearLoginState()
+	cfg := s.currentConfig()
+	if cfg.Telegram.SessionPath != "" {
+		_ = os.Remove(cfg.Telegram.SessionPath)
+	}
+	return nil
 }
 
 func (s *Service) StartLogin(ctx context.Context, input StartLoginInput) (StartLoginResult, error) {
@@ -92,6 +110,7 @@ func (s *Service) StartLogin(ctx context.Context, input StartLoginInput) (StartL
 		return StartLoginResult{}, errors.New("vui lòng nhập số điện thoại")
 	}
 
+	s.clearLoginState()
 	client := newClient(cfg)
 	var sent tg.AuthSentCodeClass
 	if err := client.Run(ctx, func(runCtx context.Context) error {
@@ -111,18 +130,20 @@ func (s *Service) StartLogin(ctx context.Context, input StartLoginInput) (StartL
 		return StartLoginResult{}, fmt.Errorf("Telegram trả về loại mã không hỗ trợ: %T", sent)
 	}
 
+	codeType := sentCode.Type.TypeName()
 	s.mu.Lock()
 	s.phone = input.Phone
 	s.codeHash = sentCode.PhoneCodeHash
+	s.codeType = codeType
 	s.mu.Unlock()
 
 	timeout, _ := sentCode.GetTimeout()
-	return StartLoginResult{NextStep: "code", Phone: input.Phone, CodeType: sentCode.Type.TypeName(), Timeout: timeout}, nil
+	return StartLoginResult{NextStep: "code", Phone: input.Phone, CodeType: codeType, Timeout: timeout}, nil
 }
 
 func (s *Service) SubmitCode(ctx context.Context, input SubmitCodeInput) (SubmitResult, error) {
 	cfg := s.currentConfig()
-	phone, codeHash := s.loginState()
+	phone, codeHash, _ := s.loginState()
 
 	if phone == "" || codeHash == "" {
 		return SubmitResult{}, ErrLoginNotStarted
@@ -149,7 +170,7 @@ func (s *Service) SubmitCode(ctx context.Context, input SubmitCodeInput) (Submit
 func (s *Service) SubmitPassword(ctx context.Context, input SubmitPasswordInput) (SubmitResult, error) {
 	cfg := s.currentConfig()
 	if input.Password == "" {
-		return SubmitResult{}, errors.New("vui lòng nhập mật khẩu cloud")
+		return SubmitResult{}, errors.New("vui lòng nhập mật khẩu xác minh hai bước")
 	}
 
 	client := newClient(cfg)
@@ -164,16 +185,30 @@ func (s *Service) SubmitPassword(ctx context.Context, input SubmitPasswordInput)
 	return SubmitResult{Success: true}, nil
 }
 
+func (s *Service) checkAuthorized(ctx context.Context, cfg config.Config) bool {
+	client := newClient(cfg)
+	ok := false
+	_ = client.Run(ctx, func(runCtx context.Context) error {
+		status, err := client.Auth().Status(runCtx)
+		if err != nil {
+			return nil
+		}
+		ok = status.Authorized
+		return nil
+	})
+	return ok
+}
+
 func (s *Service) currentConfig() config.Config {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.cfg
 }
 
-func (s *Service) loginState() (string, string) {
+func (s *Service) loginState() (string, string, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.phone, s.codeHash
+	return s.phone, s.codeHash, s.codeType
 }
 
 func (s *Service) clearLoginState() {
@@ -181,6 +216,7 @@ func (s *Service) clearLoginState() {
 	defer s.mu.Unlock()
 	s.phone = ""
 	s.codeHash = ""
+	s.codeType = ""
 }
 
 func newClient(cfg config.Config) *telegram.Client {
@@ -195,9 +231,7 @@ func isPasswordRequired(err error) bool {
 	}
 	message := err.Error()
 	return strings.Contains(message, "SESSION_PASSWORD_NEEDED") ||
-		strings.Contains(message, "PASSWORD_NEEDED") ||
-		strings.Contains(message, "2FA required") ||
-		strings.Contains(message, "PASSWORD_HASH_INVALID")
+		strings.Contains(message, "PASSWORD_NEEDED")
 }
 
 func isAuthRestart(err error) bool {

@@ -35,7 +35,9 @@ export type AuthStatus = {
   configured: boolean;
   session_exists: boolean;
   login_started: boolean;
+  authorized: boolean;
   phone?: string;
+  code_type?: string;
 };
 
 const currentHost = window.location.hostname || "127.0.0.1";
@@ -93,6 +95,10 @@ async function putJSON<T>(path: string, body: unknown): Promise<T> {
 
 export function getAuthStatus(signal?: AbortSignal) {
   return getJSON<AuthStatus>("/v1/auth/status", signal);
+}
+
+export function resetTelegramLogin() {
+  return sendJSON<AuthStatus>("/v1/auth/reset", {});
 }
 
 export function saveTelegramConfig(apiId: number, apiHash: string) {
