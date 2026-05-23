@@ -64,6 +64,48 @@ export function getDatabaseStatus(signal?: AbortSignal) {
   return getJSON<DatabaseStatus>("/v1/database/status", signal);
 }
 
+async function sendJSON<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${AGENT_BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: `Agent API lỗi ${response.status}` }));
+    throw new Error(data.error || `Agent API lỗi ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
+
+async function putJSON<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${AGENT_BASE_URL}${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: `Agent API lỗi ${response.status}` }));
+    throw new Error(data.error || `Agent API lỗi ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
+
 export function getAuthStatus(signal?: AbortSignal) {
   return getJSON<AuthStatus>("/v1/auth/status", signal);
+}
+
+export function saveTelegramConfig(apiId: number, apiHash: string) {
+  return putJSON<AuthStatus>("/v1/auth/config", { api_id: apiId, api_hash: apiHash });
+}
+
+export function startTelegramLogin(phone: string) {
+  return sendJSON<{ next_step: string; phone: string }>("/v1/auth/start", { phone });
+}
+
+export function submitTelegramCode(code: string) {
+  return sendJSON<{ success: boolean; next_step?: string }>("/v1/auth/code", { code });
+}
+
+export function submitTelegramPassword(password: string) {
+  return sendJSON<{ success: boolean; next_step?: string }>("/v1/auth/password", { password });
 }

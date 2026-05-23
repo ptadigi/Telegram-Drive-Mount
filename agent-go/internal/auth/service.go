@@ -61,6 +61,16 @@ func NewService(cfg config.Config) *Service {
 	return &Service{cfg: cfg}
 }
 
+func (s *Service) UpdateTelegramConfig(apiID int, apiHash string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cfg.Telegram.APIID = apiID
+	s.cfg.Telegram.APIHash = apiHash
+	s.client = nil
+	s.phone = ""
+	s.codeHash = ""
+}
+
 func (s *Service) Status() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()

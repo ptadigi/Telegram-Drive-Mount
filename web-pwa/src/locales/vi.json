@@ -32,6 +32,25 @@
     "roadmap": "Bước tiếp theo là kết nối Telegram bằng Go, thêm SQLite metadata, stream Range và sync upload-only.",
     "agentStatus": "PWA đang đọc trực tiếp trạng thái từ Go Agent local. Đây là nền để cấu hình Telegram, đồng bộ desktop và ổ đĩa ảo."
   },
+  "login": {
+    "title": "Kết nối Telegram",
+    "description": "Nhập API credentials, số điện thoại và mã xác minh để Go Agent tạo session Telegram cục bộ.",
+    "apiId": "API ID",
+    "apiHash": "API Hash",
+    "saveCredentials": "Lưu credentials",
+    "phone": "Số điện thoại Telegram",
+    "sendCode": "Gửi mã xác minh",
+    "code": "Mã Telegram",
+    "verifyCode": "Xác minh mã",
+    "password": "Mật khẩu cloud",
+    "passwordPlaceholder": "Nhập mật khẩu 2FA",
+    "unlock": "Mở khóa",
+    "loading": "Đang xử lý...",
+    "done": "Đăng nhập Telegram thành công. Session đã được lưu cục bộ.",
+    "errors": {
+      "credentials": "Vui lòng nhập API ID và API Hash hợp lệ"
+    }
+  },
   "agent": {
     "version": "Phiên bản",
     "uptime": "Thời gian chạy",

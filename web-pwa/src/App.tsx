@@ -2,6 +2,7 @@ import { Cloud, Database, HardDrive, Radio, Share2, Smartphone, UploadCloud } fr
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentConfig, AgentInfo, AuthStatus, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo } from "./api/agent";
+import { TelegramLoginPanel } from "./components/TelegramLoginPanel";
 
 type AgentState = "checking" | "online" | "offline";
 
@@ -72,6 +73,8 @@ export function App() {
         <FeatureCard icon={<HardDrive />} title={t("sections.virtualDrive")} text={t("copy.virtualDrive")} />
         <FeatureCard icon={<Share2 />} title={t("status.publicSharing")} text={t("copy.roadmap")} />
       </section>
+
+      <TelegramLoginPanel auth={auth} onAuthChange={setAuth} />
 
       <section className="panel panel--stack">
         <div className="panel__header">

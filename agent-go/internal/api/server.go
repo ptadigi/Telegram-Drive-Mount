@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -32,6 +33,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/config", s.handleConfig)
 	mux.HandleFunc("GET /v1/database/status", s.handleDatabaseStatus)
 	mux.HandleFunc("GET /v1/auth/status", s.handleAuthStatus)
+	mux.HandleFunc("PUT /v1/auth/config", s.handleAuthConfig)
 	mux.HandleFunc("POST /v1/auth/start", s.handleAuthStart)
 	mux.HandleFunc("POST /v1/auth/code", s.handleAuthCode)
 	mux.HandleFunc("POST /v1/auth/password", s.handleAuthPassword)
@@ -86,6 +88,22 @@ func (s *Server) handleDatabaseStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.auth.Status())
+}
+
+func (s *Server) handleAuthConfig(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		APIID   int    `json:"api_id"`
+		APIHash string `json:"api_hash"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if input.APIID == 0 || input.APIHash == "" {
+		writeError(w, http.StatusBadRequest, errBadRequest("vui lòng nhập API ID và API Hash"))
+		return
+	}
+	s.auth.UpdateTelegramConfig(input.APIID, input.APIHash)
 	writeJSON(w, http.StatusOK, s.auth.Status())
 }
 
@@ -167,4 +185,8 @@ func writeError(w http.ResponseWriter, status int, err error) {
 	writeJSON(w, status, map[string]any{
 		"error": err.Error(),
 	})
+}
+
+func errBadRequest(message string) error {
+	return errors.New(message)
 }
