@@ -1,7 +1,7 @@
 import { Cloud, Database, HardDrive, Radio, Share2, Smartphone, UploadCloud } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AgentConfig, AgentInfo, DatabaseStatus, getConfig, getDatabaseStatus, getHealth, getInfo } from "./api/agent";
+import { AgentConfig, AgentInfo, AuthStatus, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo } from "./api/agent";
 
 type AgentState = "checking" | "online" | "offline";
 
@@ -11,6 +11,7 @@ export function App() {
   const [info, setInfo] = useState<AgentInfo | null>(null);
   const [config, setConfig] = useState<AgentConfig | null>(null);
   const [database, setDatabase] = useState<DatabaseStatus | null>(null);
+  const [auth, setAuth] = useState<AuthStatus | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -20,12 +21,14 @@ export function App() {
       getInfo(controller.signal),
       getConfig(controller.signal),
       getDatabaseStatus(controller.signal),
+      getAuthStatus(controller.signal),
     ])
-      .then(([, agentInfo, agentConfig, databaseStatus]) => {
+      .then(([, agentInfo, agentConfig, databaseStatus, authStatus]) => {
         setAgentState("online");
         setInfo(agentInfo);
         setConfig(agentConfig);
         setDatabase(databaseStatus);
+        setAuth(authStatus);
       })
       .catch(() => setAgentState("offline"));
 
@@ -83,8 +86,9 @@ export function App() {
           <StatusItem label={t("agent.uptime")} value={info ? `${info.uptime_sec}s` : "-"} />
           <StatusItem label={t("agent.dataDir")} value={config?.data_dir || "-"} />
           <StatusItem label={t("agent.database")} value={database?.exists ? t("agent.ready") : t("agent.notReady")} />
-          <StatusItem label={t("agent.telegramSession")} value={config?.telegram.session_exists ? t("agent.ready") : t("agent.notReady")} />
-          <StatusItem label={t("agent.telegramApi")} value={config?.telegram.api_id_set && config.telegram.api_hash_set ? t("agent.ready") : t("agent.notReady")} />
+          <StatusItem label={t("agent.telegramSession")} value={auth?.session_exists ? t("agent.ready") : t("agent.notReady")} />
+          <StatusItem label={t("agent.telegramApi")} value={auth?.configured ? t("agent.ready") : t("agent.notReady")} />
+          <StatusItem label={t("agent.loginState")} value={auth?.login_started ? t("agent.loginStarted") : t("agent.notStarted")} />
         </dl>
       </section>
 

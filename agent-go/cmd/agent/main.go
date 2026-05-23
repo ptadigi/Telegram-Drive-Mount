@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"telegram-drive-agent/internal/api"
+	agentauth "telegram-drive-agent/internal/auth"
 	"telegram-drive-agent/internal/config"
 	"telegram-drive-agent/internal/db"
 )
@@ -29,7 +30,8 @@ func main() {
 	}
 	defer metadataDB.Close()
 
-	apiServer := api.NewServer(version, cfg)
+	authService := agentauth.NewService(cfg)
+	apiServer := api.NewServer(version, cfg, authService)
 
 	srv := &http.Server{
 		Addr:    cfg.Addr(),

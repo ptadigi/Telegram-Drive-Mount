@@ -40,6 +40,9 @@
     "telegramSession": "Session Telegram",
     "telegramApi": "API Telegram",
     "ready": "Sẵn sàng",
-    "notReady": "Chưa sẵn sàng"
+    "notReady": "Chưa sẵn sàng",
+    "loginState": "Phiên đăng nhập",
+    "loginStarted": "Đang chờ mã",
+    "notStarted": "Chưa bắt đầu"
   }
 }

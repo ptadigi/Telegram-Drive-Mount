@@ -31,6 +31,13 @@ export type DatabaseStatus = {
   exists: boolean;
 };
 
+export type AuthStatus = {
+  configured: boolean;
+  session_exists: boolean;
+  login_started: boolean;
+  phone?: string;
+};
+
 const AGENT_BASE_URL = "http://127.0.0.1:8750";
 
 async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -55,4 +62,8 @@ export function getConfig(signal?: AbortSignal) {
 
 export function getDatabaseStatus(signal?: AbortSignal) {
   return getJSON<DatabaseStatus>("/v1/database/status", signal);
+}
+
+export function getAuthStatus(signal?: AbortSignal) {
+  return getJSON<AuthStatus>("/v1/auth/status", signal);
 }

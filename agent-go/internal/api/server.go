@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	agentauth "telegram-drive-agent/internal/auth"
 	"telegram-drive-agent/internal/config"
 )
 
@@ -12,13 +13,15 @@ type Server struct {
 	startedAt time.Time
 	version   string
 	config    config.Config
+	auth      *agentauth.Service
 }
 
-func NewServer(version string, cfg config.Config) *Server {
+func NewServer(version string, cfg config.Config, authService *agentauth.Service) *Server {
 	return &Server{
 		startedAt: time.Now(),
 		version:   version,
 		config:    cfg,
+		auth:      authService,
 	}
 }
 
@@ -28,6 +31,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/info", s.handleInfo)
 	mux.HandleFunc("GET /v1/config", s.handleConfig)
 	mux.HandleFunc("GET /v1/database/status", s.handleDatabaseStatus)
+	mux.HandleFunc("GET /v1/auth/status", s.handleAuthStatus)
+	mux.HandleFunc("POST /v1/auth/start", s.handleAuthStart)
+	mux.HandleFunc("POST /v1/auth/code", s.handleAuthCode)
+	mux.HandleFunc("POST /v1/auth/password", s.handleAuthPassword)
 	return withJSON(withCORS(mux))
 }
 
@@ -48,6 +55,7 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 		"uptime_sec": int(time.Since(s.startedAt).Seconds()),
 		"features": map[string]bool{
 			"telegram_storage": false,
+			"telegram_auth":    true,
 			"local_sync":       false,
 			"media_streaming":  false,
 			"webdav":           false,
@@ -77,6 +85,49 @@ func (s *Server) handleDatabaseStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.auth.Status())
+}
+
+func (s *Server) handleAuthStart(w http.ResponseWriter, r *http.Request) {
+	var input agentauth.StartLoginInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	result, err := s.auth.StartLogin(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleAuthCode(w http.ResponseWriter, r *http.Request) {
+	var input agentauth.SubmitCodeInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	result, err := s.auth.SubmitCode(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleAuthPassword(w http.ResponseWriter, r *http.Request) {
+	var input agentauth.SubmitPasswordInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	result, err := s.auth.SubmitPassword(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func withJSON(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -97,9 +148,23 @@ func withCORS(next http.Handler) http.Handler {
 	})
 }
 
+func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return false
+	}
+	return true
+}
+
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(value); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func writeError(w http.ResponseWriter, status int, err error) {
+	writeJSON(w, status, map[string]any{
+		"error": err.Error(),
+	})
 }
