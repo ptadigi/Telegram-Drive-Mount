@@ -1,4 +1,4 @@
-import { Cloud, Database, HardDrive, Radio, Share2, Smartphone, UploadCloud } from "lucide-react";
+import { Clock3, Cloud, Database, FolderOpen, HardDrive, Link2, Search, Settings, Share2, Trash2, UploadCloud } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentConfig, AgentInfo, AuthStatus, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo } from "./api/agent";
@@ -17,14 +17,7 @@ export function App() {
 
   useEffect(() => {
     const controller = new AbortController();
-
-    Promise.all([
-      getHealth(controller.signal),
-      getInfo(controller.signal),
-      getConfig(controller.signal),
-      getDatabaseStatus(controller.signal),
-      getAuthStatus(controller.signal),
-    ])
+    Promise.all([getHealth(controller.signal), getInfo(controller.signal), getConfig(controller.signal), getDatabaseStatus(controller.signal), getAuthStatus(controller.signal)])
       .then(([, agentInfo, agentConfig, databaseStatus, authStatus]) => {
         setAgentState("online");
         setInfo(agentInfo);
@@ -33,89 +26,66 @@ export function App() {
         setAuth(authStatus);
       })
       .catch(() => setAgentState("offline"));
-
     return () => controller.abort();
   }, []);
 
-  const statusText =
-    agentState === "checking"
-      ? t("status.agentChecking")
-      : agentState === "online"
-        ? t("status.agentOnline")
-        : t("status.agentOffline");
-
   return (
-    <main className="shell">
-      <section className="hero">
-        <div className="hero__badge">
-          <Cloud size={18} />
-          <span>{t("status.telegramStorage")}</span>
+    <main className="drive-shell">
+      <aside className="drive-sidebar">
+        <div className="brand-mark"><Cloud size={22} /><strong>{t("app.name")}</strong></div>
+        <a className="new-button" href="#file-manager"><UploadCloud size={20} /> {t("actions.upload")}</a>
+        <nav className="drive-nav">
+          <a className="drive-nav__item drive-nav__item--active"><FolderOpen size={18} /> {t("drive.myDrive")}</a>
+          <a className="drive-nav__item"><Clock3 size={18} /> {t("drive.recent")}</a>
+          <a className="drive-nav__item"><Share2 size={18} /> {t("drive.shared")}</a>
+          <a className="drive-nav__item"><Link2 size={18} /> {t("drive.links")}</a>
+          <a className="drive-nav__item"><Trash2 size={18} /> {t("drive.trash")}</a>
+        </nav>
+        <div className="storage-card">
+          <HardDrive size={18} />
+          <div><strong>{t("drive.virtualDisk")}</strong><span>{t("drive.telegramBackend")}</span></div>
         </div>
-        <h1>{t("app.name")}</h1>
-        <p>{t("app.tagline")}</p>
-        <div className={`agent agent--${agentState}`}>
-          <span />
-          {statusText}
-        </div>
-        <div className="actions">
-          <a className="button button--primary" href="#file-manager">
-            <UploadCloud size={18} />
-            {t("actions.upload")}
-          </a>
-          <button className="button button--secondary">
-            <Radio size={18} />
-            {t("actions.connectAgent")}
-          </button>
-        </div>
-      </section>
+      </aside>
 
-      <section className="grid">
-        <FeatureCard icon={<Smartphone />} title={t("sections.mobileUpload")} text={t("copy.mobileUpload")} />
-        <FeatureCard icon={<HardDrive />} title={t("sections.virtualDrive")} text={t("copy.virtualDrive")} />
-        <FeatureCard icon={<Share2 />} title={t("status.publicSharing")} text={t("copy.roadmap")} />
-      </section>
-
-      <TelegramLoginPanel auth={auth} />
-
-      <section className="panel panel--stack">
-        <div className="panel__header">
-          <div>
-            <h2>{t("sections.agentStatus")}</h2>
-            <p>{t("copy.agentStatus")}</p>
+      <section className="drive-main">
+        <header className="drive-topbar">
+          <div className="search-box"><Search size={18} /><input placeholder={t("drive.search")} /></div>
+          <div className="status-pills">
+            <StatusPill state={agentState} text={agentState === "online" ? t("status.agentOnline") : agentState === "offline" ? t("status.agentOffline") : t("status.agentChecking")} />
+            <StatusPill state={auth?.authorized ? "online" : "offline"} text={auth?.authorized ? t("login.connectedTitle") : t("login.title")} />
+            <button className="icon-button"><Settings size={18} /></button>
           </div>
-          <Database className="panel__icon" />
-        </div>
-        <dl className="status-grid">
-          <StatusItem label={t("agent.version")} value={info?.version || "-"} />
-          <StatusItem label={t("agent.uptime")} value={info ? `${info.uptime_sec}s` : "-"} />
-          <StatusItem label={t("agent.dataDir")} value={config?.data_dir || "-"} />
-          <StatusItem label={t("agent.database")} value={database?.exists ? t("agent.ready") : t("agent.notReady")} />
-          <StatusItem label={t("agent.telegramSession")} value={auth?.session_exists ? t("agent.ready") : t("agent.notReady")} />
-          <StatusItem label={t("agent.telegramApi")} value={auth?.configured ? t("agent.ready") : t("agent.notReady")} />
-          <StatusItem label={t("agent.loginState")} value={auth?.login_started ? t("agent.loginStarted") : t("agent.notStarted")} />
-        </dl>
-      </section>
+        </header>
 
-      <FileManager />
+        <section className="drive-hero-card">
+          <div>
+            <span>{t("drive.heroEyebrow")}</span>
+            <h1>{t("drive.heroTitle")}</h1>
+            <p>{t("drive.heroText")}</p>
+          </div>
+          <div className="drive-stats">
+            <MiniStat label={t("agent.database")} value={database?.exists ? t("agent.ready") : t("agent.notReady")} />
+            <MiniStat label={t("agent.telegramSession")} value={auth?.session_exists ? t("agent.ready") : t("agent.notReady")} />
+            <MiniStat label={t("agent.uptime")} value={info ? `${info.uptime_sec}s` : "-"} />
+          </div>
+        </section>
+
+        {!auth?.authorized && <TelegramLoginPanel auth={auth} />}
+        <FileManager />
+
+        <section className="agent-drawer">
+          <Database size={18} />
+          <span>{t("agent.dataDir")}: {config?.data_dir || "-"}</span>
+        </section>
+      </section>
     </main>
   );
 }
 
-function FeatureCard({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
-  return (
-    <article className="card">
-      <div className="card__icon">{icon}</div>
-      <h2>{title}</h2>
-      <p>{text}</p>
-    </article>
-  );
+function StatusPill({ state, text }: { state: AgentState | "online" | "offline"; text: string }) {
+  return <div className={`status-pill status-pill--${state}`}><span />{text}</div>;
 }
 
-function StatusItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt>{label}</dt>
-      <dd>{value}</dd>
-    </div>
-  );
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return <div className="mini-stat"><span>{label}</span><strong>{value}</strong></div>;
 }

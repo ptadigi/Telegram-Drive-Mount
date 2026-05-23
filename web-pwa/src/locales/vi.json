@@ -52,9 +52,22 @@
       "connection": "Chưa thể kết nối Telegram. Vui lòng kiểm tra Go Agent hoặc thử lại sau."
     }
   },
+  "drive": {
+    "myDrive": "Ổ đĩa của tôi",
+    "recent": "Gần đây",
+    "shared": "Đã chia sẻ",
+    "links": "Liên kết",
+    "trash": "Thùng rác",
+    "virtualDisk": "Ổ đĩa ảo",
+    "telegramBackend": "Telegram làm kho lưu trữ nền",
+    "search": "Tìm trong ổ đĩa",
+    "heroEyebrow": "Cloud drive cá nhân",
+    "heroTitle": "Tất cả file của bạn, đồng bộ qua Telegram",
+    "heroText": "Tải nhiều file, thư mục, thumbnail và tự đồng bộ nền qua Go Agent. Giao diện được thiết kế như một ổ đĩa cloud thật."
+  },
   "files": {
-    "title": "File manager",
-    "description": "Lớp quản lý file nền. File tải lên hiện được lưu cục bộ trong Go Agent và đánh dấu chờ đồng bộ Telegram.",
+    "title": "Ổ đĩa của tôi",
+    "description": "Quản lý file và thư mục như cloud drive. Tải lên xong Go Agent tự đồng bộ lên Telegram.",
     "upload": "Tải file lên",
     "uploadAnyway": "Chọn file để tải lên",
     "uploadDone": "Đã tải lên {{name}}. Bấm Đồng bộ Telegram để đẩy file lên cloud.",
