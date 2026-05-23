@@ -58,10 +58,10 @@ export function App() {
           {statusText}
         </div>
         <div className="actions">
-          <button className="button button--primary">
+          <a className="button button--primary" href="#file-manager">
             <UploadCloud size={18} />
             {t("actions.upload")}
-          </button>
+          </a>
           <button className="button button--secondary">
             <Radio size={18} />
             {t("actions.connectAgent")}

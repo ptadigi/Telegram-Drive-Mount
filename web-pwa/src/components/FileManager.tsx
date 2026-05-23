@@ -1,5 +1,5 @@
 import { CloudUpload, Download, FileUp, FileText, Plus, RefreshCw } from "lucide-react";
-import { ChangeEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DriveFile, downloadFileUrl, listFiles, seedDemoFile, syncFilesToTelegram, uploadFile } from "../api/agent";
 
@@ -9,7 +9,7 @@ export function FileManager() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const busy = loading && files.length > 0;
 
   async function refresh() {
     setLoading(true);
@@ -54,18 +54,21 @@ export function FileManager() {
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
+    event.target.value = "";
     if (!file) return;
 
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       await uploadFile(file);
-      await refresh();
+      const result = await listFiles();
+      setFiles(result.files);
+      setNotice(t("files.uploadDone", { name: file.name }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-      setLoading(false);
     } finally {
-      event.target.value = "";
+      setLoading(false);
     }
   }
 
@@ -74,21 +77,20 @@ export function FileManager() {
   }, []);
 
   return (
-    <section className="file-manager">
+    <section className="file-manager" id="file-manager">
       <div className="file-manager__header">
         <div>
           <h2>{t("files.title")}</h2>
           <p>{t("files.description")}</p>
         </div>
         <div className="file-manager__actions">
-          <label className={`button button--primary ${loading ? "button--disabled" : ""}`}>
-            <FileUp size={17} /> {t("files.upload")}
+          <label className={`button button--primary upload-label ${busy ? "button--disabled" : ""}`}>
+            <FileUp size={17} /> {loading && files.length === 0 ? t("files.uploadAnyway") : t("files.upload")}
             <input
-              ref={fileInputRef}
-              className="visually-hidden"
+              className="upload-label__input"
               type="file"
               onChange={handleUpload}
-              disabled={loading}
+              disabled={busy}
             />
           </label>
           <button className="button button--secondary" onClick={syncTelegram} disabled={loading}>
