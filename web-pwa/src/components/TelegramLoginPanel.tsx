@@ -11,7 +11,7 @@ type Props = {
 
 export function TelegramLoginPanel({ auth }: Props) {
   const { t } = useTranslation();
-  const [step, setStep] = useState<Step>(auth?.session_exists ? "done" : "phone");
+  const [step, setStep] = useState<Step>(auth?.authorized ? "done" : "phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
@@ -66,6 +66,21 @@ export function TelegramLoginPanel({ auth }: Props) {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (auth?.authorized) {
+    return (
+      <section className="login-card login-card--connected">
+        <div className="login-card__header">
+          <div className="card__icon"><ShieldCheck /></div>
+          <div>
+            <h2>{t("login.connectedTitle")}</h2>
+            <p>{t("login.connectedDescription")}</p>
+          </div>
+        </div>
+        <div className="success-note">{t("login.done")}</div>
+      </section>
+    );
   }
 
   return (

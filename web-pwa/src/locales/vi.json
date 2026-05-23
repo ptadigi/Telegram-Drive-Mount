@@ -26,15 +26,17 @@
     "agentStatus": "Trạng thái Go Agent"
   },
   "copy": {
-    "mobileUpload": "PWA này tập trung vào upload nhanh từ điện thoại, xem file, stream media và quản lý link chia sẻ.",
+    "mobileUpload": "Đang ở giai đoạn nền đăng nhập. Upload từ điện thoại sẽ được bật sau khi hoàn thiện Telegram storage adapter.",
     "virtualDrive": "Đồng bộ thư mục và mount ổ ảo sẽ do Go Agent trên desktop xử lý, không phụ thuộc Tauri.",
-    "emptyRecent": "Chưa có file nào. Khi Go Agent kết nối, danh sách file sẽ xuất hiện tại đây.",
-    "roadmap": "Bước tiếp theo là kết nối Telegram bằng Go, thêm SQLite metadata, stream Range và sync upload-only.",
+    "emptyRecent": "Chưa có file manager. Hiện app mới kết nối Go Agent, SQLite metadata và session Telegram.",
+    "roadmap": "Bước tiếp theo là upload file đầu tiên lên Telegram bằng Go Agent, sau đó mới mở danh sách file, stream và sync.",
     "agentStatus": "PWA đang đọc trực tiếp trạng thái từ Go Agent local. Đây là nền để cấu hình Telegram, đồng bộ desktop và ổ đĩa ảo."
   },
   "login": {
     "title": "Kết nối Telegram",
     "description": "Đăng nhập Telegram như bình thường để biến tài khoản của bạn thành ổ cứng cloud riêng.",
+    "connectedTitle": "Telegram đã kết nối",
+    "connectedDescription": "Go Agent đã có session Telegram hợp lệ. Bước tiếp theo là bật quản lý file và upload lên ổ cloud.",
     "phone": "Số điện thoại Telegram",
     "sendCode": "Gửi mã xác minh",
     "code": "Mã Telegram",
