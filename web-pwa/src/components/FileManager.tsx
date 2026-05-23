@@ -1,7 +1,7 @@
-import { CloudUpload, FileUp, FileText, Plus, RefreshCw } from "lucide-react";
+import { CloudUpload, Download, FileUp, FileText, Plus, RefreshCw } from "lucide-react";
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { DriveFile, listFiles, seedDemoFile, syncFilesToTelegram, uploadFile } from "../api/agent";
+import { DriveFile, downloadFileUrl, listFiles, seedDemoFile, syncFilesToTelegram, uploadFile } from "../api/agent";
 
 export function FileManager() {
   const { t } = useTranslation();
@@ -117,13 +117,27 @@ export function FileManager() {
                 <span>{file.mime_type || t("files.unknownType")}</span>
               </div>
               <div className="file-row__meta">{formatBytes(file.size)}</div>
-              <div className="file-row__badge">{file.sync_state}</div>
+              <div className="file-row__badge">{syncLabel(file.sync_state)}</div>
+              <a className="file-row__download" href={downloadFileUrl(file.id)}>
+                <Download size={15} /> {t("files.download")}
+              </a>
             </div>
           ))}
         </div>
       )}
     </section>
   );
+}
+
+function syncLabel(state: string) {
+  const labels: Record<string, string> = {
+    pending_telegram_upload: "Chờ đồng bộ",
+    telegram_uploading: "Đang đồng bộ",
+    telegram_synced: "Đã lên Telegram",
+    telegram_upload_failed: "Lỗi đồng bộ",
+    metadata_only: "Metadata",
+  };
+  return labels[state] || state;
 }
 
 function formatBytes(bytes: number) {

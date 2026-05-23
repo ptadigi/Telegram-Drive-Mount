@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	agentauth "telegram-drive-agent/internal/auth"
@@ -36,6 +37,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/config", s.handleConfig)
 	mux.HandleFunc("GET /v1/database/status", s.handleDatabaseStatus)
 	mux.HandleFunc("GET /v1/files", s.handleListFiles)
+	mux.HandleFunc("GET /v1/files/download", s.handleDownloadFile)
 	mux.HandleFunc("POST /v1/files/upload", s.handleUploadFile)
 	mux.HandleFunc("POST /v1/files/sync", s.handleSyncFiles)
 	mux.HandleFunc("POST /v1/files/demo", s.handleSeedDemoFile)
@@ -102,6 +104,25 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"files": files})
+}
+
+func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errBadRequest("thiếu id file"))
+		return
+	}
+
+	file, err := s.drive.GetDownloadableFile(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", file.MimeType)
+	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
+	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+urlQueryEscape(file.Name))
+	http.ServeFile(w, r, file.LocalPath)
 }
 
 func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {

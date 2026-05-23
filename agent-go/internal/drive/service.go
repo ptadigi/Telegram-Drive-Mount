@@ -37,6 +37,11 @@ type SyncResult struct {
 	Message  string `json:"message"`
 }
 
+type DownloadableFile struct {
+	File
+	LocalPath string
+}
+
 type pendingFile struct {
 	File
 	LocalPath string
@@ -112,6 +117,31 @@ func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHe
 	}
 
 	return File{ID: id, Name: header.Filename, Size: size, MimeType: mimeType, SyncState: syncState, CreatedAt: now, UpdatedAt: now}, nil
+}
+
+func (s *Service) GetDownloadableFile(ctx context.Context, id string) (DownloadableFile, error) {
+	var file File
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, COALESCE(folder_id, ''), name, size, COALESCE(mime_type, ''), sync_state, created_at, updated_at
+		FROM files
+		WHERE id = ? AND deleted_at IS NULL
+	`, id).Scan(&file.ID, &file.FolderID, &file.Name, &file.Size, &file.MimeType, &file.SyncState, &file.CreatedAt, &file.UpdatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return DownloadableFile{}, fmt.Errorf("không tìm thấy file")
+		}
+		return DownloadableFile{}, fmt.Errorf("đọc metadata file: %w", err)
+	}
+
+	localPath := filepath.Join(s.dataDir, "uploads", file.ID+"-"+filepath.Base(file.Name))
+	if _, err := os.Stat(localPath); err != nil {
+		if os.IsNotExist(err) {
+			return DownloadableFile{}, fmt.Errorf("file chưa có cache cục bộ để tải xuống")
+		}
+		return DownloadableFile{}, fmt.Errorf("kiểm tra cache file: %w", err)
+	}
+
+	return DownloadableFile{File: file, LocalPath: localPath}, nil
 }
 
 func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error) {

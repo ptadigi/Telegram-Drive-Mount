@@ -69,10 +69,11 @@ button, input { font: inherit; }
 .file-manager__actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .muted-box { border: 1px dashed var(--border); border-radius: 18px; padding: 22px; color: var(--muted); background: rgba(255, 255, 255, 0.03); }
 .file-table { display: grid; gap: 8px; }
-.file-row { display: grid; grid-template-columns: 42px 1fr auto auto; gap: 12px; align-items: center; border: 1px solid var(--border); border-radius: 18px; padding: 12px; background: rgba(255, 255, 255, 0.04); }
+.file-row { display: grid; grid-template-columns: 42px 1fr auto auto auto; gap: 12px; align-items: center; border: 1px solid var(--border); border-radius: 18px; padding: 12px; background: rgba(255, 255, 255, 0.04); }
 .file-row__icon { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; color: #7dd3fc; background: rgba(34, 158, 217, 0.12); }
 .file-row__name { min-width: 0; display: grid; gap: 4px; }
 .file-row__name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-row__name span, .file-row__meta { color: var(--muted); font-size: 13px; }
 .file-row__badge { border-radius: 999px; padding: 5px 9px; color: #bae6fd; background: rgba(34, 158, 217, 0.12); font-size: 12px; }
-@media (max-width: 760px) { .shell { padding: 20px 0; } .hero { border-radius: 24px; } .grid { grid-template-columns: 1fr; } .panel { align-items: flex-start; flex-direction: column; } .status-grid { grid-template-columns: 1fr; } .login-card__header { flex-direction: column; } .file-manager__header { flex-direction: column; } .file-row { grid-template-columns: 42px 1fr; } .file-row__meta, .file-row__badge { grid-column: 2; justify-self: start; } }
+.file-row__download { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px; padding: 7px 10px; color: #e0f2fe; background: rgba(255, 255, 255, 0.06); text-decoration: none; font-size: 12px; }
+@media (max-width: 760px) { .shell { padding: 20px 0; } .hero { border-radius: 24px; } .grid { grid-template-columns: 1fr; } .panel { align-items: flex-start; flex-direction: column; } .status-grid { grid-template-columns: 1fr; } .login-card__header { flex-direction: column; } .file-manager__header { flex-direction: column; } .file-row { grid-template-columns: 42px 1fr; } .file-row__meta, .file-row__badge, .file-row__download { grid-column: 2; justify-self: start; } }

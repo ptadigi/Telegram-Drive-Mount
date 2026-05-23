@@ -58,7 +58,7 @@ export type AuthStatus = {
 };
 
 const currentHost = window.location.hostname || "127.0.0.1";
-const AGENT_BASE_URL = `http://${currentHost}:8750`;
+export const AGENT_BASE_URL = `http://${currentHost}:8750`;
 
 async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${AGENT_BASE_URL}${path}`, { signal });
@@ -136,6 +136,10 @@ export function submitTelegramPassword(password: string) {
 
 export function listFiles(signal?: AbortSignal) {
   return getJSON<{ files: DriveFile[] }>("/v1/files", signal);
+}
+
+export function downloadFileUrl(id: string) {
+  return `${AGENT_BASE_URL}/v1/files/download?id=${encodeURIComponent(id)}`;
 }
 
 export function seedDemoFile() {
