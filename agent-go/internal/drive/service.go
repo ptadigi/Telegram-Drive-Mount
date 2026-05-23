@@ -4,12 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"io"
 	"mime"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"strings"
 	"time"
 )
@@ -67,6 +73,11 @@ type SyncResult struct {
 type DownloadableFile struct {
 	File
 	LocalPath string
+}
+
+type ThumbnailFile struct {
+	Path     string
+	MimeType string
 }
 
 type pendingFile struct {
@@ -176,16 +187,16 @@ func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHe
 	ext := strings.ToLower(filepath.Ext(safeName))
 	kind := classifyKind(mimeType, ext)
 	syncState := "pending_telegram_upload"
-	previewStatus := previewStatusForKind(kind)
+	thumbnailPath, previewStatus := s.preparePreview(id, targetPath, kind)
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO files (id, folder_id, name, extension, kind, size, mime_type, hash, current_version_id, sync_state, local_path, thumbnail_path, preview_status, created_at, updated_at)
-		VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, '', NULL, ?, ?, '', ?, ?, ?)
-	`, id, folderID, safeName, ext, kind, size, mimeType, syncState, targetPath, previewStatus, now, now)
+		VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, '', NULL, ?, ?, ?, ?, ?, ?)
+	`, id, folderID, safeName, ext, kind, size, mimeType, syncState, targetPath, thumbnailPath, previewStatus, now, now)
 	if err != nil {
 		return File{}, fmt.Errorf("ghi metadata file: %w", err)
 	}
 
-	return File{ID: id, FolderID: folderID, Name: safeName, Extension: ext, Kind: kind, Size: size, MimeType: mimeType, SyncState: syncState, LocalPath: targetPath, PreviewStatus: previewStatus, CreatedAt: now, UpdatedAt: now}, nil
+	return File{ID: id, FolderID: folderID, Name: safeName, Extension: ext, Kind: kind, Size: size, MimeType: mimeType, SyncState: syncState, LocalPath: targetPath, ThumbnailPath: thumbnailPath, PreviewStatus: previewStatus, CreatedAt: now, UpdatedAt: now}, nil
 }
 
 func (s *Service) GetDownloadableFile(ctx context.Context, id string) (DownloadableFile, error) {
@@ -204,6 +215,20 @@ func (s *Service) GetDownloadableFile(ctx context.Context, id string) (Downloada
 		return DownloadableFile{}, fmt.Errorf("kiểm tra cache file: %w", err)
 	}
 	return DownloadableFile{File: file, LocalPath: localPath}, nil
+}
+
+func (s *Service) GetThumbnail(ctx context.Context, id string) (ThumbnailFile, error) {
+	file, err := s.getFile(ctx, id)
+	if err != nil {
+		return ThumbnailFile{}, err
+	}
+	if file.ThumbnailPath == "" {
+		return ThumbnailFile{}, fmt.Errorf("file chưa có thumbnail")
+	}
+	if _, err := os.Stat(file.ThumbnailPath); err != nil {
+		return ThumbnailFile{}, fmt.Errorf("thumbnail không còn trong cache: %w", err)
+	}
+	return ThumbnailFile{Path: file.ThumbnailPath, MimeType: "image/jpeg"}, nil
 }
 
 func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error) {
@@ -377,6 +402,79 @@ func (s *Service) SeedDemoFile(ctx context.Context) error {
 		return fmt.Errorf("tạo file demo: %w", err)
 	}
 	return nil
+}
+
+func (s *Service) preparePreview(fileID, localPath, kind string) (string, string) {
+	if kind != "image" {
+		return "", previewStatusForKind(kind)
+	}
+	thumbnailPath, err := s.createImageThumbnail(fileID, localPath)
+	if err != nil {
+		return "", "failed"
+	}
+	return thumbnailPath, "ready"
+}
+
+func (s *Service) createImageThumbnail(fileID, localPath string) (string, error) {
+	source, err := os.Open(localPath)
+	if err != nil {
+		return "", err
+	}
+	defer source.Close()
+
+	img, _, err := image.Decode(source)
+	if err != nil {
+		return "", err
+	}
+	thumb := resizeNearest(img, 320)
+
+	thumbDir := filepath.Join(s.dataDir, "thumbs")
+	if err := os.MkdirAll(thumbDir, 0o755); err != nil {
+		return "", err
+	}
+	thumbPath := filepath.Join(thumbDir, fileID+".jpg")
+	target, err := os.Create(thumbPath)
+	if err != nil {
+		return "", err
+	}
+	defer target.Close()
+	if err := jpeg.Encode(target, thumb, &jpeg.Options{Quality: 82}); err != nil {
+		return "", err
+	}
+	return thumbPath, nil
+}
+
+func resizeNearest(src image.Image, maxSize int) image.Image {
+	bounds := src.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return src
+	}
+	if width <= maxSize && height <= maxSize {
+		return src
+	}
+	scale := float64(maxSize) / float64(width)
+	if height > width {
+		scale = float64(maxSize) / float64(height)
+	}
+	dstW := int(float64(width) * scale)
+	dstH := int(float64(height) * scale)
+	if dstW < 1 {
+		dstW = 1
+	}
+	if dstH < 1 {
+		dstH = 1
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
+	for y := 0; y < dstH; y++ {
+		sy := bounds.Min.Y + y*height/dstH
+		for x := 0; x < dstW; x++ {
+			sx := bounds.Min.X + x*width/dstW
+			dst.Set(x, y, src.At(sx, sy))
+		}
+	}
+	return dst
 }
 
 func detectMimeType(name, headerType string, sample []byte) string {

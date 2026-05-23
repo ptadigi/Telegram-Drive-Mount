@@ -40,6 +40,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/drive/contents", s.handleDriveContents)
 	mux.HandleFunc("POST /v1/folders", s.handleCreateFolder)
 	mux.HandleFunc("GET /v1/files/download", s.handleDownloadFile)
+	mux.HandleFunc("GET /v1/files/thumbnail", s.handleFileThumbnail)
 	mux.HandleFunc("POST /v1/files/upload", s.handleUploadFile)
 	mux.HandleFunc("POST /v1/files/sync", s.handleSyncFiles)
 	mux.HandleFunc("POST /v1/files/demo", s.handleSeedDemoFile)
@@ -153,6 +154,21 @@ func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
 	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+urlQueryEscape(file.Name))
 	http.ServeFile(w, r, file.LocalPath)
+}
+
+func (s *Server) handleFileThumbnail(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errBadRequest("thiếu id file"))
+		return
+	}
+	thumb, err := s.drive.GetThumbnail(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	w.Header().Set("Content-Type", thumb.MimeType)
+	http.ServeFile(w, r, thumb.Path)
 }
 
 func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {

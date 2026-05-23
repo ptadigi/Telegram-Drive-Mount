@@ -76,7 +76,8 @@ label.button { user-select: none; position: relative; overflow: hidden; }
 .file-table { display: grid; gap: 8px; }
 .file-row { display: grid; grid-template-columns: 42px 1fr auto auto auto; gap: 12px; align-items: center; width: 100%; color: inherit; text-align: left; border: 1px solid var(--border); border-radius: 18px; padding: 12px; background: rgba(255, 255, 255, 0.04); }
 .file-row--folder { cursor: pointer; }
-.file-row__icon { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; color: #7dd3fc; background: rgba(34, 158, 217, 0.12); }
+.file-row__icon { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; color: #7dd3fc; background: rgba(34, 158, 217, 0.12); overflow: hidden; }
+.file-row__icon img { width: 100%; height: 100%; object-fit: cover; }
 .file-row__name { min-width: 0; display: grid; gap: 4px; }
 .file-row__name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-row__name span, .file-row__meta { color: var(--muted); font-size: 13px; }

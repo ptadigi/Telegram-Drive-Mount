@@ -1,7 +1,7 @@
 import { Archive, CloudUpload, Download, FileAudio, FileText, FileUp, FileVideo, Folder, Image, Plus, RefreshCw } from "lucide-react";
 import { ChangeEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { createFolder, downloadFileUrl, DriveContents, DriveFile, DriveFolder, listDriveContents, seedDemoFile, syncFilesToTelegram, uploadFile } from "../api/agent";
+import { createFolder, downloadFileUrl, DriveContents, DriveFile, DriveFolder, listDriveContents, seedDemoFile, syncFilesToTelegram, thumbnailUrl, uploadFile } from "../api/agent";
 
 export function FileManager() {
   const { t } = useTranslation();
@@ -156,7 +156,7 @@ export function FileManager() {
           ))}
           {contents.files.map((file) => (
             <div className="file-row" key={file.id}>
-              <div className="file-row__icon">{kindIcon(file.kind)}</div>
+              <div className="file-row__icon">{file.preview_status === "ready" && file.kind === "image" ? <img src={thumbnailUrl(file.id)} alt="" /> : kindIcon(file.kind)}</div>
               <div className="file-row__name">
                 <strong>{file.name}</strong>
                 <span>{kindLabel(file.kind)} · {file.mime_type || t("files.unknownType")}</span>
