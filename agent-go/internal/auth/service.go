@@ -99,6 +99,10 @@ func (s *Service) StartLogin(ctx context.Context, input StartLoginInput) (StartL
 		sent, err = client.Auth().SendCode(runCtx, input.Phone, gotdauth.SendCodeOptions{})
 		return err
 	}); err != nil {
+		if isAuthRestart(err) {
+			s.clearLoginState()
+			return StartLoginResult{}, errors.New("Telegram yêu cầu khởi động lại phiên đăng nhập. Vui lòng bấm gửi mã lại sau vài giây")
+		}
 		return StartLoginResult{}, fmt.Errorf("gửi mã Telegram: %w", err)
 	}
 
@@ -190,5 +194,12 @@ func isPasswordRequired(err error) bool {
 		return false
 	}
 	message := err.Error()
-	return strings.Contains(message, "SESSION_PASSWORD_NEEDED") || strings.Contains(message, "PASSWORD_NEEDED")
+	return strings.Contains(message, "SESSION_PASSWORD_NEEDED") ||
+		strings.Contains(message, "PASSWORD_NEEDED") ||
+		strings.Contains(message, "2FA required") ||
+		strings.Contains(message, "PASSWORD_HASH_INVALID")
+}
+
+func isAuthRestart(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "AUTH_RESTART")
 }
