@@ -37,6 +37,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/config", s.handleConfig)
 	mux.HandleFunc("GET /v1/database/status", s.handleDatabaseStatus)
 	mux.HandleFunc("GET /v1/files", s.handleListFiles)
+	mux.HandleFunc("GET /v1/drive/contents", s.handleDriveContents)
+	mux.HandleFunc("POST /v1/folders", s.handleCreateFolder)
 	mux.HandleFunc("GET /v1/files/download", s.handleDownloadFile)
 	mux.HandleFunc("POST /v1/files/upload", s.handleUploadFile)
 	mux.HandleFunc("POST /v1/files/sync", s.handleSyncFiles)
@@ -106,6 +108,34 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"files": files})
 }
 
+func (s *Server) handleDriveContents(w http.ResponseWriter, r *http.Request) {
+	folderID := r.URL.Query().Get("folder_id")
+	contents, err := s.drive.ListFolderContents(r.Context(), folderID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, contents)
+}
+
+func (s *Server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
+	var input drive.CreateFolderInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	folder, err := s.drive.CreateFolder(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	contents, err := s.drive.ListFolderContents(r.Context(), input.ParentID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"folder": folder, "contents": contents})
+}
+
 func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
@@ -135,7 +165,7 @@ func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	file, err := s.drive.SaveUploadedFile(r.Context(), header)
+	file, err := s.drive.SaveUploadedFile(r.Context(), header, r.FormValue("folder_id"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -149,12 +179,12 @@ func (s *Server) handleSyncFiles(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	files, err := s.drive.ListFiles(r.Context())
+	contents, err := s.drive.ListFolderContents(r.Context(), "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"sync": result, "files": files})
+	writeJSON(w, http.StatusOK, map[string]any{"sync": result, "contents": contents, "files": contents.Files})
 }
 
 func (s *Server) handleSeedDemoFile(w http.ResponseWriter, r *http.Request) {
@@ -162,12 +192,12 @@ func (s *Server) handleSeedDemoFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	files, err := s.drive.ListFiles(r.Context())
+	contents, err := s.drive.ListFolderContents(r.Context(), "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"files": files})
+	writeJSON(w, http.StatusOK, map[string]any{"contents": contents, "files": contents.Files})
 }
 
 func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {

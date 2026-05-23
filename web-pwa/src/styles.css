@@ -70,9 +70,12 @@ label.button { user-select: none; position: relative; overflow: hidden; }
 .file-manager__header h2 { margin: 0 0 8px; }
 .file-manager__header p { margin: 0; color: var(--muted); line-height: 1.6; }
 .file-manager__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.breadcrumb { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.breadcrumb button { border: 1px solid var(--border); border-radius: 999px; padding: 6px 10px; color: #bae6fd; background: rgba(34, 158, 217, 0.08); cursor: pointer; }
 .muted-box { border: 1px dashed var(--border); border-radius: 18px; padding: 22px; color: var(--muted); background: rgba(255, 255, 255, 0.03); }
 .file-table { display: grid; gap: 8px; }
-.file-row { display: grid; grid-template-columns: 42px 1fr auto auto auto; gap: 12px; align-items: center; border: 1px solid var(--border); border-radius: 18px; padding: 12px; background: rgba(255, 255, 255, 0.04); }
+.file-row { display: grid; grid-template-columns: 42px 1fr auto auto auto; gap: 12px; align-items: center; width: 100%; color: inherit; text-align: left; border: 1px solid var(--border); border-radius: 18px; padding: 12px; background: rgba(255, 255, 255, 0.04); }
+.file-row--folder { cursor: pointer; }
 .file-row__icon { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; color: #7dd3fc; background: rgba(34, 158, 217, 0.12); }
 .file-row__name { min-width: 0; display: grid; gap: 4px; }
 .file-row__name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

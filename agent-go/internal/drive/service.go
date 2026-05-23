@@ -5,21 +5,48 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 type File struct {
+	ID            string `json:"id"`
+	FolderID      string `json:"folder_id,omitempty"`
+	Name          string `json:"name"`
+	Extension     string `json:"extension"`
+	Kind          string `json:"kind"`
+	Size          int64  `json:"size"`
+	MimeType      string `json:"mime_type,omitempty"`
+	SyncState     string `json:"sync_state"`
+	LocalPath     string `json:"-"`
+	ThumbnailPath string `json:"thumbnail_path,omitempty"`
+	PreviewStatus string `json:"preview_status"`
+	CreatedAt     int64  `json:"created_at"`
+	UpdatedAt     int64  `json:"updated_at"`
+}
+
+type Folder struct {
 	ID        string `json:"id"`
-	FolderID  string `json:"folder_id,omitempty"`
+	ParentID  string `json:"parent_id,omitempty"`
 	Name      string `json:"name"`
-	Size      int64  `json:"size"`
-	MimeType  string `json:"mime_type,omitempty"`
-	SyncState string `json:"sync_state"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
+}
+
+type FolderContents struct {
+	FolderID string   `json:"folder_id,omitempty"`
+	Folders  []Folder `json:"folders"`
+	Files    []File   `json:"files"`
+}
+
+type CreateFolderInput struct {
+	ParentID string `json:"parent_id"`
+	Name     string `json:"name"`
 }
 
 type TelegramUploader interface {
@@ -58,29 +85,58 @@ func NewService(db *sql.DB, dataDir string, uploader TelegramUploader) *Service 
 }
 
 func (s *Service) ListFiles(ctx context.Context) ([]File, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, COALESCE(folder_id, ''), name, size, COALESCE(mime_type, ''), sync_state, created_at, updated_at
-		FROM files
-		WHERE deleted_at IS NULL
-		ORDER BY updated_at DESC, name ASC
-	`)
+	contents, err := s.ListFolderContents(ctx, "")
 	if err != nil {
-		return nil, fmt.Errorf("đọc danh sách file: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
-
-	files := make([]File, 0)
-	for rows.Next() {
-		var file File
-		if err := rows.Scan(&file.ID, &file.FolderID, &file.Name, &file.Size, &file.MimeType, &file.SyncState, &file.CreatedAt, &file.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("đọc file: %w", err)
-		}
-		files = append(files, file)
-	}
-	return files, rows.Err()
+	return contents.Files, nil
 }
 
-func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHeader) (File, error) {
+func (s *Service) ListFolderContents(ctx context.Context, folderID string) (FolderContents, error) {
+	folders, err := s.listFolders(ctx, folderID)
+	if err != nil {
+		return FolderContents{}, err
+	}
+	files, err := s.listFilesInFolder(ctx, folderID)
+	if err != nil {
+		return FolderContents{}, err
+	}
+	return FolderContents{FolderID: folderID, Folders: folders, Files: files}, nil
+}
+
+func (s *Service) CreateFolder(ctx context.Context, input CreateFolderInput) (Folder, error) {
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return Folder{}, fmt.Errorf("vui lòng nhập tên thư mục")
+	}
+	if strings.ContainsAny(name, `/\\`) {
+		return Folder{}, fmt.Errorf("tên thư mục không được chứa dấu / hoặc \\")
+	}
+	if input.ParentID != "" {
+		if err := s.ensureFolderExists(ctx, input.ParentID); err != nil {
+			return Folder{}, err
+		}
+	}
+
+	now := time.Now().Unix()
+	folder := Folder{ID: newID(), ParentID: input.ParentID, Name: name, CreatedAt: now, UpdatedAt: now}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO folders (id, parent_id, name, created_at, updated_at)
+		VALUES (?, NULLIF(?, ''), ?, ?, ?)
+	`, folder.ID, folder.ParentID, folder.Name, now, now)
+	if err != nil {
+		return Folder{}, fmt.Errorf("tạo thư mục: %w", err)
+	}
+	return folder, nil
+}
+
+func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHeader, folderID string) (File, error) {
+	if folderID != "" {
+		if err := s.ensureFolderExists(ctx, folderID); err != nil {
+			return File{}, err
+		}
+	}
+
 	source, err := header.Open()
 	if err != nil {
 		return File{}, fmt.Errorf("mở file upload: %w", err)
@@ -93,54 +149,60 @@ func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHe
 		return File{}, fmt.Errorf("tạo thư mục upload: %w", err)
 	}
 
-	targetPath := filepath.Join(storageDir, id+"-"+filepath.Base(header.Filename))
+	safeName := filepath.Base(header.Filename)
+	targetPath := filepath.Join(storageDir, id+"-"+safeName)
 	target, err := os.Create(targetPath)
 	if err != nil {
 		return File{}, fmt.Errorf("tạo file local: %w", err)
 	}
 	defer target.Close()
 
-	size, err := io.Copy(target, source)
+	buffer := make([]byte, 512)
+	read, readErr := source.Read(buffer)
+	if readErr != nil && readErr != io.EOF {
+		return File{}, fmt.Errorf("đọc file upload: %w", readErr)
+	}
+	mimeType := detectMimeType(safeName, header.Header.Get("Content-Type"), buffer[:read])
+	if _, err := target.Write(buffer[:read]); err != nil {
+		return File{}, fmt.Errorf("lưu file local: %w", err)
+	}
+	rest, err := io.Copy(target, source)
 	if err != nil {
 		return File{}, fmt.Errorf("lưu file local: %w", err)
 	}
+	size := int64(read) + rest
 
 	now := time.Now().Unix()
-	mimeType := header.Header.Get("Content-Type")
+	ext := strings.ToLower(filepath.Ext(safeName))
+	kind := classifyKind(mimeType, ext)
 	syncState := "pending_telegram_upload"
+	previewStatus := previewStatusForKind(kind)
 	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO files (id, folder_id, name, size, mime_type, hash, sync_state, created_at, updated_at)
-		VALUES (?, NULL, ?, ?, ?, '', ?, ?, ?)
-	`, id, header.Filename, size, mimeType, syncState, now, now)
+		INSERT INTO files (id, folder_id, name, extension, kind, size, mime_type, hash, current_version_id, sync_state, local_path, thumbnail_path, preview_status, created_at, updated_at)
+		VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, '', NULL, ?, ?, '', ?, ?, ?)
+	`, id, folderID, safeName, ext, kind, size, mimeType, syncState, targetPath, previewStatus, now, now)
 	if err != nil {
 		return File{}, fmt.Errorf("ghi metadata file: %w", err)
 	}
 
-	return File{ID: id, Name: header.Filename, Size: size, MimeType: mimeType, SyncState: syncState, CreatedAt: now, UpdatedAt: now}, nil
+	return File{ID: id, FolderID: folderID, Name: safeName, Extension: ext, Kind: kind, Size: size, MimeType: mimeType, SyncState: syncState, LocalPath: targetPath, PreviewStatus: previewStatus, CreatedAt: now, UpdatedAt: now}, nil
 }
 
 func (s *Service) GetDownloadableFile(ctx context.Context, id string) (DownloadableFile, error) {
-	var file File
-	err := s.db.QueryRowContext(ctx, `
-		SELECT id, COALESCE(folder_id, ''), name, size, COALESCE(mime_type, ''), sync_state, created_at, updated_at
-		FROM files
-		WHERE id = ? AND deleted_at IS NULL
-	`, id).Scan(&file.ID, &file.FolderID, &file.Name, &file.Size, &file.MimeType, &file.SyncState, &file.CreatedAt, &file.UpdatedAt)
+	file, err := s.getFile(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return DownloadableFile{}, fmt.Errorf("không tìm thấy file")
-		}
-		return DownloadableFile{}, fmt.Errorf("đọc metadata file: %w", err)
+		return DownloadableFile{}, err
 	}
-
-	localPath := filepath.Join(s.dataDir, "uploads", file.ID+"-"+filepath.Base(file.Name))
+	localPath := file.LocalPath
+	if localPath == "" {
+		localPath = filepath.Join(s.dataDir, "uploads", file.ID+"-"+filepath.Base(file.Name))
+	}
 	if _, err := os.Stat(localPath); err != nil {
 		if os.IsNotExist(err) {
 			return DownloadableFile{}, fmt.Errorf("file chưa có cache cục bộ để tải xuống")
 		}
 		return DownloadableFile{}, fmt.Errorf("kiểm tra cache file: %w", err)
 	}
-
 	return DownloadableFile{File: file, LocalPath: localPath}, nil
 }
 
@@ -148,7 +210,6 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 	if s.uploader == nil {
 		return SyncResult{}, fmt.Errorf("chưa có Telegram uploader")
 	}
-
 	pending, err := s.pendingTelegramUploads(ctx)
 	if err != nil {
 		return SyncResult{}, err
@@ -163,14 +224,12 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 			result.Failed++
 			continue
 		}
-
 		uploaded, err := s.uploader.UploadToSavedMessages(ctx, item.LocalPath, item.Name)
 		if err != nil {
 			_ = s.markSyncState(ctx, item.ID, "telegram_upload_failed")
 			result.Failed++
 			continue
 		}
-
 		if err := s.recordTelegramVersion(ctx, item.File, uploaded); err != nil {
 			_ = s.markSyncState(ctx, item.ID, "telegram_upload_failed")
 			result.Failed++
@@ -178,14 +237,85 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 		}
 		result.Uploaded++
 	}
-
 	result.Message = fmt.Sprintf("Đã đồng bộ %d file lên Telegram, lỗi %d file", result.Uploaded, result.Failed)
 	return result, nil
 }
 
+func (s *Service) listFolders(ctx context.Context, parentID string) ([]Folder, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, COALESCE(parent_id, ''), name, created_at, updated_at
+		FROM folders
+		WHERE deleted_at IS NULL AND COALESCE(parent_id, '') = ?
+		ORDER BY name ASC
+	`, parentID)
+	if err != nil {
+		return nil, fmt.Errorf("đọc danh sách thư mục: %w", err)
+	}
+	defer rows.Close()
+	folders := make([]Folder, 0)
+	for rows.Next() {
+		var folder Folder
+		if err := rows.Scan(&folder.ID, &folder.ParentID, &folder.Name, &folder.CreatedAt, &folder.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("đọc thư mục: %w", err)
+		}
+		folders = append(folders, folder)
+	}
+	return folders, rows.Err()
+}
+
+func (s *Service) listFilesInFolder(ctx context.Context, folderID string) ([]File, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, COALESCE(folder_id, ''), name, COALESCE(extension, ''), COALESCE(kind, 'other'), size, COALESCE(mime_type, ''), sync_state, COALESCE(local_path, ''), COALESCE(thumbnail_path, ''), COALESCE(preview_status, 'pending'), created_at, updated_at
+		FROM files
+		WHERE deleted_at IS NULL AND COALESCE(folder_id, '') = ?
+		ORDER BY updated_at DESC, name ASC
+	`, folderID)
+	if err != nil {
+		return nil, fmt.Errorf("đọc danh sách file: %w", err)
+	}
+	defer rows.Close()
+	files := make([]File, 0)
+	for rows.Next() {
+		var file File
+		if err := rows.Scan(&file.ID, &file.FolderID, &file.Name, &file.Extension, &file.Kind, &file.Size, &file.MimeType, &file.SyncState, &file.LocalPath, &file.ThumbnailPath, &file.PreviewStatus, &file.CreatedAt, &file.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("đọc file: %w", err)
+		}
+		files = append(files, file)
+	}
+	return files, rows.Err()
+}
+
+func (s *Service) getFile(ctx context.Context, id string) (File, error) {
+	var file File
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, COALESCE(folder_id, ''), name, COALESCE(extension, ''), COALESCE(kind, 'other'), size, COALESCE(mime_type, ''), sync_state, COALESCE(local_path, ''), COALESCE(thumbnail_path, ''), COALESCE(preview_status, 'pending'), created_at, updated_at
+		FROM files
+		WHERE id = ? AND deleted_at IS NULL
+	`, id).Scan(&file.ID, &file.FolderID, &file.Name, &file.Extension, &file.Kind, &file.Size, &file.MimeType, &file.SyncState, &file.LocalPath, &file.ThumbnailPath, &file.PreviewStatus, &file.CreatedAt, &file.UpdatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return File{}, fmt.Errorf("không tìm thấy file")
+		}
+		return File{}, fmt.Errorf("đọc metadata file: %w", err)
+	}
+	return file, nil
+}
+
+func (s *Service) ensureFolderExists(ctx context.Context, id string) error {
+	var exists int
+	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM folders WHERE id = ? AND deleted_at IS NULL`, id).Scan(&exists)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("không tìm thấy thư mục")
+		}
+		return fmt.Errorf("kiểm tra thư mục: %w", err)
+	}
+	return nil
+}
+
 func (s *Service) pendingTelegramUploads(ctx context.Context) ([]pendingFile, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, COALESCE(folder_id, ''), name, size, COALESCE(mime_type, ''), sync_state, created_at, updated_at
+		SELECT id, COALESCE(folder_id, ''), name, COALESCE(extension, ''), COALESCE(kind, 'other'), size, COALESCE(mime_type, ''), sync_state, COALESCE(local_path, ''), COALESCE(thumbnail_path, ''), COALESCE(preview_status, 'pending'), created_at, updated_at
 		FROM files
 		WHERE deleted_at IS NULL AND sync_state IN ('pending_telegram_upload', 'telegram_upload_failed')
 		ORDER BY updated_at ASC
@@ -194,14 +324,15 @@ func (s *Service) pendingTelegramUploads(ctx context.Context) ([]pendingFile, er
 		return nil, fmt.Errorf("đọc queue đồng bộ Telegram: %w", err)
 	}
 	defer rows.Close()
-
 	items := make([]pendingFile, 0)
 	for rows.Next() {
 		var item pendingFile
-		if err := rows.Scan(&item.ID, &item.FolderID, &item.Name, &item.Size, &item.MimeType, &item.SyncState, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.FolderID, &item.Name, &item.Extension, &item.Kind, &item.Size, &item.MimeType, &item.SyncState, &item.LocalPath, &item.ThumbnailPath, &item.PreviewStatus, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("đọc file chờ đồng bộ: %w", err)
 		}
-		item.LocalPath = filepath.Join(s.dataDir, "uploads", item.ID+"-"+filepath.Base(item.Name))
+		if item.LocalPath == "" {
+			item.LocalPath = filepath.Join(s.dataDir, "uploads", item.ID+"-"+filepath.Base(item.Name))
+		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
@@ -220,7 +351,6 @@ func (s *Service) recordTelegramVersion(ctx context.Context, file File, uploaded
 		return fmt.Errorf("mở transaction metadata: %w", err)
 	}
 	defer tx.Rollback()
-
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO file_versions (id, file_id, version_number, size, hash, telegram_channel_id, telegram_message_id, telegram_file_id, created_at)
 		VALUES (?, ?, 1, ?, '', NULL, ?, ?, ?)
@@ -228,25 +358,60 @@ func (s *Service) recordTelegramVersion(ctx context.Context, file File, uploaded
 	if err != nil {
 		return fmt.Errorf("ghi version Telegram: %w", err)
 	}
-
 	_, err = tx.ExecContext(ctx, `
 		UPDATE files SET current_version_id = ?, sync_state = 'telegram_synced', updated_at = ? WHERE id = ?
 	`, versionID, now, file.ID)
 	if err != nil {
 		return fmt.Errorf("cập nhật trạng thái file: %w", err)
 	}
-
 	return tx.Commit()
 }
 
 func (s *Service) SeedDemoFile(ctx context.Context) error {
 	now := time.Now().Unix()
 	_, err := s.db.ExecContext(ctx, `
-		INSERT OR IGNORE INTO files (id, folder_id, name, size, mime_type, hash, sync_state, created_at, updated_at)
-		VALUES (?, NULL, ?, ?, ?, '', ?, ?, ?)
-	`, "demo-welcome", "Chào mừng đến Ổ Đĩa Cloud Ảo.txt", int64(1024), "text/plain", "metadata_only", now, now)
+		INSERT OR IGNORE INTO files (id, folder_id, name, extension, kind, size, mime_type, hash, sync_state, local_path, thumbnail_path, preview_status, created_at, updated_at)
+		VALUES (?, NULL, ?, ?, ?, ?, ?, '', ?, '', '', ?, ?, ?)
+	`, "demo-welcome", "Chào mừng đến Ổ Đĩa Cloud Ảo.txt", ".txt", "document", int64(1024), "text/plain", "metadata_only", "ready", now, now)
 	if err != nil {
 		return fmt.Errorf("tạo file demo: %w", err)
 	}
 	return nil
+}
+
+func detectMimeType(name, headerType string, sample []byte) string {
+	if headerType != "" && headerType != "application/octet-stream" {
+		return headerType
+	}
+	if extType := mime.TypeByExtension(strings.ToLower(filepath.Ext(name))); extType != "" {
+		return extType
+	}
+	if len(sample) > 0 {
+		return http.DetectContentType(sample)
+	}
+	return "application/octet-stream"
+}
+
+func classifyKind(mimeType, ext string) string {
+	switch {
+	case strings.HasPrefix(mimeType, "image/"):
+		return "image"
+	case strings.HasPrefix(mimeType, "video/"):
+		return "video"
+	case strings.HasPrefix(mimeType, "audio/"):
+		return "audio"
+	case mimeType == "application/pdf" || ext == ".doc" || ext == ".docx" || ext == ".xls" || ext == ".xlsx" || ext == ".ppt" || ext == ".pptx" || ext == ".txt":
+		return "document"
+	case ext == ".zip" || ext == ".rar" || ext == ".7z" || ext == ".tar" || ext == ".gz":
+		return "archive"
+	default:
+		return "other"
+	}
+}
+
+func previewStatusForKind(kind string) string {
+	if kind == "image" || kind == "video" || kind == "audio" || kind == "document" {
+		return "pending"
+	}
+	return "unsupported"
 }

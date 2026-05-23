@@ -98,5 +98,40 @@ func migrate(db *sql.DB) error {
 			return fmt.Errorf("chạy migration sqlite: %w", err)
 		}
 	}
+	return addColumns(db, "files", map[string]string{
+		"extension":      "TEXT NOT NULL DEFAULT ''",
+		"kind":           "TEXT NOT NULL DEFAULT 'other'",
+		"local_path":     "TEXT NOT NULL DEFAULT ''",
+		"thumbnail_path": "TEXT NOT NULL DEFAULT ''",
+		"preview_status": "TEXT NOT NULL DEFAULT 'pending'",
+	})
+}
+
+func addColumns(db *sql.DB, table string, columns map[string]string) error {
+	existing := map[string]bool{}
+	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notNull int
+		var defaultValue any
+		var pk int
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &defaultValue, &pk); err != nil {
+			return err
+		}
+		existing[name] = true
+	}
+	for name, definition := range columns {
+		if existing[name] {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, name, definition)); err != nil {
+			return fmt.Errorf("thêm cột %s.%s: %w", table, name, err)
+		}
+	}
 	return nil
 }
