@@ -15,6 +15,7 @@ import (
 	"telegram-drive-agent/internal/config"
 	"telegram-drive-agent/internal/db"
 	"telegram-drive-agent/internal/drive"
+	"telegram-drive-agent/internal/telegramstorage"
 )
 
 const version = "0.1.0-dev"
@@ -32,7 +33,8 @@ func main() {
 	defer metadataDB.Close()
 
 	authService := agentauth.NewService(cfg)
-	driveService := drive.NewService(metadataDB, cfg.DataDir)
+	telegramStorage := telegramstorage.NewService(cfg)
+	driveService := drive.NewService(metadataDB, cfg.DataDir, telegramStorage)
 	apiServer := api.NewServer(version, cfg, authService, driveService)
 
 	srv := &http.Server{

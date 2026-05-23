@@ -42,6 +42,12 @@ export type DriveFile = {
   updated_at: number;
 };
 
+export type SyncResult = {
+  uploaded: number;
+  failed: number;
+  message: string;
+};
+
 export type AuthStatus = {
   configured: boolean;
   session_exists: boolean;
@@ -148,4 +154,8 @@ export async function uploadFile(file: File) {
     throw new Error(data.error || `Agent API lỗi ${response.status}`);
   }
   return response.json() as Promise<{ file: DriveFile }>;
+}
+
+export function syncFilesToTelegram() {
+  return sendJSON<{ sync: SyncResult; files: DriveFile[] }>("/v1/files/sync", {});
 }

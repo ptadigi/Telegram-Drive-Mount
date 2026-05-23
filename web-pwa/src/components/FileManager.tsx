@@ -1,13 +1,14 @@
-import { FileUp, FileText, Plus, RefreshCw } from "lucide-react";
+import { CloudUpload, FileUp, FileText, Plus, RefreshCw } from "lucide-react";
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { DriveFile, listFiles, seedDemoFile, uploadFile } from "../api/agent";
+import { DriveFile, listFiles, seedDemoFile, syncFilesToTelegram, uploadFile } from "../api/agent";
 
 export function FileManager() {
   const { t } = useTranslation();
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function refresh() {
@@ -16,6 +17,21 @@ export function FileManager() {
     try {
       const result = await listFiles();
       setFiles(result.files);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function syncTelegram() {
+    setLoading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await syncFilesToTelegram();
+      setFiles(result.files);
+      setNotice(result.sync.message);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -74,6 +90,9 @@ export function FileManager() {
           <button className="button button--primary" onClick={() => fileInputRef.current?.click()} disabled={loading}>
             <FileUp size={17} /> {t("files.upload")}
           </button>
+          <button className="button button--secondary" onClick={syncTelegram} disabled={loading}>
+            <CloudUpload size={17} /> {t("files.syncTelegram")}
+          </button>
           <button className="button button--ghost" onClick={refresh} disabled={loading}>
             <RefreshCw size={17} /> {t("files.refresh")}
           </button>
@@ -83,6 +102,7 @@ export function FileManager() {
         </div>
       </div>
 
+      {notice && <div className="success-note">{notice}</div>}
       {error && <div className="error-note">{error}</div>}
       {loading && <div className="muted-box">{t("files.loading")}</div>}
       {!loading && files.length === 0 && <div className="muted-box">{t("files.empty")}</div>}

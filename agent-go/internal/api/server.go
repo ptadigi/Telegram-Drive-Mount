@@ -37,6 +37,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/database/status", s.handleDatabaseStatus)
 	mux.HandleFunc("GET /v1/files", s.handleListFiles)
 	mux.HandleFunc("POST /v1/files/upload", s.handleUploadFile)
+	mux.HandleFunc("POST /v1/files/sync", s.handleSyncFiles)
 	mux.HandleFunc("POST /v1/files/demo", s.handleSeedDemoFile)
 	mux.HandleFunc("GET /v1/auth/status", s.handleAuthStatus)
 	mux.HandleFunc("PUT /v1/auth/config", s.handleAuthConfig)
@@ -119,6 +120,20 @@ func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"file": file})
+}
+
+func (s *Server) handleSyncFiles(w http.ResponseWriter, r *http.Request) {
+	result, err := s.drive.SyncPendingToTelegram(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	files, err := s.drive.ListFiles(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sync": result, "files": files})
 }
 
 func (s *Server) handleSeedDemoFile(w http.ResponseWriter, r *http.Request) {
