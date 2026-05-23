@@ -1,42 +1,22 @@
-import { KeyRound, Lock, Phone, ShieldCheck } from "lucide-react";
+import { Lock, Phone, ShieldCheck } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AuthStatus, saveTelegramConfig, startTelegramLogin, submitTelegramCode, submitTelegramPassword } from "../api/agent";
+import { AuthStatus, startTelegramLogin, submitTelegramCode, submitTelegramPassword } from "../api/agent";
 
-type Step = "credentials" | "phone" | "code" | "password" | "done";
+type Step = "phone" | "code" | "password" | "done";
 
 type Props = {
   auth: AuthStatus | null;
-  onAuthChange: (auth: AuthStatus) => void;
 };
 
-export function TelegramLoginPanel({ auth, onAuthChange }: Props) {
+export function TelegramLoginPanel({ auth }: Props) {
   const { t } = useTranslation();
-  const [step, setStep] = useState<Step>(auth?.configured ? "phone" : "credentials");
-  const [apiId, setApiId] = useState("");
-  const [apiHash, setApiHash] = useState("");
+  const [step, setStep] = useState<Step>(auth?.session_exists ? "done" : "phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  async function submitCredentials(event: FormEvent) {
-    event.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const parsedApiId = Number(apiId);
-      if (!parsedApiId || !apiHash.trim()) throw new Error(t("login.errors.credentials"));
-      const nextAuth = await saveTelegramConfig(parsedApiId, apiHash.trim());
-      onAuthChange(nextAuth);
-      setStep("phone");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function submitPhone(event: FormEvent) {
     event.preventDefault();
@@ -46,7 +26,7 @@ export function TelegramLoginPanel({ auth, onAuthChange }: Props) {
       await startTelegramLogin(phone.trim());
       setStep("code");
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(readableLoginError(err));
     } finally {
       setLoading(false);
     }
@@ -64,7 +44,7 @@ export function TelegramLoginPanel({ auth, onAuthChange }: Props) {
         setStep("done");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(readableLoginError(err));
     } finally {
       setLoading(false);
     }
@@ -78,7 +58,7 @@ export function TelegramLoginPanel({ auth, onAuthChange }: Props) {
       await submitTelegramPassword(password);
       setStep("done");
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(readableLoginError(err));
     } finally {
       setLoading(false);
     }
@@ -94,20 +74,6 @@ export function TelegramLoginPanel({ auth, onAuthChange }: Props) {
         </div>
       </div>
 
-      {step === "credentials" && (
-        <form className="form" onSubmit={submitCredentials}>
-          <label>
-            {t("login.apiId")}
-            <div className="input-wrap"><KeyRound size={17} /><input value={apiId} onChange={(e) => setApiId(e.target.value)} inputMode="numeric" placeholder="12345678" /></div>
-          </label>
-          <label>
-            {t("login.apiHash")}
-            <div className="input-wrap"><KeyRound size={17} /><input value={apiHash} onChange={(e) => setApiHash(e.target.value)} placeholder="abcdef123456..." /></div>
-          </label>
-          <button className="button button--primary" disabled={loading}>{loading ? t("login.loading") : t("login.saveCredentials")}</button>
-        </form>
-      )}
-
       {step === "phone" && (
         <form className="form" onSubmit={submitPhone}>
           <label>
@@ -122,7 +88,7 @@ export function TelegramLoginPanel({ auth, onAuthChange }: Props) {
         <form className="form" onSubmit={submitCode}>
           <label>
             {t("login.code")}
-            <div className="input-wrap"><KeyRound size={17} /><input value={code} onChange={(e) => setCode(e.target.value)} placeholder="12345" /></div>
+            <div className="input-wrap"><Phone size={17} /><input value={code} onChange={(e) => setCode(e.target.value)} placeholder="12345" /></div>
           </label>
           <button className="button button--primary" disabled={loading}>{loading ? t("login.loading") : t("login.verifyCode")}</button>
         </form>
@@ -142,4 +108,12 @@ export function TelegramLoginPanel({ auth, onAuthChange }: Props) {
       {error && <div className="error-note">{error}</div>}
     </section>
   );
+}
+
+function readableLoginError(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  if (message.includes("API ID") || message.includes("API Hash") || message.includes("Telegram")) {
+    return "Chưa thể kết nối Telegram. Vui lòng kiểm tra cấu hình Go Agent hoặc thử lại sau.";
+  }
+  return message;
 }

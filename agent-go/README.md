@@ -41,7 +41,13 @@ Invoke-RestMethod http://127.0.0.1:8750/health
 Invoke-RestMethod http://127.0.0.1:8750/v1/info
 ```
 
-## Roadmap gan
+## Cấu hình Telegram API
+
+Người dùng cuối không nhập API ID/API Hash trong UI. Đây là cấu hình nội bộ của Go Agent.
+
+Trong giai đoạn dev, đặt API Telegram bằng `config.example.json` hoặc biến môi trường trước khi chạy agent. Sau này bản phát hành sẽ đóng gói cấu hình này ở tầng ứng dụng/gateway để người dùng chỉ cần đăng nhập bằng số điện thoại hoặc QR.
+
+## Roadmap gần
 
 1. Them config file.
 2. Them SQLite metadata.

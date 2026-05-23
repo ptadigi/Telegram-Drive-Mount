@@ -74,7 +74,7 @@ export function App() {
         <FeatureCard icon={<Share2 />} title={t("status.publicSharing")} text={t("copy.roadmap")} />
       </section>
 
-      <TelegramLoginPanel auth={auth} onAuthChange={setAuth} />
+      <TelegramLoginPanel auth={auth} />
 
       <section className="panel panel--stack">
         <div className="panel__header">

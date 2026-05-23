@@ -38,7 +38,8 @@ export type AuthStatus = {
   phone?: string;
 };
 
-const AGENT_BASE_URL = "http://127.0.0.1:8750";
+const currentHost = window.location.hostname || "127.0.0.1";
+const AGENT_BASE_URL = `http://${currentHost}:8750`;
 
 async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${AGENT_BASE_URL}${path}`, { signal });

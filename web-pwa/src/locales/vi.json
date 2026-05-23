@@ -34,10 +34,7 @@
   },
   "login": {
     "title": "Kết nối Telegram",
-    "description": "Nhập API credentials, số điện thoại và mã xác minh để Go Agent tạo session Telegram cục bộ.",
-    "apiId": "API ID",
-    "apiHash": "API Hash",
-    "saveCredentials": "Lưu credentials",
+    "description": "Đăng nhập Telegram như bình thường để biến tài khoản của bạn thành ổ cứng cloud riêng.",
     "phone": "Số điện thoại Telegram",
     "sendCode": "Gửi mã xác minh",
     "code": "Mã Telegram",
@@ -48,7 +45,7 @@
     "loading": "Đang xử lý...",
     "done": "Đăng nhập Telegram thành công. Session đã được lưu cục bộ.",
     "errors": {
-      "credentials": "Vui lòng nhập API ID và API Hash hợp lệ"
+      "connection": "Chưa thể kết nối Telegram. Vui lòng kiểm tra Go Agent hoặc thử lại sau."
     }
   },
   "agent": {
