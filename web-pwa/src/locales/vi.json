@@ -1,0 +1,33 @@
+{
+  "app": {
+    "name": "Ổ Đĩa Cloud Ảo",
+    "tagline": "Biến Telegram thành tầng lưu trữ cho ổ cứng cloud riêng của bạn"
+  },
+  "status": {
+    "agentChecking": "Đang kiểm tra Go Agent...",
+    "agentOnline": "Go Agent đang hoạt động",
+    "agentOffline": "Chưa kết nối được Go Agent",
+    "telegramStorage": "Lưu trữ Telegram",
+    "syncDesktop": "Đồng bộ desktop",
+    "mediaStreaming": "Stream media",
+    "publicSharing": "Chia sẻ public"
+  },
+  "actions": {
+    "upload": "Tải file lên",
+    "connectAgent": "Kết nối Agent",
+    "openDrive": "Mở ổ đĩa",
+    "createShare": "Tạo link chia sẻ"
+  },
+  "sections": {
+    "mobileUpload": "Tải lên từ điện thoại",
+    "virtualDrive": "Ổ đĩa ảo",
+    "recentFiles": "File gần đây",
+    "roadmap": "Hướng phát triển"
+  },
+  "copy": {
+    "mobileUpload": "PWA này tập trung vào upload nhanh từ điện thoại, xem file, stream media và quản lý link chia sẻ.",
+    "virtualDrive": "Đồng bộ thư mục và mount ổ ảo sẽ do Go Agent trên desktop xử lý, không phụ thuộc Tauri.",
+    "emptyRecent": "Chưa có file nào. Khi Go Agent kết nối, danh sách file sẽ xuất hiện tại đây.",
+    "roadmap": "Bước tiếp theo là kết nối Telegram bằng Go, thêm SQLite metadata, stream Range và sync upload-only."
+  }
+}

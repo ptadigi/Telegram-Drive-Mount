@@ -1,0 +1,11 @@
+{
+  "host": "127.0.0.1",
+  "port": 8750,
+  "data_dir": "",
+  "database_path": "",
+  "telegram": {
+    "api_id": 0,
+    "api_hash": "",
+    "session_path": ""
+  }
+}
