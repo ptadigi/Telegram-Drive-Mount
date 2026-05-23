@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"telegram-drive-agent/internal/api"
 	agentauth "telegram-drive-agent/internal/auth"
@@ -37,6 +38,10 @@ func main() {
 	driveService := drive.NewService(metadataDB, cfg.DataDir, telegramStorage)
 	apiServer := api.NewServer(version, cfg, authService, driveService)
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go driveService.SyncWorker(ctx, 2*time.Second)
+
 	srv := &http.Server{
 		Addr:    cfg.Addr(),
 		Handler: apiServer.Handler(),
@@ -49,8 +54,6 @@ func main() {
 		}
 	}()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	<-ctx.Done()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)

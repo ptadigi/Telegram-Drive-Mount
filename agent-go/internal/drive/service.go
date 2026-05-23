@@ -70,6 +70,19 @@ type SyncResult struct {
 	Message  string `json:"message"`
 }
 
+type Transfer struct {
+	ID         string `json:"id"`
+	FileID     string `json:"file_id"`
+	Kind       string `json:"kind"`
+	Phase      string `json:"phase"`
+	Percent    int    `json:"percent"`
+	BytesDone  int64  `json:"bytes_done"`
+	BytesTotal int64  `json:"bytes_total"`
+	LastError  string `json:"last_error,omitempty"`
+	CreatedAt  int64  `json:"created_at"`
+	UpdatedAt  int64  `json:"updated_at"`
+}
+
 type DownloadableFile struct {
 	File
 	LocalPath string
@@ -188,12 +201,26 @@ func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHe
 	kind := classifyKind(mimeType, ext)
 	syncState := "pending_telegram_upload"
 	thumbnailPath, previewStatus := s.preparePreview(id, targetPath, kind)
-	_, err = s.db.ExecContext(ctx, `
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return File{}, fmt.Errorf("mở transaction upload: %w", err)
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO files (id, folder_id, name, extension, kind, size, mime_type, hash, current_version_id, sync_state, local_path, thumbnail_path, preview_status, created_at, updated_at)
 		VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, '', NULL, ?, ?, ?, ?, ?, ?)
 	`, id, folderID, safeName, ext, kind, size, mimeType, syncState, targetPath, thumbnailPath, previewStatus, now, now)
 	if err != nil {
 		return File{}, fmt.Errorf("ghi metadata file: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO transfers (id, file_id, kind, phase, percent, bytes_done, bytes_total, created_at, updated_at)
+		VALUES (?, ?, 'telegram_sync', 'queued', 0, 0, ?, ?, ?)
+	`, newID(), id, size, now, now); err != nil {
+		return File{}, fmt.Errorf("ghi queue đồng bộ: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return File{}, fmt.Errorf("lưu metadata upload: %w", err)
 	}
 
 	return File{ID: id, FolderID: folderID, Name: safeName, Extension: ext, Kind: kind, Size: size, MimeType: mimeType, SyncState: syncState, LocalPath: targetPath, ThumbnailPath: thumbnailPath, PreviewStatus: previewStatus, CreatedAt: now, UpdatedAt: now}, nil
@@ -231,6 +258,45 @@ func (s *Service) GetThumbnail(ctx context.Context, id string) (ThumbnailFile, e
 	return ThumbnailFile{Path: file.ThumbnailPath, MimeType: "image/jpeg"}, nil
 }
 
+func (s *Service) ListTransfers(ctx context.Context) ([]Transfer, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, file_id, kind, phase, percent, bytes_done, bytes_total, COALESCE(last_error, ''), created_at, updated_at
+		FROM transfers
+		WHERE phase NOT IN ('completed') OR updated_at > ?
+		ORDER BY updated_at DESC
+		LIMIT 50
+	`, time.Now().Add(-10*time.Minute).Unix())
+	if err != nil {
+		return nil, fmt.Errorf("đọc danh sách transfer: %w", err)
+	}
+	defer rows.Close()
+	transfers := make([]Transfer, 0)
+	for rows.Next() {
+		var transfer Transfer
+		if err := rows.Scan(&transfer.ID, &transfer.FileID, &transfer.Kind, &transfer.Phase, &transfer.Percent, &transfer.BytesDone, &transfer.BytesTotal, &transfer.LastError, &transfer.CreatedAt, &transfer.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("đọc transfer: %w", err)
+		}
+		transfers = append(transfers, transfer)
+	}
+	return transfers, rows.Err()
+}
+
+func (s *Service) SyncWorker(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			_, _ = s.SyncPendingToTelegram(ctx)
+		}
+	}
+}
+
 func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error) {
 	if s.uploader == nil {
 		return SyncResult{}, fmt.Errorf("chưa có Telegram uploader")
@@ -249,17 +315,22 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 			result.Failed++
 			continue
 		}
+		_ = s.updateTransfer(ctx, item.ID, "syncing_telegram", 15, 0, item.Size, "")
 		uploaded, err := s.uploader.UploadToSavedMessages(ctx, item.LocalPath, item.Name)
 		if err != nil {
 			_ = s.markSyncState(ctx, item.ID, "telegram_upload_failed")
+			_ = s.updateTransfer(ctx, item.ID, "failed", 100, 0, item.Size, err.Error())
 			result.Failed++
 			continue
 		}
+		_ = s.updateTransfer(ctx, item.ID, "syncing_telegram", 90, item.Size, item.Size, "")
 		if err := s.recordTelegramVersion(ctx, item.File, uploaded); err != nil {
 			_ = s.markSyncState(ctx, item.ID, "telegram_upload_failed")
+			_ = s.updateTransfer(ctx, item.ID, "failed", 100, item.Size, item.Size, err.Error())
 			result.Failed++
 			continue
 		}
+		_ = s.updateTransfer(ctx, item.ID, "completed", 100, item.Size, item.Size, "")
 		result.Uploaded++
 	}
 	result.Message = fmt.Sprintf("Đã đồng bộ %d file lên Telegram, lỗi %d file", result.Uploaded, result.Failed)
@@ -336,6 +407,15 @@ func (s *Service) ensureFolderExists(ctx context.Context, id string) error {
 		return fmt.Errorf("kiểm tra thư mục: %w", err)
 	}
 	return nil
+}
+
+func (s *Service) updateTransfer(ctx context.Context, fileID, phase string, percent int, bytesDone, bytesTotal int64, lastError string) error {
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE transfers
+		SET phase = ?, percent = ?, bytes_done = ?, bytes_total = ?, last_error = NULLIF(?, ''), updated_at = ?
+		WHERE file_id = ? AND kind = 'telegram_sync' AND phase NOT IN ('completed')
+	`, phase, percent, bytesDone, bytesTotal, lastError, time.Now().Unix(), fileID)
+	return err
 }
 
 func (s *Service) pendingTelegramUploads(ctx context.Context) ([]pendingFile, error) {

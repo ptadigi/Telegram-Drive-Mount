@@ -58,6 +58,8 @@
     "upload": "Tải file lên",
     "uploadAnyway": "Chọn file để tải lên",
     "uploadDone": "Đã tải lên {{name}}. Bấm Đồng bộ Telegram để đẩy file lên cloud.",
+    "uploadAutoSync": "Đã tải lên {{name}}. Go Agent đang tự đồng bộ lên Telegram.",
+    "uploadingAgent": "Đang tải lên Agent:",
     "syncTelegram": "Đồng bộ Telegram",
     "download": "Tải xuống",
     "refresh": "Làm mới",

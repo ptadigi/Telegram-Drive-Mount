@@ -91,6 +91,18 @@ func migrate(db *sql.DB) error {
 			state TEXT NOT NULL DEFAULT 'pending_upload',
 			last_error TEXT
 		)`,
+		`CREATE TABLE IF NOT EXISTS transfers (
+			id TEXT PRIMARY KEY,
+			file_id TEXT NOT NULL,
+			kind TEXT NOT NULL,
+			phase TEXT NOT NULL,
+			percent INTEGER NOT NULL DEFAULT 0,
+			bytes_done INTEGER NOT NULL DEFAULT 0,
+			bytes_total INTEGER NOT NULL DEFAULT 0,
+			last_error TEXT,
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		)`,
 	}
 
 	for _, stmt := range statements {

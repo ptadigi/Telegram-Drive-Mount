@@ -36,6 +36,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/info", s.handleInfo)
 	mux.HandleFunc("GET /v1/config", s.handleConfig)
 	mux.HandleFunc("GET /v1/database/status", s.handleDatabaseStatus)
+	mux.HandleFunc("GET /v1/transfers", s.handleTransfers)
 	mux.HandleFunc("GET /v1/files", s.handleListFiles)
 	mux.HandleFunc("GET /v1/drive/contents", s.handleDriveContents)
 	mux.HandleFunc("POST /v1/folders", s.handleCreateFolder)
@@ -98,6 +99,15 @@ func (s *Server) handleDatabaseStatus(w http.ResponseWriter, r *http.Request) {
 		"path":   s.config.DatabasePath,
 		"exists": fileExists(s.config.DatabasePath),
 	})
+}
+
+func (s *Server) handleTransfers(w http.ResponseWriter, r *http.Request) {
+	transfers, err := s.drive.ListTransfers(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"transfers": transfers})
 }
 
 func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
