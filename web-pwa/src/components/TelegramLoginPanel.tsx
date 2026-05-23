@@ -17,6 +17,7 @@ export function TelegramLoginPanel({ auth }: Props) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [codeInfo, setCodeInfo] = useState<string | null>(null);
 
   async function submitPhone(event: FormEvent) {
     event.preventDefault();
@@ -25,7 +26,8 @@ export function TelegramLoginPanel({ auth }: Props) {
     try {
       const normalizedPhone = normalizePhone(phone);
       setPhone(normalizedPhone);
-      await startTelegramLogin(normalizedPhone);
+      const result = await startTelegramLogin(normalizedPhone);
+      setCodeInfo(describeCodeType(result.code_type, result.timeout_sec));
       setStep("code");
     } catch (err) {
       setError(readableLoginError(err));
@@ -93,7 +95,7 @@ export function TelegramLoginPanel({ auth }: Props) {
             <div className="input-wrap"><Phone size={17} /><input value={code} onChange={(e) => setCode(e.target.value)} placeholder="12345" /></div>
           </label>
           <button className="button button--primary" disabled={loading}>{loading ? t("login.loading") : t("login.verifyCode")}</button>
-          <p className="form-hint">{t("login.codeHint")}</p>
+          <p className="form-hint">{codeInfo || t("login.codeHint")}</p>
           <button type="button" className="link-button" onClick={() => setStep("phone")}>{t("login.changePhone")}</button>
         </form>
       )}
@@ -121,6 +123,14 @@ function normalizePhone(value: string) {
   if (trimmed.startsWith("84")) return `+${trimmed}`;
   if (trimmed.startsWith("0")) return `+84${trimmed.slice(1)}`;
   return `+${trimmed}`;
+}
+
+function describeCodeType(codeType: string, timeout: number) {
+  const waitText = timeout > 0 ? ` Nếu chưa thấy, hãy chờ khoảng ${timeout} giây rồi thử lại.` : "";
+  if (codeType.includes("App")) return `Telegram báo mã đã được gửi vào app Telegram của số này.${waitText}`;
+  if (codeType.includes("SMS")) return `Telegram báo mã đã được gửi qua SMS.${waitText}`;
+  if (codeType.includes("Call")) return `Telegram báo mã sẽ được gửi qua cuộc gọi.${waitText}`;
+  return `Telegram đã chấp nhận yêu cầu gửi mã (${codeType}).${waitText}`;
 }
 
 function readableLoginError(err: unknown) {

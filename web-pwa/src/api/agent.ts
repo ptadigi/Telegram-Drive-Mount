@@ -100,7 +100,7 @@ export function saveTelegramConfig(apiId: number, apiHash: string) {
 }
 
 export function startTelegramLogin(phone: string) {
-  return sendJSON<{ next_step: string; phone: string }>("/v1/auth/start", { phone });
+  return sendJSON<{ next_step: string; phone: string; code_type: string; timeout_sec: number }>("/v1/auth/start", { phone });
 }
 
 export function submitTelegramCode(code: string) {

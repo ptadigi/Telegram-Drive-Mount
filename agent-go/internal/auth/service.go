@@ -49,6 +49,8 @@ type SubmitPasswordInput struct {
 type StartLoginResult struct {
 	NextStep string `json:"next_step"`
 	Phone    string `json:"phone"`
+	CodeType string `json:"code_type"`
+	Timeout  int    `json:"timeout_sec"`
 }
 
 type SubmitResult struct {
@@ -110,7 +112,8 @@ func (s *Service) StartLogin(ctx context.Context, input StartLoginInput) (StartL
 	s.codeHash = sentCode.PhoneCodeHash
 	s.mu.Unlock()
 
-	return StartLoginResult{NextStep: "code", Phone: input.Phone}, nil
+	timeout, _ := sentCode.GetTimeout()
+	return StartLoginResult{NextStep: "code", Phone: input.Phone, CodeType: sentCode.Type.TypeName(), Timeout: timeout}, nil
 }
 
 func (s *Service) SubmitCode(ctx context.Context, input SubmitCodeInput) (SubmitResult, error) {
