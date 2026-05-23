@@ -1,20 +1,32 @@
-import { Cloud, HardDrive, Radio, Share2, Smartphone, UploadCloud } from "lucide-react";
+import { Cloud, Database, HardDrive, Radio, Share2, Smartphone, UploadCloud } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { AgentConfig, AgentInfo, DatabaseStatus, getConfig, getDatabaseStatus, getHealth, getInfo } from "./api/agent";
 
 type AgentState = "checking" | "online" | "offline";
 
 export function App() {
   const { t } = useTranslation();
   const [agentState, setAgentState] = useState<AgentState>("checking");
+  const [info, setInfo] = useState<AgentInfo | null>(null);
+  const [config, setConfig] = useState<AgentConfig | null>(null);
+  const [database, setDatabase] = useState<DatabaseStatus | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
 
-    fetch("http://127.0.0.1:8750/health", {
-      signal: controller.signal,
-    })
-      .then((res) => setAgentState(res.ok ? "online" : "offline"))
+    Promise.all([
+      getHealth(controller.signal),
+      getInfo(controller.signal),
+      getConfig(controller.signal),
+      getDatabaseStatus(controller.signal),
+    ])
+      .then(([, agentInfo, agentConfig, databaseStatus]) => {
+        setAgentState("online");
+        setInfo(agentInfo);
+        setConfig(agentConfig);
+        setDatabase(databaseStatus);
+      })
       .catch(() => setAgentState("offline"));
 
     return () => controller.abort();
@@ -58,6 +70,24 @@ export function App() {
         <FeatureCard icon={<Share2 />} title={t("status.publicSharing")} text={t("copy.roadmap")} />
       </section>
 
+      <section className="panel panel--stack">
+        <div className="panel__header">
+          <div>
+            <h2>{t("sections.agentStatus")}</h2>
+            <p>{t("copy.agentStatus")}</p>
+          </div>
+          <Database className="panel__icon" />
+        </div>
+        <dl className="status-grid">
+          <StatusItem label={t("agent.version")} value={info?.version || "-"} />
+          <StatusItem label={t("agent.uptime")} value={info ? `${info.uptime_sec}s` : "-"} />
+          <StatusItem label={t("agent.dataDir")} value={config?.data_dir || "-"} />
+          <StatusItem label={t("agent.database")} value={database?.exists ? t("agent.ready") : t("agent.notReady")} />
+          <StatusItem label={t("agent.telegramSession")} value={config?.telegram.session_exists ? t("agent.ready") : t("agent.notReady")} />
+          <StatusItem label={t("agent.telegramApi")} value={config?.telegram.api_id_set && config.telegram.api_hash_set ? t("agent.ready") : t("agent.notReady")} />
+        </dl>
+      </section>
+
       <section className="panel">
         <div>
           <h2>{t("sections.recentFiles")}</h2>
@@ -76,5 +106,14 @@ function FeatureCard({ icon, title, text }: { icon: React.ReactNode; title: stri
       <h2>{title}</h2>
       <p>{text}</p>
     </article>
+  );
+}
+
+function StatusItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
   );
 }

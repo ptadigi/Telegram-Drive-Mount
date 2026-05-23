@@ -198,6 +198,51 @@ button {
   gap: 16px;
 }
 
+.panel--stack {
+  display: block;
+}
+
+.panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.panel__icon {
+  color: #7dd3fc;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 18px 0 0;
+}
+
+.status-grid div {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  min-width: 0;
+}
+
+.status-grid dt {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.status-grid dd {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 760px) {
   .shell {
     padding: 20px 0;
@@ -215,4 +260,9 @@ button {
     align-items: flex-start;
     flex-direction: column;
   }
+
+  .status-grid {
+    grid-template-columns: 1fr;
+  }
 }
+

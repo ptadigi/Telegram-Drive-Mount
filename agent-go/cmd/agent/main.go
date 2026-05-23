@@ -29,7 +29,7 @@ func main() {
 	}
 	defer metadataDB.Close()
 
-	apiServer := api.NewServer(version)
+	apiServer := api.NewServer(version, cfg)
 
 	srv := &http.Server{
 		Addr:    cfg.Addr(),

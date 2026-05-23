@@ -22,12 +22,24 @@
     "mobileUpload": "Tải lên từ điện thoại",
     "virtualDrive": "Ổ đĩa ảo",
     "recentFiles": "File gần đây",
-    "roadmap": "Hướng phát triển"
+    "roadmap": "Hướng phát triển",
+    "agentStatus": "Trạng thái Go Agent"
   },
   "copy": {
     "mobileUpload": "PWA này tập trung vào upload nhanh từ điện thoại, xem file, stream media và quản lý link chia sẻ.",
     "virtualDrive": "Đồng bộ thư mục và mount ổ ảo sẽ do Go Agent trên desktop xử lý, không phụ thuộc Tauri.",
     "emptyRecent": "Chưa có file nào. Khi Go Agent kết nối, danh sách file sẽ xuất hiện tại đây.",
-    "roadmap": "Bước tiếp theo là kết nối Telegram bằng Go, thêm SQLite metadata, stream Range và sync upload-only."
+    "roadmap": "Bước tiếp theo là kết nối Telegram bằng Go, thêm SQLite metadata, stream Range và sync upload-only.",
+    "agentStatus": "PWA đang đọc trực tiếp trạng thái từ Go Agent local. Đây là nền để cấu hình Telegram, đồng bộ desktop và ổ đĩa ảo."
+  },
+  "agent": {
+    "version": "Phiên bản",
+    "uptime": "Thời gian chạy",
+    "dataDir": "Thư mục dữ liệu",
+    "database": "Database metadata",
+    "telegramSession": "Session Telegram",
+    "telegramApi": "API Telegram",
+    "ready": "Sẵn sàng",
+    "notReady": "Chưa sẵn sàng"
   }
 }
