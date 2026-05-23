@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/gotd/td/telegram"
@@ -14,18 +15,16 @@ import (
 )
 
 var (
-	ErrTelegramConfigMissing = errors.New("chưa cấu hình API ID hoặc API Hash Telegram")
+	ErrTelegramConfigMissing = errors.New("chưa cấu hình API Telegram cho Go Agent")
 	ErrLoginNotStarted       = errors.New("chưa bắt đầu phiên đăng nhập")
 )
 
 type Service struct {
 	cfg config.Config
 
-	mu        sync.Mutex
-	phone     string
-	codeHash  string
-	client    *telegram.Client
-	cancelRun context.CancelFunc
+	mu       sync.Mutex
+	phone    string
+	codeHash string
 }
 
 type Status struct {
@@ -66,7 +65,6 @@ func (s *Service) UpdateTelegramConfig(apiID int, apiHash string) {
 	defer s.mu.Unlock()
 	s.cfg.Telegram.APIID = apiID
 	s.cfg.Telegram.APIHash = apiHash
-	s.client = nil
 	s.phone = ""
 	s.codeHash = ""
 }
@@ -84,18 +82,15 @@ func (s *Service) Status() Status {
 }
 
 func (s *Service) StartLogin(ctx context.Context, input StartLoginInput) (StartLoginResult, error) {
-	if s.cfg.Telegram.APIID == 0 || s.cfg.Telegram.APIHash == "" {
+	cfg := s.currentConfig()
+	if cfg.Telegram.APIID == 0 || cfg.Telegram.APIHash == "" {
 		return StartLoginResult{}, ErrTelegramConfigMissing
 	}
 	if input.Phone == "" {
 		return StartLoginResult{}, errors.New("vui lòng nhập số điện thoại")
 	}
 
-	client, err := s.ensureClient()
-	if err != nil {
-		return StartLoginResult{}, err
-	}
-
+	client := newClient(cfg)
 	var sent tg.AuthSentCodeClass
 	if err := client.Run(ctx, func(runCtx context.Context) error {
 		var err error
@@ -119,10 +114,8 @@ func (s *Service) StartLogin(ctx context.Context, input StartLoginInput) (StartL
 }
 
 func (s *Service) SubmitCode(ctx context.Context, input SubmitCodeInput) (SubmitResult, error) {
-	s.mu.Lock()
-	phone := s.phone
-	codeHash := s.codeHash
-	s.mu.Unlock()
+	cfg := s.currentConfig()
+	phone, codeHash := s.loginState()
 
 	if phone == "" || codeHash == "" {
 		return SubmitResult{}, ErrLoginNotStarted
@@ -131,11 +124,7 @@ func (s *Service) SubmitCode(ctx context.Context, input SubmitCodeInput) (Submit
 		return SubmitResult{}, errors.New("vui lòng nhập mã Telegram")
 	}
 
-	client, err := s.ensureClient()
-	if err != nil {
-		return SubmitResult{}, err
-	}
-
+	client := newClient(cfg)
 	if err := client.Run(ctx, func(runCtx context.Context) error {
 		_, err := client.Auth().SignIn(runCtx, phone, input.Code, codeHash)
 		return err
@@ -151,15 +140,12 @@ func (s *Service) SubmitCode(ctx context.Context, input SubmitCodeInput) (Submit
 }
 
 func (s *Service) SubmitPassword(ctx context.Context, input SubmitPasswordInput) (SubmitResult, error) {
+	cfg := s.currentConfig()
 	if input.Password == "" {
 		return SubmitResult{}, errors.New("vui lòng nhập mật khẩu cloud")
 	}
 
-	client, err := s.ensureClient()
-	if err != nil {
-		return SubmitResult{}, err
-	}
-
+	client := newClient(cfg)
 	if err := client.Run(ctx, func(runCtx context.Context) error {
 		_, err := client.Auth().Password(runCtx, input.Password)
 		return err
@@ -171,18 +157,16 @@ func (s *Service) SubmitPassword(ctx context.Context, input SubmitPasswordInput)
 	return SubmitResult{Success: true}, nil
 }
 
-func (s *Service) ensureClient() (*telegram.Client, error) {
+func (s *Service) currentConfig() config.Config {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.cfg
+}
 
-	if s.client != nil {
-		return s.client, nil
-	}
-
-	s.client = telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
-		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
-	})
-	return s.client, nil
+func (s *Service) loginState() (string, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.phone, s.codeHash
 }
 
 func (s *Service) clearLoginState() {
@@ -192,19 +176,16 @@ func (s *Service) clearLoginState() {
 	s.codeHash = ""
 }
 
+func newClient(cfg config.Config) *telegram.Client {
+	return telegram.NewClient(cfg.Telegram.APIID, cfg.Telegram.APIHash, telegram.Options{
+		SessionStorage: &telegram.FileSessionStorage{Path: cfg.Telegram.SessionPath},
+	})
+}
+
 func isPasswordRequired(err error) bool {
-	return err != nil && (contains(err.Error(), "SESSION_PASSWORD_NEEDED") || contains(err.Error(), "PASSWORD_NEEDED"))
-}
-
-func contains(s, substr string) bool {
-	return len(substr) == 0 || (len(s) >= len(substr) && index(s, substr) >= 0)
-}
-
-func index(s, substr string) int {
-	for i := 0; i+len(substr) <= len(s); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
+	if err == nil {
+		return false
 	}
-	return -1
+	message := err.Error()
+	return strings.Contains(message, "SESSION_PASSWORD_NEEDED") || strings.Contains(message, "PASSWORD_NEEDED")
 }

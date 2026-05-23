@@ -112,8 +112,8 @@ export function TelegramLoginPanel({ auth }: Props) {
 
 function readableLoginError(err: unknown) {
   const message = err instanceof Error ? err.message : String(err);
-  if (message.includes("API ID") || message.includes("API Hash") || message.includes("Telegram")) {
-    return "Chưa thể kết nối Telegram. Vui lòng kiểm tra cấu hình Go Agent hoặc thử lại sau.";
+  if (message.includes("chưa cấu hình API Telegram")) {
+    return "Go Agent chưa có cấu hình Telegram nội bộ. Vui lòng khởi động lại Agent bằng cấu hình local của dự án.";
   }
   return message;
 }

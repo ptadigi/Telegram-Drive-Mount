@@ -13,6 +13,10 @@ dist/
 .vscode/
 .idea/
 
+# Local secrets
+agent-go/config.local.json
+agent-go/*.session
+
 # Misc
 CompiledApps/
 *.log
