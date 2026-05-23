@@ -81,15 +81,16 @@ export function FileManager() {
           <p>{t("files.description")}</p>
         </div>
         <div className="file-manager__actions">
-          <input
-            ref={fileInputRef}
-            className="visually-hidden"
-            type="file"
-            onChange={handleUpload}
-          />
-          <button className="button button--primary" onClick={() => fileInputRef.current?.click()} disabled={loading}>
+          <label className={`button button--primary ${loading ? "button--disabled" : ""}`}>
             <FileUp size={17} /> {t("files.upload")}
-          </button>
+            <input
+              ref={fileInputRef}
+              className="visually-hidden"
+              type="file"
+              onChange={handleUpload}
+              disabled={loading}
+            />
+          </label>
           <button className="button button--secondary" onClick={syncTelegram} disabled={loading}>
             <CloudUpload size={17} /> {t("files.syncTelegram")}
           </button>
