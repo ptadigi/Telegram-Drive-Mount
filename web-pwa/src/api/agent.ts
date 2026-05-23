@@ -57,11 +57,12 @@ export function downloadFileUrl(id: string) { return `${AGENT_BASE_URL}/v1/files
 export function thumbnailUrl(id: string) { return `${AGENT_BASE_URL}/v1/files/thumbnail?id=${encodeURIComponent(id)}`; }
 export function seedDemoFile() { return sendJSON<{ contents?: DriveContents; files: DriveFile[] }>("/v1/files/demo", {}); }
 
-export function uploadFile(file: File, folderId = "", onProgress?: (progress: UploadProgress) => void) {
+export function uploadFile(file: File, folderId = "", onProgress?: (progress: UploadProgress) => void, relativePath = "") {
   return new Promise<{ file: DriveFile }>((resolve, reject) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("folder_id", folderId);
+    formData.append("relative_path", relativePath);
     const request = new XMLHttpRequest();
     request.open("POST", `${AGENT_BASE_URL}/v1/files/upload`);
     request.upload.onprogress = (event) => {

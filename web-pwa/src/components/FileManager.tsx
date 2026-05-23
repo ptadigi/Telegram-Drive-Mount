@@ -8,7 +8,7 @@ export function FileManager() {
   const [contents, setContents] = useState<DriveContents>({ folders: [], files: [] });
   const [folderStack, setFolderStack] = useState<DriveFolder[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [localUpload, setLocalUpload] = useState<UploadProgress | null>(null);
+  const [localUploads, setLocalUploads] = useState<UploadProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -75,23 +75,40 @@ export function FileManager() {
   }
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const selected = Array.from(event.target.files || []);
     event.target.value = "";
-    if (!file) return;
+    if (selected.length === 0) return;
+    await uploadSelectedFiles(selected, false);
+  }
 
+  async function handleFolderUpload(event: ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (selected.length === 0) return;
+    await uploadSelectedFiles(selected, true);
+  }
+
+  async function uploadSelectedFiles(selected: File[], preserveRelativePath: boolean) {
     setLoading(true);
     setError(null);
     setNotice(null);
-    setLocalUpload({ phase: "uploading_agent", percent: 0, fileName: file.name });
+    setLocalUploads(selected.map((file) => ({ phase: "uploading_agent", percent: 0, fileName: file.name })));
+    let uploaded = 0;
     try {
-      await uploadFile(file, currentFolderId, setLocalUpload);
+      for (const file of selected) {
+        const relativePath = preserveRelativePath ? getRelativePath(file) : "";
+        await uploadFile(file, currentFolderId, (progress) => {
+          setLocalUploads((items) => items.map((item) => item.fileName === file.name ? progress : item));
+        }, relativePath);
+        uploaded += 1;
+      }
       await refresh();
-      setNotice(t("files.uploadAutoSync", { name: file.name }));
+      setNotice(t("files.multiUploadAutoSync", { count: uploaded }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
-      setTimeout(() => setLocalUpload(null), 1800);
+      setTimeout(() => setLocalUploads([]), 2200);
     }
   }
 
@@ -129,7 +146,11 @@ export function FileManager() {
         <div className="file-manager__actions">
           <label className={`button button--primary upload-label ${busy ? "button--disabled" : ""}`}>
             <FileUp size={17} /> {loading && isEmpty ? t("files.uploadAnyway") : t("files.upload")}
-            <input className="upload-label__input" type="file" onChange={handleUpload} disabled={busy} />
+            <input className="upload-label__input" type="file" multiple onChange={handleUpload} disabled={busy} />
+          </label>
+          <label className={`button button--secondary upload-label ${busy ? "button--disabled" : ""}`}>
+            <Folder size={17} /> {t("files.uploadFolder")}
+            <input className="upload-label__input" type="file" multiple onChange={handleFolderUpload} disabled={busy} {...({ webkitdirectory: "", directory: "" } as Record<string, string>)} />
           </label>
           <button className="button button--secondary" onClick={createNewFolder} disabled={loading}><Folder size={17} /> {t("files.createFolder")}</button>
           <button className="button button--ghost" onClick={() => refresh()} disabled={loading}><RefreshCw size={17} /> {t("files.refresh")}</button>
@@ -137,7 +158,7 @@ export function FileManager() {
         </div>
       </div>
 
-      {localUpload && <ProgressCard label={`${t("files.uploadingAgent")} ${localUpload.fileName}`} percent={localUpload.percent} />}
+      {localUploads.length > 0 && <div className="transfer-stack">{localUploads.map((upload) => <ProgressCard key={upload.fileName} label={`${t("files.uploadingAgent")} ${upload.fileName}`} percent={upload.percent} error={upload.error} />)}</div>}
       {activeTransfers.length > 0 && <div className="transfer-stack">{activeTransfers.map((transfer) => <ProgressCard key={transfer.id} label={transferLabel(transfer.phase)} percent={transfer.percent} error={transfer.last_error} />)}</div>}
       {notice && <div className="success-note">{notice}</div>}
       {error && <div className="error-note">{error}</div>}
@@ -172,6 +193,10 @@ export function FileManager() {
       )}
     </section>
   );
+}
+
+function getRelativePath(file: File) {
+  return (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
 }
 
 function ProgressCard({ label, percent, error }: { label: string; percent: number; error?: string }) {

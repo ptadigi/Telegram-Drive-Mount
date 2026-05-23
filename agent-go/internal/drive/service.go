@@ -11,6 +11,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 
 	_ "image/gif"
@@ -154,11 +155,15 @@ func (s *Service) CreateFolder(ctx context.Context, input CreateFolderInput) (Fo
 	return folder, nil
 }
 
-func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHeader, folderID string) (File, error) {
+func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHeader, folderID string, relativePath string) (File, error) {
 	if folderID != "" {
 		if err := s.ensureFolderExists(ctx, folderID); err != nil {
 			return File{}, err
 		}
+	}
+	folderID, err := s.ensureRelativeFolderPath(ctx, folderID, relativePath)
+	if err != nil {
+		return File{}, err
 	}
 
 	source, err := header.Open()
@@ -395,6 +400,57 @@ func (s *Service) getFile(ctx context.Context, id string) (File, error) {
 		return File{}, fmt.Errorf("đọc metadata file: %w", err)
 	}
 	return file, nil
+}
+
+func (s *Service) ensureRelativeFolderPath(ctx context.Context, parentID string, relativePath string) (string, error) {
+	relativePath = strings.ReplaceAll(strings.TrimSpace(relativePath), "\\", "/")
+	relativePath = filepath.ToSlash(relativePath)
+	if relativePath == "" {
+		return parentID, nil
+	}
+	dir := path.Dir(relativePath)
+	if dir == "." || dir == "/" || dir == "" {
+		return parentID, nil
+	}
+	parts := strings.Split(dir, "/")
+	currentParent := parentID
+	for _, part := range parts {
+		name := strings.TrimSpace(part)
+		if name == "" || name == "." {
+			continue
+		}
+		folder, err := s.getOrCreateFolder(ctx, currentParent, name)
+		if err != nil {
+			return "", err
+		}
+		currentParent = folder.ID
+	}
+	return currentParent, nil
+}
+
+func (s *Service) getOrCreateFolder(ctx context.Context, parentID string, name string) (Folder, error) {
+	var folder Folder
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, COALESCE(parent_id, ''), name, created_at, updated_at
+		FROM folders
+		WHERE deleted_at IS NULL AND COALESCE(parent_id, '') = ? AND name = ?
+	`, parentID, name).Scan(&folder.ID, &folder.ParentID, &folder.Name, &folder.CreatedAt, &folder.UpdatedAt)
+	if err == nil {
+		return folder, nil
+	}
+	if err != sql.ErrNoRows {
+		return Folder{}, fmt.Errorf("tìm thư mục: %w", err)
+	}
+	now := time.Now().Unix()
+	folder = Folder{ID: newID(), ParentID: parentID, Name: name, CreatedAt: now, UpdatedAt: now}
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO folders (id, parent_id, name, created_at, updated_at)
+		VALUES (?, NULLIF(?, ''), ?, ?, ?)
+	`, folder.ID, folder.ParentID, folder.Name, now, now)
+	if err != nil {
+		return Folder{}, fmt.Errorf("tạo thư mục: %w", err)
+	}
+	return folder, nil
 }
 
 func (s *Service) ensureFolderExists(ctx context.Context, id string) error {

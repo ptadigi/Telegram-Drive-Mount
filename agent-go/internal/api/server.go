@@ -191,7 +191,7 @@ func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	file, err := s.drive.SaveUploadedFile(r.Context(), header, r.FormValue("folder_id"))
+	file, err := s.drive.SaveUploadedFile(r.Context(), header, r.FormValue("folder_id"), r.FormValue("relative_path"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
