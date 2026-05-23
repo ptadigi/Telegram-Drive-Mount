@@ -23,7 +23,9 @@ export function TelegramLoginPanel({ auth }: Props) {
     setLoading(true);
     setError(null);
     try {
-      await startTelegramLogin(phone.trim());
+      const normalizedPhone = normalizePhone(phone);
+      setPhone(normalizedPhone);
+      await startTelegramLogin(normalizedPhone);
       setStep("code");
     } catch (err) {
       setError(readableLoginError(err));
@@ -91,6 +93,8 @@ export function TelegramLoginPanel({ auth }: Props) {
             <div className="input-wrap"><Phone size={17} /><input value={code} onChange={(e) => setCode(e.target.value)} placeholder="12345" /></div>
           </label>
           <button className="button button--primary" disabled={loading}>{loading ? t("login.loading") : t("login.verifyCode")}</button>
+          <p className="form-hint">{t("login.codeHint")}</p>
+          <button type="button" className="link-button" onClick={() => setStep("phone")}>{t("login.changePhone")}</button>
         </form>
       )}
 
@@ -108,6 +112,15 @@ export function TelegramLoginPanel({ auth }: Props) {
       {error && <div className="error-note">{error}</div>}
     </section>
   );
+}
+
+function normalizePhone(value: string) {
+  const trimmed = value.trim().replace(/\s+/g, "");
+  if (trimmed.startsWith("+")) return trimmed;
+  if (trimmed.startsWith("00")) return `+${trimmed.slice(2)}`;
+  if (trimmed.startsWith("84")) return `+${trimmed}`;
+  if (trimmed.startsWith("0")) return `+84${trimmed.slice(1)}`;
+  return `+${trimmed}`;
 }
 
 function readableLoginError(err: unknown) {

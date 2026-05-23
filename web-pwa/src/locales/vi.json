@@ -39,6 +39,8 @@
     "sendCode": "Gửi mã xác minh",
     "code": "Mã Telegram",
     "verifyCode": "Xác minh mã",
+    "codeHint": "Mã thường được gửi vào app Telegram của bạn, không nhất thiết là SMS.",
+    "changePhone": "Đổi số điện thoại",
     "password": "Mật khẩu cloud",
     "passwordPlaceholder": "Nhập mật khẩu 2FA",
     "unlock": "Mở khóa",
