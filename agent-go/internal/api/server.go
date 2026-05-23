@@ -36,6 +36,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/config", s.handleConfig)
 	mux.HandleFunc("GET /v1/database/status", s.handleDatabaseStatus)
 	mux.HandleFunc("GET /v1/files", s.handleListFiles)
+	mux.HandleFunc("POST /v1/files/upload", s.handleUploadFile)
 	mux.HandleFunc("POST /v1/files/demo", s.handleSeedDemoFile)
 	mux.HandleFunc("GET /v1/auth/status", s.handleAuthStatus)
 	mux.HandleFunc("PUT /v1/auth/config", s.handleAuthConfig)
@@ -100,6 +101,24 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"files": files})
+}
+
+func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(512 << 20); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	_, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	file, err := s.drive.SaveUploadedFile(r.Context(), header)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"file": file})
 }
 
 func (s *Server) handleSeedDemoFile(w http.ResponseWriter, r *http.Request) {

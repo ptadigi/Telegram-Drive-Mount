@@ -135,3 +135,17 @@ export function listFiles(signal?: AbortSignal) {
 export function seedDemoFile() {
   return sendJSON<{ files: DriveFile[] }>("/v1/files/demo", {});
 }
+
+export async function uploadFile(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${AGENT_BASE_URL}/v1/files/upload`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: `Agent API lỗi ${response.status}` }));
+    throw new Error(data.error || `Agent API lỗi ${response.status}`);
+  }
+  return response.json() as Promise<{ file: DriveFile }>;
+}

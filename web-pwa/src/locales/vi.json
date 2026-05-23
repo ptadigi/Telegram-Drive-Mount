@@ -54,7 +54,8 @@
   },
   "files": {
     "title": "File manager",
-    "description": "Lớp quản lý file nền. Hiện tại đang đọc SQLite metadata, bước tiếp theo sẽ nối upload/download Telegram thật.",
+    "description": "Lớp quản lý file nền. File tải lên hiện được lưu cục bộ trong Go Agent và đánh dấu chờ đồng bộ Telegram.",
+    "upload": "Tải file lên",
     "refresh": "Làm mới",
     "createDemo": "Tạo file demo",
     "loading": "Đang tải danh sách file...",

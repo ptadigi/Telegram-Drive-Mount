@@ -1,13 +1,14 @@
-import { FileText, Plus, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { FileUp, FileText, Plus, RefreshCw } from "lucide-react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { DriveFile, listFiles, seedDemoFile } from "../api/agent";
+import { DriveFile, listFiles, seedDemoFile, uploadFile } from "../api/agent";
 
 export function FileManager() {
   const { t } = useTranslation();
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function refresh() {
     setLoading(true);
@@ -35,6 +36,23 @@ export function FileManager() {
     }
   }
 
+  async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      await uploadFile(file);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setLoading(false);
+    } finally {
+      event.target.value = "";
+    }
+  }
+
   useEffect(() => {
     refresh();
   }, []);
@@ -47,10 +65,19 @@ export function FileManager() {
           <p>{t("files.description")}</p>
         </div>
         <div className="file-manager__actions">
+          <input
+            ref={fileInputRef}
+            className="visually-hidden"
+            type="file"
+            onChange={handleUpload}
+          />
+          <button className="button button--primary" onClick={() => fileInputRef.current?.click()} disabled={loading}>
+            <FileUp size={17} /> {t("files.upload")}
+          </button>
           <button className="button button--ghost" onClick={refresh} disabled={loading}>
             <RefreshCw size={17} /> {t("files.refresh")}
           </button>
-          <button className="button button--primary" onClick={createDemo} disabled={loading}>
+          <button className="button button--secondary" onClick={createDemo} disabled={loading}>
             <Plus size={17} /> {t("files.createDemo")}
           </button>
         </div>

@@ -4,6 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
+	"mime/multipart"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -19,11 +23,12 @@ type File struct {
 }
 
 type Service struct {
-	db *sql.DB
+	db      *sql.DB
+	dataDir string
 }
 
-func NewService(db *sql.DB) *Service {
-	return &Service{db: db}
+func NewService(db *sql.DB, dataDir string) *Service {
+	return &Service{db: db, dataDir: dataDir}
 }
 
 func (s *Service) ListFiles(ctx context.Context) ([]File, error) {
@@ -47,6 +52,45 @@ func (s *Service) ListFiles(ctx context.Context) ([]File, error) {
 		files = append(files, file)
 	}
 	return files, rows.Err()
+}
+
+func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHeader) (File, error) {
+	source, err := header.Open()
+	if err != nil {
+		return File{}, fmt.Errorf("mở file upload: %w", err)
+	}
+	defer source.Close()
+
+	id := newID()
+	storageDir := filepath.Join(s.dataDir, "uploads")
+	if err := os.MkdirAll(storageDir, 0o755); err != nil {
+		return File{}, fmt.Errorf("tạo thư mục upload: %w", err)
+	}
+
+	targetPath := filepath.Join(storageDir, id+"-"+filepath.Base(header.Filename))
+	target, err := os.Create(targetPath)
+	if err != nil {
+		return File{}, fmt.Errorf("tạo file local: %w", err)
+	}
+	defer target.Close()
+
+	size, err := io.Copy(target, source)
+	if err != nil {
+		return File{}, fmt.Errorf("lưu file local: %w", err)
+	}
+
+	now := time.Now().Unix()
+	mimeType := header.Header.Get("Content-Type")
+	syncState := "pending_telegram_upload"
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO files (id, folder_id, name, size, mime_type, hash, sync_state, created_at, updated_at)
+		VALUES (?, NULL, ?, ?, ?, '', ?, ?, ?)
+	`, id, header.Filename, size, mimeType, syncState, now, now)
+	if err != nil {
+		return File{}, fmt.Errorf("ghi metadata file: %w", err)
+	}
+
+	return File{ID: id, Name: header.Filename, Size: size, MimeType: mimeType, SyncState: syncState, CreatedAt: now, UpdatedAt: now}, nil
 }
 
 func (s *Service) SeedDemoFile(ctx context.Context) error {

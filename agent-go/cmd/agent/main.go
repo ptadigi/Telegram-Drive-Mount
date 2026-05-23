@@ -32,7 +32,7 @@ func main() {
 	defer metadataDB.Close()
 
 	authService := agentauth.NewService(cfg)
-	driveService := drive.NewService(metadataDB)
+	driveService := drive.NewService(metadataDB, cfg.DataDir)
 	apiServer := api.NewServer(version, cfg, authService, driveService)
 
 	srv := &http.Server{
