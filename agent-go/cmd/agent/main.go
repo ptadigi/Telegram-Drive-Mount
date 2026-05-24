@@ -17,9 +17,18 @@ import (
 	"telegram-drive-agent/internal/db"
 	"telegram-drive-agent/internal/drive"
 	"telegram-drive-agent/internal/telegramstorage"
+	"telegram-drive-agent/internal/tunnel"
 )
 
 const version = "0.1.0-dev"
+
+type driveTunnelListener struct {
+	drive *drive.Service
+}
+
+func (l driveTunnelListener) OnTunnelStatus(status tunnel.Status) {
+	l.drive.SetTunnelStatus(status.Active, status.URL)
+}
 
 func main() {
 	cfg, err := config.Load("")
@@ -36,7 +45,8 @@ func main() {
 	authService := agentauth.NewService(cfg)
 	telegramStorage := telegramstorage.NewService(cfg)
 	driveService := drive.NewService(metadataDB, cfg.DataDir, telegramStorage)
-	apiServer := api.NewServer(version, cfg, authService, driveService)
+	tunnelSvc := tunnel.New(driveTunnelListener{drive: driveService})
+	apiServer := api.NewServer(version, cfg, authService, driveService, tunnelSvc)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

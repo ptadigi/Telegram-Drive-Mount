@@ -1,6 +1,6 @@
 import { CheckCircle2, Cloud, Globe, Wifi, XCircle } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
-import { eventsUrl, getShareConfig, ShareConfig, updateShareConfig } from "../api/agent";
+import { controlTunnel, eventsUrl, getShareConfig, ShareConfig, updateShareConfig } from "../api/agent";
 
 type Mode = "lan" | "domain" | "tunnel";
 
@@ -42,7 +42,13 @@ export function SettingsView() {
     setError(null);
     setNotice(null);
     try {
-      const targetMode = nextMode || mode;
+      const targetMode: Mode = nextMode || mode;
+      const previousMode: string = mode;
+      if (targetMode === "tunnel") {
+        await controlTunnel("start");
+      } else if (previousMode === "tunnel") {
+        await controlTunnel("stop");
+      }
       const result = await updateShareConfig({
         mode: targetMode,
         domain: targetMode === "domain" ? domain : "",
@@ -86,9 +92,8 @@ export function SettingsView() {
           active={mode === "tunnel"}
           icon={<Cloud size={22} />}
           title="Cloudflare Tunnel"
-          description="Bật một phát có ngay link public, không cần domain. (Sắp ra)"
+          description="Bật một phát có ngay link public, không cần domain. Cần cài cloudflared trên máy."
           onClick={() => save("tunnel")}
-          disabled
         />
       </div>
 
@@ -118,6 +123,7 @@ export function SettingsView() {
             <strong>Trạng thái chia sẻ</strong>
             <span>{config.health_message || (config.health_ok ? "Sẵn sàng" : "Chưa kết nối được")}</span>
             <span className="muted-text">Local: {config.local_base_url || "-"}</span>
+            {config.tunnel_active && config.tunnel_url && <span className="muted-text">Tunnel: {config.tunnel_url}</span>}
           </div>
         </div>
       )}

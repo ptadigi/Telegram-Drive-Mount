@@ -10,6 +10,7 @@ import (
 	agentauth "telegram-drive-agent/internal/auth"
 	"telegram-drive-agent/internal/config"
 	"telegram-drive-agent/internal/drive"
+	"telegram-drive-agent/internal/tunnel"
 )
 
 type Server struct {
@@ -18,15 +19,17 @@ type Server struct {
 	config    config.Config
 	auth      *agentauth.Service
 	drive     *drive.Service
+	tunnel    *tunnel.Service
 }
 
-func NewServer(version string, cfg config.Config, authService *agentauth.Service, driveService *drive.Service) *Server {
+func NewServer(version string, cfg config.Config, authService *agentauth.Service, driveService *drive.Service, tunnelService *tunnel.Service) *Server {
 	return &Server{
 		startedAt: time.Now(),
 		version:   version,
 		config:    cfg,
 		auth:      authService,
 		drive:     driveService,
+		tunnel:    tunnelService,
 	}
 }
 
@@ -59,6 +62,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/shares", s.handleDeleteShare)
 	mux.HandleFunc("GET /v1/share/config", s.handleShareConfigGet)
 	mux.HandleFunc("PUT /v1/share/config", s.handleShareConfigPut)
+	mux.HandleFunc("POST /v1/share/tunnel", s.handleShareTunnel)
 	mux.HandleFunc("GET /.td-check", s.handleShareHealthCheck)
 	mux.HandleFunc("GET /share/{slug}", s.handleSharePage)
 	mux.HandleFunc("POST /share/{slug}/unlock", s.handleShareUnlock)
@@ -414,6 +418,29 @@ func (s *Server) handleShareConfigPut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"config": cfg})
+}
+
+func (s *Server) handleShareTunnel(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Action string `json:"action"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	switch input.Action {
+	case "start":
+		status, err := s.tunnel.Start(s.config.Port)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"tunnel": status})
+	case "stop":
+		s.tunnel.Stop()
+		writeJSON(w, http.StatusOK, map[string]any{"tunnel": s.tunnel.Status()})
+	default:
+		writeError(w, http.StatusBadRequest, errBadRequest("action không hợp lệ"))
+	}
 }
 
 func (s *Server) handleShareHealthCheck(w http.ResponseWriter, r *http.Request) {

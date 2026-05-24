@@ -20,6 +20,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -103,10 +104,13 @@ type pendingFile struct {
 }
 
 type Service struct {
-	db       *sql.DB
-	dataDir  string
-	uploader TelegramUploader
-	events   *EventBus
+	db           *sql.DB
+	dataDir      string
+	uploader     TelegramUploader
+	events       *EventBus
+	tunnelURL    string
+	tunnelActive bool
+	tunnelMu     sync.RWMutex
 }
 
 func NewService(db *sql.DB, dataDir string, uploader TelegramUploader) *Service {
@@ -115,6 +119,19 @@ func NewService(db *sql.DB, dataDir string, uploader TelegramUploader) *Service 
 
 func (s *Service) Events() *EventBus {
 	return s.events
+}
+
+func (s *Service) SetTunnelStatus(active bool, url string) {
+	s.tunnelMu.Lock()
+	s.tunnelActive = active
+	s.tunnelURL = url
+	s.tunnelMu.Unlock()
+	cfg, err := s.GetShareConfig(context.Background())
+	if err == nil {
+		cfg.TunnelActive = active
+		cfg.TunnelURL = url
+		s.events.Publish("share.config", cfg)
+	}
 }
 
 func (s *Service) ListFiles(ctx context.Context) ([]File, error) {

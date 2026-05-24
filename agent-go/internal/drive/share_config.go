@@ -19,6 +19,8 @@ type ShareConfig struct {
 	GatewayToken  string `json:"-"`
 	HealthOK      bool   `json:"health_ok"`
 	HealthMessage string `json:"health_message,omitempty"`
+	TunnelURL     string `json:"tunnel_url,omitempty"`
+	TunnelActive  bool   `json:"tunnel_active"`
 	UpdatedAt     int64  `json:"updated_at,omitempty"`
 }
 
@@ -28,11 +30,19 @@ func (s *Service) GetShareConfig(ctx context.Context) (ShareConfig, error) {
 	var ok int
 	if err := row.Scan(&cfg.Mode, &cfg.Domain, &cfg.BaseURL, &cfg.LocalBaseURL, &cfg.Port, &cfg.GatewayToken, &ok, &cfg.HealthMessage, &cfg.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return ShareConfig{Mode: "lan", LocalBaseURL: "", Port: 8750}, nil
+			cfg = ShareConfig{Mode: "lan", LocalBaseURL: "", Port: 8750}
+		} else {
+			return ShareConfig{}, err
 		}
-		return ShareConfig{}, err
 	}
 	cfg.HealthOK = ok == 1
+	s.tunnelMu.RLock()
+	cfg.TunnelActive = s.tunnelActive
+	cfg.TunnelURL = s.tunnelURL
+	s.tunnelMu.RUnlock()
+	if cfg.Mode == "tunnel" && cfg.TunnelURL != "" {
+		cfg.BaseURL = cfg.TunnelURL
+	}
 	return cfg, nil
 }
 
@@ -106,7 +116,10 @@ func (s *Service) checkShareHealth(cfg ShareConfig) (bool, string) {
 		return true, "Đang dùng chế độ LAN, link chỉ mở trong mạng nội bộ"
 	}
 	if cfg.Mode == "tunnel" {
-		return true, "Đã bật Cloudflare Tunnel ở chế độ thử nghiệm"
+		if cfg.TunnelURL == "" {
+			return false, "Đang khởi động Cloudflare Tunnel, vui lòng đợi vài giây"
+		}
+		return true, "Đang dùng Cloudflare Tunnel: " + cfg.TunnelURL
 	}
 	if cfg.BaseURL == "" {
 		return false, "Chưa có base URL để kiểm tra"
