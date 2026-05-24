@@ -200,12 +200,26 @@ func (s *Service) watchSingleRoot(ctx context.Context, root SyncRoot) {
 		}
 		return nil
 	})
+	pending := map[string]*pendingChange{}
+	debounce := time.NewTicker(2 * time.Second)
+	defer debounce.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case event := <-watcher.Events:
-			if event.Name == "" || event.Op&(fsnotify.Create|fsnotify.Write) == 0 {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			if event.Name == "" {
+				continue
+			}
+			if event.Op&(fsnotify.Remove|fsnotify.Rename) != 0 {
+				s.handleSyncRemoval(ctx, root, event.Name)
+				delete(pending, event.Name)
+				continue
+			}
+			if event.Op&(fsnotify.Create|fsnotify.Write) == 0 {
 				continue
 			}
 			info, err := os.Stat(event.Name)
@@ -216,10 +230,54 @@ func (s *Service) watchSingleRoot(ctx context.Context, root SyncRoot) {
 				_ = watcher.Add(event.Name)
 				continue
 			}
-			_ = s.importLocalFile(ctx, root, event.Name, info)
+			pending[event.Name] = &pendingChange{path: event.Name, size: info.Size(), mtime: info.ModTime().Unix(), ready: 0}
+		case <-debounce.C:
+			for path, change := range pending {
+				info, err := os.Stat(path)
+				if err != nil {
+					delete(pending, path)
+					continue
+				}
+				if info.IsDir() {
+					delete(pending, path)
+					continue
+				}
+				if info.Size() == change.size && info.ModTime().Unix() == change.mtime {
+					change.ready++
+					if change.ready >= 1 {
+						_ = s.importLocalFile(ctx, root, path, info)
+						delete(pending, path)
+					}
+					continue
+				}
+				change.size = info.Size()
+				change.mtime = info.ModTime().Unix()
+				change.ready = 0
+			}
 		case <-watcher.Errors:
 		}
 	}
+}
+
+type pendingChange struct {
+	path  string
+	size  int64
+	mtime int64
+	ready int
+}
+
+func (s *Service) handleSyncRemoval(ctx context.Context, root SyncRoot, localPath string) {
+	var remoteID string
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(remote_file_id, '') FROM sync_entries WHERE sync_root_id = ? AND local_path = ?`, root.ID, localPath).Scan(&remoteID); err != nil {
+		return
+	}
+	if remoteID == "" {
+		return
+	}
+	now := time.Now().Unix()
+	_, _ = s.db.ExecContext(ctx, `UPDATE files SET deleted_at = ?, updated_at = ? WHERE id = ?`, now, now, remoteID)
+	_, _ = s.db.ExecContext(ctx, `UPDATE sync_entries SET state = 'pending_delete', last_error = NULL WHERE sync_root_id = ? AND local_path = ?`, root.ID, localPath)
+	s.events.Publish("file.trashed", map[string]any{"id": remoteID, "deleted_at": now})
 }
 
 func (s *Service) getSyncRoot(ctx context.Context, id string) (SyncRoot, error) {
@@ -255,9 +313,12 @@ func (s *Service) importLocalFile(ctx context.Context, root SyncRoot, localPath 
 	}
 	rel = filepath.ToSlash(rel)
 	var existing string
-	err = s.db.QueryRowContext(ctx, `SELECT remote_file_id FROM sync_entries WHERE sync_root_id = ? AND local_path = ?`, root.ID, localPath).Scan(&existing)
+	var existingMtime sql.NullInt64
+	err = s.db.QueryRowContext(ctx, `SELECT remote_file_id, COALESCE(local_mtime, 0) FROM sync_entries WHERE sync_root_id = ? AND local_path = ?`, root.ID, localPath).Scan(&existing, &existingMtime)
 	if err == nil && existing != "" {
-		return nil
+		if existingMtime.Valid && existingMtime.Int64 == info.ModTime().Unix() {
+			return nil
+		}
 	}
 	file, err := s.SaveLocalFile(ctx, localPath, root.RemoteFolderID, rel)
 	if err != nil {
