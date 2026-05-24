@@ -111,7 +111,11 @@
     "localFolder": "Cục bộ",
     "createDemo": "Tạo file demo",
     "renamePrompt": "Nhập tên mới",
+    "rename": "Đổi tên",
+    "share": "Tạo link chia sẻ",
+    "viewDetails": "Xem chi tiết",
     "trashConfirm": "Đưa {{name}} vào thùng rác?",
+    "trash": "Xóa vào thùng rác",
     "loading": "Đang tải danh sách file...",
     "empty": "Chưa có file nào trong metadata.",
     "unknownType": "Không rõ loại file"

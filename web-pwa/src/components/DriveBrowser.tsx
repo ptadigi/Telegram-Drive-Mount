@@ -1,7 +1,9 @@
-import { Archive, Download, FileAudio, FileText, FileVideo, Folder, Image, Link2, MoreVertical, RefreshCw } from "lucide-react";
-import { ChangeEvent, DragEvent, useCallback, useEffect, useRef, useState } from "react";
+import { Archive, Download, FileAudio, FileText, FileVideo, Folder, Image, Info, Link2, MoreVertical, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import React, { ChangeEvent, DragEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createFolder, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, renameFile, renameFolder, thumbnailUrl, trashFile, trashFolder } from "../api/agent";
+import { ContextMenu, ContextMenuItem } from "./ContextMenu";
+import { DetailPanel } from "./DetailPanel";
 import { ShareDialog } from "./ShareDialog";
 import { UploadQueue } from "../state/uploads";
 
@@ -19,6 +21,8 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [dropping, setDropping] = useState(false);
   const [shareTarget, setShareTarget] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
+  const [selection, setSelection] = useState<{ kind: "file"; data: DriveFile } | { kind: "folder"; data: DriveFolder } | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const currentFolderId = folderStack.length > 0 ? folderStack[folderStack.length - 1].id : "";
@@ -122,44 +126,63 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   function handleFolderMenu(event: React.MouseEvent, folder: DriveFolder) {
     event.preventDefault();
     event.stopPropagation();
-    const action = window.prompt(`${folder.name}: nhập 'rename', 'share' hoặc 'trash'`);
-    if (action === "rename") {
-      const name = window.prompt(t("files.renamePrompt"), folder.name);
-      if (name && name !== folder.name) renameFolder(folder.id, name).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
-    }
-    if (action === "share") {
-      setShareTarget({ kind: "folder", id: folder.id, name: folder.name });
-    }
-    if (action === "trash") {
-      if (window.confirm(t("files.trashConfirm", { name: folder.name }))) trashFolder(folder.id).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
-    }
+    setSelection({ kind: "folder", data: folder });
+    setMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        { key: "rename", label: t("files.rename"), icon: <Pencil size={14} />, onSelect: () => promptRenameFolder(folder) },
+        { key: "share", label: t("files.share"), icon: <Link2 size={14} />, onSelect: () => setShareTarget({ kind: "folder", id: folder.id, name: folder.name }) },
+        { key: "trash", label: t("files.trash"), icon: <Trash2 size={14} />, danger: true, onSelect: () => promptTrashFolder(folder) },
+      ],
+    });
   }
 
   function handleFileMenu(event: React.MouseEvent, file: DriveFile) {
     event.preventDefault();
     event.stopPropagation();
-    const action = window.prompt(`${file.name}: nhập 'rename', 'share' hoặc 'trash'`);
-    if (action === "rename") {
-      const name = window.prompt(t("files.renamePrompt"), file.name);
-      if (name && name !== file.name) renameFile(file.id, name).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
-    }
-    if (action === "share") {
-      setShareTarget({ kind: "file", id: file.id, name: file.name });
-    }
-    if (action === "trash") {
-      if (window.confirm(t("files.trashConfirm", { name: file.name }))) trashFile(file.id).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
-    }
+    setSelection({ kind: "file", data: file });
+    setMenu({
+      x: event.clientX,
+      y: event.clientY,
+      items: [
+        { key: "details", label: t("files.viewDetails"), icon: <Info size={14} />, onSelect: () => setSelection({ kind: "file", data: file }) },
+        { key: "share", label: t("files.share"), icon: <Link2 size={14} />, onSelect: () => setShareTarget({ kind: "file", id: file.id, name: file.name }) },
+        { key: "rename", label: t("files.rename"), icon: <Pencil size={14} />, onSelect: () => promptRenameFile(file) },
+        { key: "download", label: t("files.download"), icon: <Download size={14} />, onSelect: () => window.location.assign(downloadFileUrl(file.id)) },
+        { key: "trash", label: t("files.trash"), icon: <Trash2 size={14} />, danger: true, onSelect: () => promptTrashFile(file) },
+      ],
+    });
+  }
+
+  function promptRenameFolder(folder: DriveFolder) {
+    const name = window.prompt(t("files.renamePrompt"), folder.name);
+    if (name && name !== folder.name) renameFolder(folder.id, name).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }
+
+  function promptRenameFile(file: DriveFile) {
+    const name = window.prompt(t("files.renamePrompt"), file.name);
+    if (name && name !== file.name) renameFile(file.id, name).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }
+
+  function promptTrashFolder(folder: DriveFolder) {
+    if (window.confirm(t("files.trashConfirm", { name: folder.name }))) trashFolder(folder.id).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }
+
+  function promptTrashFile(file: DriveFile) {
+    if (window.confirm(t("files.trashConfirm", { name: file.name }))) trashFile(file.id).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }
 
   const isEmpty = contents.folders.length === 0 && contents.files.length === 0;
 
   return (
-    <section
-      className={dropping ? "drive-browser drive-browser--dropping" : "drive-browser"}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
+    <div className={selection ? "drive-layout drive-layout--with-detail" : "drive-layout"}>
+      <section
+        className={dropping ? "drive-browser drive-browser--dropping" : "drive-browser"}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
       <div className="drive-browser__header">
         <div>
           <h2>{rootLabel}</h2>
@@ -194,7 +217,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
             </div>
           ))}
           {contents.files.map((file) => (
-            <div className="drive-card" key={file.id}>
+            <div className="drive-card" key={file.id} onClick={() => setSelection({ kind: "file", data: file })}>
               <div className="drive-card__thumb">
                 {file.preview_status === "ready" && file.kind === "image" ? <img src={thumbnailUrl(file.id)} alt="" /> : kindIcon(file.kind)}
               </div>
@@ -219,7 +242,14 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
         targetId={shareTarget?.id || ""}
         targetName={shareTarget?.name || ""}
       />
-    </section>
+      </section>
+      <DetailPanel selection={selection} onClose={() => setSelection(null)} onShare={() => {
+        if (!selection) return;
+        if (selection.kind === "file") setShareTarget({ kind: "file", id: selection.data.id, name: selection.data.name });
+        else setShareTarget({ kind: "folder", id: selection.data.id, name: selection.data.name });
+      }} />
+      {menu && <ContextMenu position={{ x: menu.x, y: menu.y }} items={menu.items} onClose={() => setMenu(null)} />}
+    </div>
   );
 }
 
