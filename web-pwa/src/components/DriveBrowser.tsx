@@ -1,7 +1,7 @@
 import { Archive, CheckCircle2, Download, FileAudio, FileText, FileVideo, Folder, FolderInput, Image, Info, LayoutGrid, Link2, List, MoreVertical, Pencil, RefreshCw, Star, Trash2 } from "lucide-react";
 import React, { ChangeEvent, DragEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { createFolder, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, moveFile, moveFolder, renameFile, renameFolder, starFile, starFolder, thumbnailUrl, trashFile, trashFolder, zipFolderUrl } from "../api/agent";
+import { createFolder, downloadBundle, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, moveFile, moveFolder, renameFile, renameFolder, starFile, starFolder, thumbnailUrl, trashFile, trashFolder, zipFolderUrl } from "../api/agent";
 import { useConfirm, useToast } from "../state/ui";
 import { ContextMenu, ContextMenuItem } from "./ContextMenu";
 import { DetailPanel } from "./DetailPanel";
@@ -419,6 +419,15 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
             <button className="button button--ghost" onClick={() => bulkStar(true)}>★ Sao</button>
             <button className="button button--ghost" onClick={() => bulkStar(false)}>Bỏ sao</button>
             <button className="button button--ghost" onClick={bulkMove}>Di chuyển</button>
+            <button className="button button--ghost" onClick={async () => {
+              try {
+                await downloadBundle([...selectedIds.files], [...selectedIds.folders]);
+                clearSelection();
+                toast("Đã chuẩn bị file ZIP", "success");
+              } catch (err) {
+                toast(err instanceof Error ? err.message : String(err), "error");
+              }
+            }}>Tải ZIP</button>
             <button className="button button--danger" onClick={bulkTrash}>Xóa vào thùng rác</button>
             <button className="button button--ghost" onClick={clearSelection}>Hủy</button>
           </div>

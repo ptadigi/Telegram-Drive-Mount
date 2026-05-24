@@ -248,6 +248,40 @@ func (s *Service) ZipFolder(ctx context.Context, folderID string, w http.Respons
 	return s.writeFolderToZip(ctx, folderID, "", zipWriter)
 }
 
+func (s *Service) ZipBundle(ctx context.Context, fileIDs []string, folderIDs []string, w http.ResponseWriter) error {
+	zipWriter := zip.NewWriter(w)
+	defer zipWriter.Close()
+	for _, id := range fileIDs {
+		file, err := s.GetDownloadableFile(ctx, id)
+		if err != nil {
+			continue
+		}
+		header, err := zipWriter.Create(file.Name)
+		if err != nil {
+			return err
+		}
+		source, err := os.Open(file.LocalPath)
+		if err != nil {
+			continue
+		}
+		_, copyErr := io.Copy(header, source)
+		source.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+	}
+	for _, id := range folderIDs {
+		var name string
+		if err := s.db.QueryRowContext(ctx, `SELECT name FROM folders WHERE id = ?`, id).Scan(&name); err != nil {
+			continue
+		}
+		if err := s.writeFolderToZip(ctx, id, name, zipWriter); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Service) writeFolderToZip(ctx context.Context, folderID string, prefix string, zipWriter *zip.Writer) error {
 	folders, err := s.listFolders(ctx, folderID)
 	if err != nil {

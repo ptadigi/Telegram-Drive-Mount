@@ -73,6 +73,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/folders/star", s.handleStarFolder)
 	mux.HandleFunc("DELETE /v1/folders", s.handleDeleteFolder)
 	mux.HandleFunc("GET /v1/folders/zip", s.handleZipFolder)
+	mux.HandleFunc("POST /v1/bundle/zip", s.handleZipBundle)
 	mux.HandleFunc("GET /v1/shares", s.handleListShares)
 	mux.HandleFunc("POST /v1/shares", s.handleCreateShare)
 	mux.HandleFunc("PUT /v1/shares", s.handleUpdateShare)
@@ -504,6 +505,25 @@ func (s *Server) handleDeleteFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleZipBundle(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		FileIDs   []string `json:"file_ids"`
+		FolderIDs []string `json:"folder_ids"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if len(input.FileIDs) == 0 && len(input.FolderIDs) == 0 {
+		writeError(w, http.StatusBadRequest, errBadRequest("vui lòng chọn ít nhất một mục"))
+		return
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''bundle.zip")
+	if err := s.drive.ZipBundle(r.Context(), input.FileIDs, input.FolderIDs, w); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+	}
 }
 
 func (s *Server) handleZipFolder(w http.ResponseWriter, r *http.Request) {

@@ -102,6 +102,24 @@ export async function permanentDeleteFolder(id: string) {
   return response.json() as Promise<{ ok: boolean }>;
 }
 export function zipFolderUrl(id: string) { return `${AGENT_BASE_URL}/v1/folders/zip?id=${encodeURIComponent(id)}`; }
+export async function downloadBundle(fileIds: string[], folderIds: string[]) {
+  const response = await fetch(`${AGENT_BASE_URL}/v1/bundle/zip`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_ids: fileIds, folder_ids: folderIds }),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: `Lỗi ${response.status}` }));
+    throw new Error(data.error || `Lỗi ${response.status}`);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "bundle.zip";
+  link.click();
+  URL.revokeObjectURL(url);
+}
 export function listShares(targetKind?: string, targetId?: string, signal?: AbortSignal) {
   const params = new URLSearchParams();
   if (targetKind) params.set("target_kind", targetKind);
