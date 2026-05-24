@@ -1,6 +1,6 @@
 import { CheckCircle2, Cloud, Globe, Wifi, XCircle } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
-import { APIAuthConfig, CacheStats, cleanupCache, controlTunnel, eventsUrl, getAPIAuth, getCacheStats, getShareConfig, getStorageSettings, setCacheConfig, ShareConfig, StorageSettings, updateAPIAuth, updateShareConfig, updateStorageSettings } from "../api/agent";
+import { APIAuthConfig, CacheStats, cleanupCache, controlTunnel, createStorageChannel, eventsUrl, getAPIAuth, getCacheStats, getShareConfig, getStorageSettings, setCacheConfig, ShareConfig, StorageSettings, updateAPIAuth, updateShareConfig, updateStorageSettings } from "../api/agent";
 
 type Mode = "lan" | "domain" | "tunnel";
 
@@ -272,6 +272,21 @@ export function SettingsView() {
             </div>
           )}
           <button className="button button--primary" onClick={saveStorage} disabled={loading}>Lưu cấu hình lưu trữ</button>
+          {storageKind === "channel" && <button className="button button--secondary" onClick={async () => {
+            setLoading(true);
+            try {
+              const result = await createStorageChannel(channelTitle || "Ổ Đĩa Cloud Ảo");
+              setStorage(result.storage);
+              setChannelID(String(result.storage.channel_id));
+              setAccessHash(String(result.storage.access_hash));
+              setChannelTitle(result.storage.title || "");
+              setNotice(`Đã tạo channel ${result.storage.title || result.storage.channel_id}`);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : String(err));
+            } finally {
+              setLoading(false);
+            }
+          }} disabled={loading}>Tạo channel mới tự động</button>}
         </div>
       )}
 

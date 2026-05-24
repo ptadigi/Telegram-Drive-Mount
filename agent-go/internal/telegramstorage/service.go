@@ -348,6 +348,72 @@ func documentFromChannelMessages(resp tg.MessagesMessagesClass, messageID int) *
 	return nil
 }
 
+type CreatedChannel = drive.CreatedChannel
+
+func (s *Service) CreateStorageChannel(ctx context.Context, title string) (drive.CreatedChannel, error) {
+	if s.cfg.Telegram.APIID == 0 || s.cfg.Telegram.APIHash == "" {
+		return drive.CreatedChannel{}, errors.New("chưa cấu hình API Telegram cho Go Agent")
+	}
+	if title == "" {
+		title = "Ổ Đĩa Cloud Ảo"
+	}
+	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
+		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
+	})
+	var created drive.CreatedChannel
+	err := client.Run(ctx, func(runCtx context.Context) error {
+		status, err := client.Auth().Status(runCtx)
+		if err != nil {
+			return fmt.Errorf("kiểm tra session Telegram: %w", err)
+		}
+		if !status.Authorized {
+			return ErrUnauthorized
+		}
+		api := client.API()
+		updates, err := api.ChannelsCreateChannel(runCtx, &tg.ChannelsCreateChannelRequest{
+			Title:     title,
+			About:     "Ổ Đĩa Cloud Ảo private storage",
+			Megagroup: false,
+			Broadcast: true,
+		})
+		if err != nil {
+			return fmt.Errorf("tạo channel Telegram: %w", err)
+		}
+		channel := findChannelFromUpdates(updates)
+		if channel == nil {
+			return errors.New("không lấy được channel vừa tạo")
+		}
+		created = drive.CreatedChannel{ChannelID: channel.ID, AccessHash: channel.AccessHash, Title: channel.Title}
+		return nil
+	})
+	if err != nil {
+		return drive.CreatedChannel{}, err
+	}
+	return created, nil
+}
+
+func findChannelFromUpdates(value tg.UpdatesClass) *tg.Channel {
+	updates, ok := value.(*tg.Updates)
+	if !ok {
+		combined, ok2 := value.(*tg.UpdatesCombined)
+		if !ok2 {
+			return nil
+		}
+		for _, chat := range combined.Chats {
+			if ch, ok := chat.(*tg.Channel); ok {
+				return ch
+			}
+		}
+		return nil
+	}
+	for _, chat := range updates.Chats {
+		if ch, ok := chat.(*tg.Channel); ok {
+			return ch
+		}
+	}
+	return nil
+}
+
 func locationFromMessages(messages []tg.MessageClass, messageID int) tg.InputFileLocationClass {
 	for _, msg := range messages {
 		concrete, ok := msg.(*tg.Message)

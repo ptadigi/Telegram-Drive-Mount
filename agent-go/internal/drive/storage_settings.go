@@ -24,6 +24,28 @@ type UpdateStorageInput struct {
 	Title      string `json:"title"`
 }
 
+type CreatedChannel struct {
+	ChannelID  int64  `json:"channel_id"`
+	AccessHash int64  `json:"access_hash"`
+	Title      string `json:"title"`
+}
+
+type ChannelCreator interface {
+	CreateStorageChannel(ctx context.Context, title string) (CreatedChannel, error)
+}
+
+func (s *Service) CreateStorageChannel(ctx context.Context, title string) (StorageSettings, error) {
+	creator, ok := s.uploader.(ChannelCreator)
+	if !ok {
+		return StorageSettings{}, errors.New("Telegram uploader không hỗ trợ tạo channel")
+	}
+	created, err := creator.CreateStorageChannel(ctx, title)
+	if err != nil {
+		return StorageSettings{}, err
+	}
+	return s.UpdateStorageSettings(ctx, UpdateStorageInput{PeerKind: "channel", ChannelID: created.ChannelID, AccessHash: created.AccessHash, Title: created.Title})
+}
+
 func (s *Service) GetStorageSettings(ctx context.Context) (StorageSettings, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT peer_kind, channel_id, access_hash, COALESCE(title, ''), updated_at FROM storage_settings WHERE id = 'default'`)
 	var settings StorageSettings

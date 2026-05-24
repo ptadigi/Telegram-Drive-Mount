@@ -136,6 +136,7 @@ export function setCacheConfig(mode: string, maxBytes: number) { return putJSON<
 export function cleanupCache() { return sendJSON<{ removed: number; cache: CacheStats }>("/v1/cache/cleanup", {}); }
 export function getStorageSettings(signal?: AbortSignal) { return getJSON<{ storage: StorageSettings }>("/v1/storage", signal); }
 export function updateStorageSettings(payload: { peer_kind: string; channel_id?: number; access_hash?: number; title?: string }) { return putJSON<{ storage: StorageSettings }>("/v1/storage", payload); }
+export function createStorageChannel(title: string) { return sendJSON<{ storage: StorageSettings }>("/v1/storage/channel", { title }); }
 export function getAPIAuth(signal?: AbortSignal) { return getJSON<{ auth: APIAuthConfig }>("/v1/auth/api-config", signal); }
 export function updateAPIAuth(payload: { mode: string; username?: string; password?: string }) { return putJSON<{ auth: APIAuthConfig }>("/v1/auth/api-config", payload); }
 export function shareLink(config: ShareConfig | null, slug: string) {
