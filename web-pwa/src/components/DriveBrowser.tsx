@@ -1,7 +1,8 @@
-import { Archive, Download, FileAudio, FileText, FileVideo, Folder, Image, MoreVertical, RefreshCw } from "lucide-react";
+import { Archive, Download, FileAudio, FileText, FileVideo, Folder, Image, Link2, MoreVertical, RefreshCw } from "lucide-react";
 import { ChangeEvent, DragEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createFolder, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, renameFile, renameFolder, thumbnailUrl, trashFile, trashFolder } from "../api/agent";
+import { ShareDialog } from "./ShareDialog";
 import { UploadQueue } from "../state/uploads";
 
 type Props = {
@@ -17,6 +18,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dropping, setDropping] = useState(false);
+  const [shareTarget, setShareTarget] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const currentFolderId = folderStack.length > 0 ? folderStack[folderStack.length - 1].id : "";
@@ -120,10 +122,13 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   function handleFolderMenu(event: React.MouseEvent, folder: DriveFolder) {
     event.preventDefault();
     event.stopPropagation();
-    const action = window.prompt(`${folder.name}: nhập 'rename' hoặc 'trash'`);
+    const action = window.prompt(`${folder.name}: nhập 'rename', 'share' hoặc 'trash'`);
     if (action === "rename") {
       const name = window.prompt(t("files.renamePrompt"), folder.name);
       if (name && name !== folder.name) renameFolder(folder.id, name).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+    }
+    if (action === "share") {
+      setShareTarget({ kind: "folder", id: folder.id, name: folder.name });
     }
     if (action === "trash") {
       if (window.confirm(t("files.trashConfirm", { name: folder.name }))) trashFolder(folder.id).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
@@ -133,10 +138,13 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   function handleFileMenu(event: React.MouseEvent, file: DriveFile) {
     event.preventDefault();
     event.stopPropagation();
-    const action = window.prompt(`${file.name}: nhập 'rename' hoặc 'trash'`);
+    const action = window.prompt(`${file.name}: nhập 'rename', 'share' hoặc 'trash'`);
     if (action === "rename") {
       const name = window.prompt(t("files.renamePrompt"), file.name);
       if (name && name !== file.name) renameFile(file.id, name).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+    }
+    if (action === "share") {
+      setShareTarget({ kind: "file", id: file.id, name: file.name });
     }
     if (action === "trash") {
       if (window.confirm(t("files.trashConfirm", { name: file.name }))) trashFile(file.id).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
@@ -196,6 +204,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
               </div>
               <div className="drive-card__footer">
                 <span className={`badge badge--${syncBadge(file.sync_state)}`}>{syncLabel(file.sync_state)}</span>
+                <button className="drive-card__action" onClick={() => setShareTarget({ kind: "file", id: file.id, name: file.name })}><Link2 size={14} /></button>
                 <a className="drive-card__action" href={downloadFileUrl(file.id)}><Download size={14} /></a>
                 <button className="drive-card__menu" onClick={(event) => handleFileMenu(event, file)}><MoreVertical size={16} /></button>
               </div>
@@ -203,6 +212,13 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
           ))}
         </div>
       )}
+      <ShareDialog
+        open={!!shareTarget}
+        onClose={() => setShareTarget(null)}
+        targetKind={shareTarget?.kind || "file"}
+        targetId={shareTarget?.id || ""}
+        targetName={shareTarget?.name || ""}
+      />
     </section>
   );
 }

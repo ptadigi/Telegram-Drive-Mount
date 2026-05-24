@@ -130,7 +130,45 @@ a.button { text-decoration: none; }
 .spin { animation: spin 1.2s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-.success-note, .error-note { margin-top: 10px; border-radius: 14px; padding: 10px 14px; font-size: 14px; }
+.modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5); display: grid; place-items: center; z-index: 100; padding: 16px; }
+.modal__panel { width: min(560px, 100%); background: #fff; border-radius: 22px; border: 1px solid var(--line); box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18); padding: 22px; display: grid; gap: 14px; max-height: 90vh; overflow: auto; }
+.modal__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.modal__header h2 { margin: 0 0 6px; font-size: 20px; }
+.modal__header p { margin: 0; color: var(--muted); font-size: 13px; }
+.share-config-summary { padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: #f8fafc; color: #334155; font-size: 13px; }
+.share-create { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; align-items: end; }
+.share-create label { display: grid; gap: 4px; font-size: 13px; color: #334155; }
+.share-create input, .share-create select { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #fff; color: var(--ink); }
+.share-list { display: grid; gap: 10px; }
+.share-list header { display: flex; justify-content: space-between; align-items: center; }
+.share-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.share-row strong { display: block; word-break: break-all; }
+.share-row span { color: var(--muted); font-size: 12px; }
+.share-row__actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.share-row--revoked { opacity: 0.65; }
+
+.settings-view { border: 1px solid var(--line); border-radius: 22px; background: #fff; padding: 22px; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05); }
+.settings-view__header { margin-bottom: 14px; }
+.settings-view__header h2 { margin: 0 0 6px; }
+.settings-view__header p { margin: 0; color: var(--muted); }
+.settings-modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.mode-card { display: grid; grid-template-columns: 44px 1fr; gap: 12px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: #fff; cursor: pointer; text-align: left; }
+.mode-card:hover:not(:disabled) { background: #f8fafc; }
+.mode-card--active { border-color: var(--blue); background: #eef4ff; }
+.mode-card:disabled { opacity: 0.6; cursor: not-allowed; }
+.mode-card__icon { display: grid; place-items: center; color: var(--blue); }
+.mode-card__body { display: grid; gap: 4px; }
+.mode-card__body strong { font-size: 15px; }
+.mode-card__body span { color: var(--muted); font-size: 13px; }
+.settings-form { margin-top: 16px; display: grid; gap: 12px; max-width: 520px; }
+.settings-form label { display: grid; gap: 6px; font-size: 13px; color: #334155; }
+.settings-form input { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #fff; color: var(--ink); }
+.settings-status { margin-top: 18px; display: grid; grid-template-columns: 44px 1fr; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: #f8fafc; }
+.settings-status__icon { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; color: var(--blue); background: #eef4ff; }
+.settings-status__icon--ok { background: #dcfce7; color: #166534; }
+.settings-status__icon--warn { background: #fee2e2; color: #991b1b; }
+.settings-status strong { display: block; }
+.settings-status span { display: block; color: var(--muted); font-size: 13px; }
 .success-note { color: #166534; background: #dcfce7; border: 1px solid #bbf7d0; }
 .error-note { color: #991b1b; background: #fee2e2; border: 1px solid #fecaca; }
 

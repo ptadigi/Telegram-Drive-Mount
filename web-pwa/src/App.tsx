@@ -3,6 +3,7 @@ import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentConfig, AgentInfo, AuthStatus, createFolder, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo } from "./api/agent";
 import { DriveBrowser } from "./components/DriveBrowser";
+import { SettingsView } from "./components/SettingsView";
 import { SyncRootsPanel } from "./components/SyncRootsPanel";
 import { TelegramLoginPanel } from "./components/TelegramLoginPanel";
 import { TrashView } from "./components/TrashView";
@@ -10,7 +11,7 @@ import { UploadDock } from "./components/UploadDock";
 import { useUploadQueue } from "./state/uploads";
 
 type AgentState = "checking" | "online" | "offline";
-type ViewKey = "home" | "drive" | "computers" | "shared" | "starred" | "trash";
+type ViewKey = "home" | "drive" | "computers" | "shared" | "starred" | "trash" | "settings";
 
 export function App() {
   const { t } = useTranslation();
@@ -100,7 +101,7 @@ export function App() {
           <div className="status-pills">
             <StatusPill state={agentState} text={agentState === "online" ? t("status.agentOnline") : agentState === "offline" ? t("status.agentOffline") : t("status.agentChecking")} />
             <StatusPill state={auth?.authorized ? "online" : "offline"} text={auth?.authorized ? t("login.connectedTitle") : t("login.title")} />
-            <button className="icon-button"><Settings size={18} /></button>
+            <button className="icon-button" onClick={() => setView("settings")}><Settings size={18} /></button>
           </div>
         </header>
 
@@ -112,6 +113,7 @@ export function App() {
         {view === "shared" && <PlaceholderView title={t("drive.shared")} text={t("drive.sharedSoon")} />}
         {view === "starred" && <PlaceholderView title={t("drive.starred")} text={t("drive.starredSoon")} />}
         {view === "trash" && <TrashView />}
+        {view === "settings" && <SettingsView />}
 
         <section className="agent-drawer">
           <Database size={18} />

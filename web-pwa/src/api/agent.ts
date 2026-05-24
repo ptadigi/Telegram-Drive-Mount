@@ -8,6 +8,8 @@ export type DriveFolder = { id: string; parent_id?: string; name: string; create
 export type DriveContents = { folder_id?: string; folders: DriveFolder[]; files: DriveFile[]; };
 export type SyncResult = { uploaded: number; failed: number; message: string; };
 export type Transfer = { id: string; file_id: string; kind: string; phase: string; percent: number; bytes_done: number; bytes_total: number; last_error?: string; created_at: number; updated_at: number; };
+export type Share = { id: string; slug: string; target_kind: string; target_id: string; has_password: boolean; expires_at?: number; revoked: boolean; max_downloads: number; access_count: number; last_accessed_at?: number; created_at: number; updated_at: number; };
+export type ShareConfig = { mode: string; domain?: string; base_url?: string; local_base_url: string; port: number; health_ok: boolean; health_message?: string; updated_at?: number; };
 export type AuthStatus = { configured: boolean; session_exists: boolean; login_started: boolean; authorized: boolean; phone?: string; code_type?: string; };
 export type SyncRoot = { id: string; local_path: string; remote_folder_id?: string; mode: string; enabled: boolean; status: string; last_scan_at: number; created_at: number; updated_at: number; };
 export type UploadProgress = { phase: "uploading_agent" | "processing" | "completed" | "failed"; percent: number; fileName: string; error?: string; };
@@ -74,6 +76,38 @@ export function renameFile(id: string, name: string) { return putJSON<{ file: Dr
 export function trashFile(id: string) { return sendJSON<{ ok: boolean }>("/v1/files/trash", { id }); }
 export function restoreFile(id: string) { return sendJSON<{ ok: boolean }>("/v1/files/restore", { id }); }
 export function listTrash(signal?: AbortSignal) { return getJSON<DriveContents>("/v1/trash", signal); }
+export function listShares(targetKind?: string, targetId?: string, signal?: AbortSignal) {
+  const params = new URLSearchParams();
+  if (targetKind) params.set("target_kind", targetKind);
+  if (targetId) params.set("target_id", targetId);
+  const query = params.toString();
+  return getJSON<{ shares: Share[] }>(query ? `/v1/shares?${query}` : "/v1/shares", signal);
+}
+export function createShare(targetKind: string, targetId: string, password = "", expiresIn = 0, maxDownloads = 0) {
+  return sendJSON<{ share: Share }>("/v1/shares", { target_kind: targetKind, target_id: targetId, password, expires_in: expiresIn, max_downloads: maxDownloads });
+}
+export function updateShare(id: string, payload: { password?: string | null; expires_in?: number | null; revoked?: boolean | null; max_downloads?: number | null; }) {
+  const body: Record<string, unknown> = { id };
+  if (payload.password !== undefined) body.password = payload.password;
+  if (payload.expires_in !== undefined) body.expires_in = payload.expires_in;
+  if (payload.revoked !== undefined) body.revoked = payload.revoked;
+  if (payload.max_downloads !== undefined) body.max_downloads = payload.max_downloads;
+  return putJSON<{ share: Share }>("/v1/shares", body);
+}
+export async function deleteShare(id: string) {
+  const response = await fetch(`${AGENT_BASE_URL}/v1/shares?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: `Agent API lỗi ${response.status}` }));
+    throw new Error(data.error || `Agent API lỗi ${response.status}`);
+  }
+  return response.json() as Promise<{ ok: boolean }>;
+}
+export function getShareConfig(signal?: AbortSignal) { return getJSON<{ config: ShareConfig }>("/v1/share/config", signal); }
+export function updateShareConfig(payload: { mode: string; domain?: string; base_url?: string; }) { return putJSON<{ config: ShareConfig }>("/v1/share/config", payload); }
+export function shareLink(config: ShareConfig | null, slug: string) {
+  const base = (config?.base_url && config.base_url.trim()) || (config?.local_base_url && config.local_base_url.trim()) || `${AGENT_BASE_URL}`;
+  return `${base.replace(/\/$/, "")}/share/${slug}`;
+}
 export function downloadFileUrl(id: string) { return `${AGENT_BASE_URL}/v1/files/download?id=${encodeURIComponent(id)}`; }
 export function thumbnailUrl(id: string) { return `${AGENT_BASE_URL}/v1/files/thumbnail?id=${encodeURIComponent(id)}`; }
 export function seedDemoFile() { return sendJSON<{ contents?: DriveContents; files: DriveFile[] }>("/v1/files/demo", {}); }
