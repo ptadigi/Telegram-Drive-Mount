@@ -105,6 +105,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /share/{slug}/raw", s.handleShareRaw)
 	mux.HandleFunc("GET /v1/files/download", s.handleDownloadFile)
 	mux.HandleFunc("GET /v1/files/stream", s.handleStreamFile)
+	mux.HandleFunc("GET /v1/files/hls", s.handleHLSStream)
 	mux.HandleFunc("GET /v1/files/thumbnail", s.handleFileThumbnail)
 	mux.HandleFunc("POST /v1/files/upload", s.handleUploadFile)
 	mux.HandleFunc("POST /v1/files/sync", s.handleSyncFiles)
@@ -888,6 +889,17 @@ func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
 	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+urlQueryEscape(file.Name))
 	http.ServeFile(w, r, file.LocalPath)
+}
+
+func (s *Server) handleHLSStream(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errBadRequest("thiếu id file"))
+		return
+	}
+	if err := s.drive.HLSStream(r.Context(), id, w); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+	}
 }
 
 func (s *Server) handleStreamFile(w http.ResponseWriter, r *http.Request) {
