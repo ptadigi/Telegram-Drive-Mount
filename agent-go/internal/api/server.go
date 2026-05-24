@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	agentauth "telegram-drive-agent/internal/auth"
@@ -23,6 +24,8 @@ type Server struct {
 	drive     *drive.Service
 	tunnel    *tunnel.Service
 	shareRate *rateLimiter
+	authMu    sync.RWMutex
+	authCfg   config.AuthConfig
 }
 
 func NewServer(version string, cfg config.Config, authService *agentauth.Service, driveService *drive.Service, tunnelService *tunnel.Service) *Server {
@@ -34,6 +37,7 @@ func NewServer(version string, cfg config.Config, authService *agentauth.Service
 		drive:     driveService,
 		tunnel:    tunnelService,
 		shareRate: newRateLimiter(20, time.Minute),
+		authCfg:   cfg.Auth,
 	}
 }
 
@@ -77,6 +81,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/share/config", s.handleShareConfigPut)
 	mux.HandleFunc("GET /v1/storage", s.handleStorageGet)
 	mux.HandleFunc("PUT /v1/storage", s.handleStoragePut)
+	mux.HandleFunc("GET /v1/auth/api-config", s.handleAPIAuthGet)
+	mux.HandleFunc("PUT /v1/auth/api-config", s.handleAPIAuthPut)
 	mux.Handle("/webdav/", s.webdavHandler())
 	mux.Handle("/webdav", s.webdavHandler())
 	mux.HandleFunc("GET /v1/cache", s.handleCacheStats)
@@ -103,26 +109,42 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) withAuth(next http.Handler) http.Handler {
-	if s.config.Auth.Mode != "basic" || s.config.Auth.Password == "" {
-		return next
-	}
-	user := s.config.Auth.Username
-	if user == "" {
-		user = "admin"
-	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.authMu.RLock()
+		cfg := s.authCfg
+		s.authMu.RUnlock()
+		if cfg.Mode != "basic" || cfg.Password == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if isPublicPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
+		user := cfg.Username
+		if user == "" {
+			user = "admin"
+		}
 		gotUser, gotPass, ok := r.BasicAuth()
-		if !ok || gotUser != user || gotPass != s.config.Auth.Password {
+		if !ok || gotUser != user || gotPass != cfg.Password {
 			w.Header().Set("WWW-Authenticate", "Basic realm=\"Ổ Đĩa Cloud Ảo\"")
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) UpdateAuthConfig(cfg config.AuthConfig) {
+	s.authMu.Lock()
+	s.authCfg = cfg
+	s.authMu.Unlock()
+}
+
+func (s *Server) AuthConfig() config.AuthConfig {
+	s.authMu.RLock()
+	defer s.authMu.RUnlock()
+	return s.authCfg
 }
 
 func isPublicPath(path string) bool {
@@ -587,6 +609,47 @@ func (s *Server) handleCacheCleanup(w http.ResponseWriter, r *http.Request) {
 	}
 	stats, _ := s.drive.CacheStats(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{"removed": removed, "cache": stats})
+}
+
+func (s *Server) handleAPIAuthGet(w http.ResponseWriter, r *http.Request) {
+	cfg := s.AuthConfig()
+	writeJSON(w, http.StatusOK, map[string]any{"auth": map[string]any{
+		"mode":         cfg.Mode,
+		"username":     cfg.Username,
+		"has_password": cfg.Password != "",
+	}})
+}
+
+func (s *Server) handleAPIAuthPut(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Mode     string `json:"mode"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	mode := strings.ToLower(strings.TrimSpace(input.Mode))
+	if mode != "open" && mode != "basic" {
+		writeError(w, http.StatusBadRequest, errBadRequest("chế độ auth không hợp lệ"))
+		return
+	}
+	current := s.AuthConfig()
+	cfg := config.AuthConfig{Mode: mode, Username: strings.TrimSpace(input.Username), Password: current.Password}
+	if input.Password != "" {
+		cfg.Password = input.Password
+	}
+	if mode == "basic" {
+		if cfg.Username == "" {
+			cfg.Username = "admin"
+		}
+		if cfg.Password == "" {
+			writeError(w, http.StatusBadRequest, errBadRequest("vui lòng nhập mật khẩu"))
+			return
+		}
+	}
+	s.UpdateAuthConfig(cfg)
+	writeJSON(w, http.StatusOK, map[string]any{"auth": map[string]any{"mode": cfg.Mode, "username": cfg.Username, "has_password": cfg.Password != ""}})
 }
 
 func (s *Server) handleStorageGet(w http.ResponseWriter, r *http.Request) {

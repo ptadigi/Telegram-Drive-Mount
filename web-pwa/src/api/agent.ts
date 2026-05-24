@@ -12,6 +12,7 @@ export type Share = { id: string; slug: string; target_kind: string; target_id: 
 export type ShareConfig = { mode: string; domain?: string; base_url?: string; local_base_url: string; port: number; health_ok: boolean; health_message?: string; tunnel_url?: string; tunnel_active?: boolean; updated_at?: number; };
 export type CacheStats = { mode: string; max_bytes: number; used_bytes: number; files: number; };
 export type StorageSettings = { peer_kind: string; channel_id: number; access_hash: number; title?: string; updated_at?: number; };
+export type APIAuthConfig = { mode: string; username: string; has_password: boolean; };
 export type AuthStatus = { configured: boolean; session_exists: boolean; login_started: boolean; authorized: boolean; phone?: string; code_type?: string; };
 export type SyncRoot = { id: string; local_path: string; remote_folder_id?: string; mode: string; enabled: boolean; status: string; last_scan_at: number; created_at: number; updated_at: number; };
 export type UploadProgress = { phase: "uploading_agent" | "processing" | "completed" | "failed"; percent: number; fileName: string; error?: string; };
@@ -135,6 +136,8 @@ export function setCacheConfig(mode: string, maxBytes: number) { return putJSON<
 export function cleanupCache() { return sendJSON<{ removed: number; cache: CacheStats }>("/v1/cache/cleanup", {}); }
 export function getStorageSettings(signal?: AbortSignal) { return getJSON<{ storage: StorageSettings }>("/v1/storage", signal); }
 export function updateStorageSettings(payload: { peer_kind: string; channel_id?: number; access_hash?: number; title?: string }) { return putJSON<{ storage: StorageSettings }>("/v1/storage", payload); }
+export function getAPIAuth(signal?: AbortSignal) { return getJSON<{ auth: APIAuthConfig }>("/v1/auth/api-config", signal); }
+export function updateAPIAuth(payload: { mode: string; username?: string; password?: string }) { return putJSON<{ auth: APIAuthConfig }>("/v1/auth/api-config", payload); }
 export function shareLink(config: ShareConfig | null, slug: string) {
   const base = (config?.base_url && config.base_url.trim()) || (config?.local_base_url && config.local_base_url.trim()) || `${AGENT_BASE_URL}`;
   return `${base.replace(/\/$/, "")}/share/${slug}`;

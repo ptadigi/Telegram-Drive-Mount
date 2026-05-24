@@ -1,6 +1,6 @@
 import { CheckCircle2, Cloud, Globe, Wifi, XCircle } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
-import { CacheStats, cleanupCache, controlTunnel, eventsUrl, getCacheStats, getShareConfig, getStorageSettings, setCacheConfig, ShareConfig, StorageSettings, updateShareConfig, updateStorageSettings } from "../api/agent";
+import { APIAuthConfig, CacheStats, cleanupCache, controlTunnel, eventsUrl, getAPIAuth, getCacheStats, getShareConfig, getStorageSettings, setCacheConfig, ShareConfig, StorageSettings, updateAPIAuth, updateShareConfig, updateStorageSettings } from "../api/agent";
 
 type Mode = "lan" | "domain" | "tunnel";
 
@@ -19,6 +19,10 @@ export function SettingsView() {
   const [channelID, setChannelID] = useState("");
   const [accessHash, setAccessHash] = useState("");
   const [channelTitle, setChannelTitle] = useState("");
+  const [auth, setAuth] = useState<APIAuthConfig | null>(null);
+  const [authMode, setAuthMode] = useState<"open" | "basic">("open");
+  const [authUser, setAuthUser] = useState("");
+  const [authPass, setAuthPass] = useState("");
 
   async function refresh() {
     setLoading(true);
@@ -38,6 +42,11 @@ export function SettingsView() {
       setChannelID(storageResult.storage.channel_id ? String(storageResult.storage.channel_id) : "");
       setAccessHash(storageResult.storage.access_hash ? String(storageResult.storage.access_hash) : "");
       setChannelTitle(storageResult.storage.title || "");
+      const authResult = await getAPIAuth();
+      setAuth(authResult.auth);
+      setAuthMode((authResult.auth.mode as "open" | "basic") || "open");
+      setAuthUser(authResult.auth.username || "");
+      setAuthPass("");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -83,6 +92,25 @@ export function SettingsView() {
       const result = await updateStorageSettings(payload);
       setStorage(result.storage);
       setNotice(storageKind === "self" ? "Đã chuyển về Saved Messages" : "Đã lưu cấu hình storage channel");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveAuth() {
+    setLoading(true);
+    try {
+      const payload: { mode: string; username?: string; password?: string } = { mode: authMode };
+      if (authMode === "basic") {
+        payload.username = authUser || "admin";
+        if (authPass) payload.password = authPass;
+      }
+      const result = await updateAPIAuth(payload);
+      setAuth(result.auth);
+      setAuthPass("");
+      setNotice(authMode === "basic" ? "Đã bật bảo vệ Basic Auth" : "Đã tắt bảo vệ API");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -244,6 +272,36 @@ export function SettingsView() {
             </div>
           )}
           <button className="button button--primary" onClick={saveStorage} disabled={loading}>Lưu cấu hình lưu trữ</button>
+        </div>
+      )}
+
+      {auth && (
+        <div className="settings-cache">
+          <header>
+            <h3>Bảo mật API</h3>
+            <span>{auth.mode === "basic" ? "Đang bật Basic Auth" : "Đang mở (chỉ dùng cho LAN/desktop)"}</span>
+          </header>
+          <div className="settings-cache__modes">
+            <button className={`mode-card ${authMode === "open" ? "mode-card--active" : ""}`} onClick={() => setAuthMode("open")}>
+              <strong>Mở</strong><span>Không yêu cầu mật khẩu. Phù hợp khi chạy desktop hoặc LAN tin cậy.</span>
+            </button>
+            <button className={`mode-card ${authMode === "basic" ? "mode-card--active" : ""}`} onClick={() => setAuthMode("basic")}>
+              <strong>Basic Auth</strong><span>Yêu cầu user/password cho mọi truy cập, kể cả WebDAV. Bắt buộc khi deploy VPS.</span>
+            </button>
+          </div>
+          {authMode === "basic" && (
+            <div className="settings-form">
+              <label>
+                <span>Tên đăng nhập</span>
+                <input value={authUser} onChange={(event) => setAuthUser(event.target.value)} placeholder="admin" />
+              </label>
+              <label>
+                <span>Mật khẩu mới {auth.has_password && <em>(để trống nếu giữ nguyên)</em>}</span>
+                <input type="password" value={authPass} onChange={(event) => setAuthPass(event.target.value)} placeholder="••••••••" />
+              </label>
+            </div>
+          )}
+          <button className="button button--primary" onClick={saveAuth} disabled={loading}>Lưu cài đặt bảo mật</button>
         </div>
       )}
     </section>
