@@ -11,6 +11,7 @@ import { ShareDialog } from "./ShareDialog";
 
 type SortKey = "updated_at" | "name" | "size";
 type ViewMode = "grid" | "list";
+type KindFilter = "all" | "image" | "video" | "audio" | "document" | "archive" | "other";
 import { UploadQueue } from "../state/uploads";
 
 type Props = {
@@ -36,6 +37,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   const [selection, setSelection] = useState<{ kind: "file"; data: DriveFile } | { kind: "folder"; data: DriveFolder } | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("updated_at");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const toast = useToast();
   const confirm = useConfirm();
   const folderInputRef = useRef<HTMLInputElement | null>(null);
@@ -366,7 +368,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
 
   const isEmpty = contents.folders.length === 0 && contents.files.length === 0;
   const sortedFolders = [...contents.folders].sort(folderComparator(sortKey));
-  const sortedFiles = [...contents.files].sort(fileComparator(sortKey));
+  const sortedFiles = [...contents.files].filter((file) => kindFilter === "all" || file.kind === kindFilter).sort(fileComparator(sortKey));
 
   return (
     <div className={selection ? "drive-layout drive-layout--with-detail" : "drive-layout"}>
@@ -390,6 +392,15 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
             <option value="updated_at">Mới nhất</option>
             <option value="name">Tên A-Z</option>
             <option value="size">Dung lượng</option>
+          </select>
+          <select className="select-control" value={kindFilter} onChange={(event) => setKindFilter(event.target.value as KindFilter)}>
+            <option value="all">Tất cả loại</option>
+            <option value="image">Hình ảnh</option>
+            <option value="video">Video</option>
+            <option value="audio">Âm thanh</option>
+            <option value="document">Tài liệu</option>
+            <option value="archive">File nén</option>
+            <option value="other">Khác</option>
           </select>
           <button className={`icon-button ${viewMode === "grid" ? "icon-button--active" : ""}`} onClick={() => setViewMode("grid")} aria-label="Lưới"><LayoutGrid size={16} /></button>
           <button className={`icon-button ${viewMode === "list" ? "icon-button--active" : ""}`} onClick={() => setViewMode("list")} aria-label="Danh sách"><List size={16} /></button>

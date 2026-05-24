@@ -2,6 +2,7 @@ import { Cloud, Database, FolderOpen, HardDrive, Home, Link2, Search, Settings, 
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentConfig, AgentInfo, AuthStatus, createFolder, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo } from "./api/agent";
+import { ActivityView } from "./components/ActivityView";
 import { DriveBrowser } from "./components/DriveBrowser";
 import { HomeView } from "./components/HomeView";
 import { SearchView } from "./components/SearchView";
@@ -15,7 +16,7 @@ import { UploadDock } from "./components/UploadDock";
 import { useUploadQueue } from "./state/uploads";
 
 type AgentState = "checking" | "online" | "offline";
-type ViewKey = "home" | "drive" | "computers" | "shared" | "starred" | "trash" | "settings" | "search";
+type ViewKey = "home" | "drive" | "computers" | "shared" | "starred" | "trash" | "settings" | "search" | "activity";
 
 export function App() {
   const sharedPath = window.location.pathname.match(/^\/share\/(.+)$/);
@@ -100,7 +101,7 @@ function DriveApp() {
               {item.icon} {item.label}
             </button>
           ))}
-          <a className="drive-nav__item drive-nav__item--ghost"><Link2 size={18} /> {t("drive.links")}</a>
+          <a className="drive-nav__item drive-nav__item--ghost" onClick={() => setView("activity")}><Link2 size={18} /> Hoạt động</a>
         </nav>
         <div className="storage-card">
           <HardDrive size={18} />
@@ -128,6 +129,7 @@ function DriveApp() {
         {view === "search" && <SearchView query={searchQuery} />}
         {view === "trash" && <TrashView />}
         {view === "settings" && <SettingsView />}
+        {view === "activity" && <ActivityView />}
 
         <section className="agent-drawer">
           <Database size={18} />
