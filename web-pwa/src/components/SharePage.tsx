@@ -82,8 +82,12 @@ export function SharePage({ slug }: { slug: string }) {
         )}
         {!loading && data && data.share.target_kind === "folder" && !data.requires_password && (
           <div className="share-page__file">
-            <h1>Link chia sẻ thư mục</h1>
-            <p>Tính năng tải thư mục công khai sẽ sớm được hỗ trợ.</p>
+            <div className="share-page__icon"><FileText size={36} /></div>
+            <h1>Thư mục chia sẻ</h1>
+            <p>Tải toàn bộ thư mục dưới dạng tệp ZIP.</p>
+            <a className="button button--primary" href={`${AGENT_BASE_URL}/share/${encodeURIComponent(slug)}/raw${password ? `?password=${encodeURIComponent(password)}` : ""}`}>
+              <Download size={16} /> Tải ZIP
+            </a>
           </div>
         )}
       </section>

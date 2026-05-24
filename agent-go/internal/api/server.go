@@ -628,11 +628,22 @@ func (s *Server) handleShareUnlock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
+	if !s.shareRate.allow(clientIP(r)) {
+		writeError(w, http.StatusTooManyRequests, errBadRequest("quá nhiều yêu cầu, vui lòng thử lại sau"))
+		return
+	}
 	slug := r.PathValue("slug")
 	password := r.URL.Query().Get("password")
 	resolved, err := s.drive.ResolveShare(r.Context(), slug, password)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, err)
+		return
+	}
+	if resolved.Share.TargetKind == "folder" {
+		s.drive.RecordShareAccess(r.Context(), resolved.Share.ID)
+		if err := s.drive.StreamFolderShareZip(r.Context(), resolved.Share, w); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+		}
 		return
 	}
 	file, err := s.drive.DownloadableForShare(r.Context(), resolved.Share)

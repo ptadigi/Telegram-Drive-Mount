@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/base32"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -302,9 +303,18 @@ func IsSharePasswordRequired(err error) bool {
 
 func (s *Service) DownloadableForShare(ctx context.Context, share Share) (DownloadableFile, error) {
 	if share.TargetKind != "file" {
-		return DownloadableFile{}, fmt.Errorf("link chia sẻ thư mục chưa được hỗ trợ")
+		return DownloadableFile{}, fmt.Errorf("link chia sẻ này không phải file đơn lẻ")
 	}
 	return s.GetDownloadableFile(ctx, share.TargetID)
+}
+
+func (s *Service) StreamFolderShareZip(ctx context.Context, share Share, w http.ResponseWriter) error {
+	if share.TargetKind != "folder" {
+		return fmt.Errorf("link chia sẻ không phải thư mục")
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''share.zip")
+	return s.ZipFolder(ctx, share.TargetID, w)
 }
 
 func generateSlug() (string, error) {

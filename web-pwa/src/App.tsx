@@ -3,6 +3,7 @@ import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentConfig, AgentInfo, AuthStatus, createFolder, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo } from "./api/agent";
 import { DriveBrowser } from "./components/DriveBrowser";
+import { HomeView } from "./components/HomeView";
 import { SearchView } from "./components/SearchView";
 import { SettingsView } from "./components/SettingsView";
 import { SharePage } from "./components/SharePage";
@@ -119,7 +120,7 @@ function DriveApp() {
 
         {!auth?.authorized && <TelegramLoginPanel auth={auth} />}
 
-        {view === "home" && <HomeView t={t} info={info} config={config} database={database} auth={auth} agentState={agentState} />}
+        {view === "home" && <HomeView info={info} database={database} auth={auth} agentState={agentState} onOpenDrive={() => setView("drive")} onOpenStarred={() => setView("starred")} onOpenSettings={() => setView("settings")} onOpenComputers={() => setView("computers")} />}
         {view === "drive" && <DriveBrowser uploadQueue={queue} rootLabel={t("drive.myDrive")} description={t("drive.myDriveDesc")} />}
         {view === "computers" && <ComputersView t={t} />}
         {view === "shared" && <PlaceholderView title={t("drive.shared")} text={t("drive.sharedSoon")} />}
@@ -143,25 +144,6 @@ function DriveApp() {
         <button className={view === "settings" ? "active" : ""} onClick={() => setView("settings")}><Settings size={18} /> Cài đặt</button>
       </nav>
     </main>
-  );
-}
-
-function HomeView({ t, info, config, database, auth, agentState }: { t: ReturnType<typeof useTranslation>["t"]; info: AgentInfo | null; config: AgentConfig | null; database: DatabaseStatus | null; auth: AuthStatus | null; agentState: AgentState; }) {
-  return (
-    <section className="drive-hero-card">
-      <div>
-        <span>{t("drive.heroEyebrow")}</span>
-        <h1>{t("drive.heroTitle")}</h1>
-        <p>{t("drive.heroText")}</p>
-        <p className="muted-text">{t("agent.dataDir")}: {config?.data_dir || "-"}</p>
-      </div>
-      <div className="drive-stats">
-        <MiniStat label={t("status.agentOnline")} value={agentState === "online" ? t("agent.ready") : t("agent.notReady")} />
-        <MiniStat label={t("agent.database")} value={database?.exists ? t("agent.ready") : t("agent.notReady")} />
-        <MiniStat label={t("agent.telegramSession")} value={auth?.session_exists ? t("agent.ready") : t("agent.notReady")} />
-        <MiniStat label={t("agent.uptime")} value={info ? `${info.uptime_sec}s` : "-"} />
-      </div>
-    </section>
   );
 }
 

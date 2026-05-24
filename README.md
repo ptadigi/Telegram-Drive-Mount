@@ -1,30 +1,49 @@
-# Ổ Đĩa Cloud Ảo Dùng Telegram Làm Lưu Trữ
+# Ổ Đĩa Cloud Ảo dùng Telegram làm lưu trữ
 
-Dự án này đang được chuyển hướng từ prototype Tauri/Rust cũ sang kiến trúc mới nhẹ hơn:
+Cloud drive cá nhân, mã nguồn mở, lấy Telegram làm tầng lưu trữ ẩn phía sau. Người dùng thấy giao diện như Google Drive, không cần biết Telegram là gì.
 
 ```text
-PWA tiếng Việt + Go Desktop Agent + Gateway public domain + Telegram storage backend
+PWA tiếng Việt + Go Desktop Agent + Gateway domain/Tunnel + Telegram storage
 ```
 
-Mục tiêu là tạo một ổ cứng cloud ảo: người dùng quản lý, đồng bộ, stream và chia sẻ file như một cloud drive thật; Telegram chỉ đóng vai trò tầng lưu trữ phía sau.
+## Thành phần
 
-## Thành phần chính
+- `agent-go/`: Go agent chạy nền, mở API local (mặc định `127.0.0.1:8750`). Phụ trách đăng nhập Telegram, metadata SQLite, queue đồng bộ Telegram, watcher thư mục desktop, gateway link chia sẻ, Cloudflare Tunnel.
+- `web-pwa/`: PWA giao diện tiếng Việt có dấu. Phụ trách upload file/thư mục, quản lý drive, đánh dấu sao, tìm kiếm, đổi tên, di chuyển, thùng rác, link chia sẻ và trang public mở link.
+- `docs/`: Kiến trúc, plan UI Google Drive, roadmap.
 
-- `agent-go/`: Go desktop agent. Phụ trách đăng nhập Telegram, metadata, sync desktop, stream local, WebDAV/FUSE sau này.
-- `web-pwa/`: PWA tiếng Việt. Phụ trách upload từ điện thoại/browser, quản lý file, stream media, tạo link chia sẻ.
-- `docs/`: Tài liệu kiến trúc, roadmap và design system.
-- `app/`: Prototype Tauri cũ, giữ tạm để tham khảo logic Telegram upload/download/stream. Không còn là hướng phát triển chính.
+## Tính năng đã có
 
-## Trạng thái hiện tại
+- Đăng nhập Telegram bằng số điện thoại + mã (hỗ trợ 2FA).
+- Upload nhiều file, kéo thả file/thư mục từ máy, tự tạo cây thư mục.
+- Auto sync nền lên Telegram, không cần bấm nút.
+- Hash SHA-256 chống upload trùng.
+- Fallback: tải lại file từ Telegram khi cache local mất.
+- Thumbnail ảnh.
+- File manager: đổi tên, di chuyển, đánh dấu sao, thùng rác (xóa/khôi phục), xóa hẳn, tải file, tải thư mục dạng ZIP.
+- Search file/folder theo tên.
+- Drag & drop nâng cao: thả file ngoài vào folder card, kéo file giữa các thư mục để di chuyển, kéo về root.
+- Link chia sẻ:
+  - mật khẩu, hết hạn, giới hạn lượt tải, thu hồi
+  - chia sẻ file hoặc thư mục (tải về dạng ZIP)
+  - trang public `/share/<slug>` đẹp tiếng Việt
+- Cấu hình domain chia sẻ:
+  - LAN
+  - tên miền của bạn
+  - Cloudflare Tunnel auto (cần cài `cloudflared`)
+- Đồng bộ thư mục desktop: thêm/quét lại/tạm dừng/bật lại/xóa, watcher `fsnotify`.
+- Realtime SSE cho file/transfer/sync root/share config.
+- PWA installable, dark mode, bottom nav cho mobile.
 
-- Đã có skeleton Go Agent với health API.
-- Đã có tài liệu kiến trúc sản phẩm mới.
-- Đã bắt đầu tách PWA mới không phụ thuộc Tauri.
+## Chạy thử nhanh
 
-## Chạy Go Agent
+Yêu cầu: Go 1.22+, Node.js 20+, file `agent-go/config.local.json` chứa Telegram `api_id` và `api_hash` (lấy tại https://my.telegram.org/apps), không commit lên git.
+
+### 1. Chạy Go Agent
 
 ```powershell
 cd agent-go
+$env:TD_AGENT_CONFIG = 'config.local.json'
 go run ./cmd/agent
 ```
 
@@ -32,21 +51,60 @@ Kiểm tra:
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8750/health
-Invoke-RestMethod http://127.0.0.1:8750/v1/info
 ```
 
-## Chạy PWA
+### 2. Chạy PWA
 
 ```powershell
 cd web-pwa
 npm install
-npm run dev
+npm run dev -- --host 0.0.0.0
 ```
 
-## Nguyên tắc phát triển
+Mở `http://192.168.x.x:5173` trên trình duyệt cùng mạng để dùng từ điện thoại.
 
-- Giao diện và nội dung mặc định dùng tiếng Việt có dấu.
-- Không dùng Tauri cho app mới.
-- Go Agent là lõi native nhẹ cho desktop.
-- PWA là giao diện chính cho mobile/web/desktop.
-- Telegram được xem như object storage backend, không phải data model chính.
+## Đăng nhập Telegram
+
+1. Mở PWA, panel `Kết nối Telegram` xuất hiện nếu chưa đăng nhập.
+2. Nhập số điện thoại đã đăng ký Telegram.
+3. Nhập mã Telegram gửi tới ứng dụng.
+4. Nếu tài khoản bật xác minh hai bước, nhập mật khẩu 2FA.
+
+Sau khi kết nối, app hoạt động như cloud drive: upload xong tự đồng bộ lên Telegram nền.
+
+## Cấu hình link chia sẻ
+
+Trong PWA mở `Cài đặt`:
+
+- LAN: link chỉ mở trong mạng nội bộ, không cần cấu hình thêm.
+- Tên miền của tôi: nhập domain trỏ về máy chạy agent. App tự kiểm tra `/.td-check`.
+- Cloudflare Tunnel: bật một phát có ngay link public `*.trycloudflare.com`. Yêu cầu cài `cloudflared` trong PATH.
+
+## Đồng bộ thư mục desktop
+
+1. Mở mục `Máy tính` trong PWA.
+2. Bấm `Thêm thư mục`, nhập đường dẫn local.
+3. Agent quét và đẩy file lên cloud, sau đó watch nền để đồng bộ file mới.
+
+## Cấu trúc dữ liệu
+
+- Metadata lưu trong SQLite tại thư mục dữ liệu của Agent.
+- File local cache trong `dataDir/uploads/`.
+- Thumbnail trong `dataDir/thumbs/`.
+- Session Telegram là file local, không gửi đi đâu.
+
+## Định hướng
+
+- Không dùng Tauri.
+- Telegram là object storage, không phải data model chính.
+- Mọi giao diện và thông báo dùng tiếng Việt có dấu.
+- Mã nguồn mở để mỗi cá nhân/tổ chức self-host được.
+
+## Mốc tiếp theo
+
+- Tray app desktop + auto start.
+- Mount ổ đĩa ảo (WinFsp/macFUSE).
+- Storage channel/chat Telegram chuyên dụng thay Saved Messages.
+- Stream video range từ Telegram.
+
+Đóng góp và issue luôn được hoan nghênh.
