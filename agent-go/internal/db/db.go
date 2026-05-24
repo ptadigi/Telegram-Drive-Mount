@@ -3,8 +3,11 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -14,15 +17,67 @@ func Open(path string) (*sql.DB, error) {
 		return nil, fmt.Errorf("tạo thư mục dữ liệu: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", path)
+	dsn := buildDSN(path)
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("mở sqlite: %w", err)
+	}
+	if err := tunePool(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := applyPragmas(db); err != nil {
+		db.Close()
+		return nil, err
 	}
 	if err := migrate(db); err != nil {
 		db.Close()
 		return nil, err
 	}
 	return db, nil
+}
+
+func buildDSN(path string) string {
+	values := url.Values{}
+	values.Set("_pragma", "journal_mode(WAL)")
+	values.Add("_pragma", "synchronous(NORMAL)")
+	values.Add("_pragma", "busy_timeout(8000)")
+	values.Add("_pragma", "foreign_keys(ON)")
+	values.Add("_pragma", "temp_store(MEMORY)")
+	values.Add("_pragma", "cache_size(-32000)")
+	values.Add("_pragma", "wal_autocheckpoint(200)")
+	return "file:" + path + "?" + values.Encode()
+}
+
+func tunePool(db *sql.DB) error {
+	maxOpen := runtime.GOMAXPROCS(0)
+	if maxOpen < 4 {
+		maxOpen = 4
+	}
+	if maxOpen > 8 {
+		maxOpen = 8
+	}
+	db.SetMaxOpenConns(maxOpen)
+	db.SetMaxIdleConns(maxOpen)
+	db.SetConnMaxIdleTime(5 * time.Minute)
+	db.SetConnMaxLifetime(0)
+	return nil
+}
+
+func applyPragmas(db *sql.DB) error {
+	pragmas := []string{
+		"PRAGMA journal_mode = WAL",
+		"PRAGMA synchronous = NORMAL",
+		"PRAGMA busy_timeout = 8000",
+		"PRAGMA foreign_keys = ON",
+		"PRAGMA temp_store = MEMORY",
+	}
+	for _, stmt := range pragmas {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("áp dụng %s: %w", stmt, err)
+		}
+	}
+	return nil
 }
 
 func migrate(db *sql.DB) error {
