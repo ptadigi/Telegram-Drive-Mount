@@ -53,6 +53,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/files/trash", s.handleTrashFile)
 	mux.HandleFunc("POST /v1/files/restore", s.handleRestoreFile)
 	mux.HandleFunc("GET /v1/trash", s.handleListTrash)
+	mux.HandleFunc("GET /v1/shares", s.handleListShares)
+	mux.HandleFunc("POST /v1/shares", s.handleCreateShare)
+	mux.HandleFunc("PUT /v1/shares", s.handleUpdateShare)
+	mux.HandleFunc("DELETE /v1/shares", s.handleDeleteShare)
 	mux.HandleFunc("GET /v1/files/download", s.handleDownloadFile)
 	mux.HandleFunc("GET /v1/files/thumbnail", s.handleFileThumbnail)
 	mux.HandleFunc("POST /v1/files/upload", s.handleUploadFile)
@@ -329,6 +333,54 @@ func (s *Server) handleListTrash(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, contents)
+}
+
+func (s *Server) handleListShares(w http.ResponseWriter, r *http.Request) {
+	shares, err := s.drive.ListShares(r.Context(), r.URL.Query().Get("target_kind"), r.URL.Query().Get("target_id"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"shares": shares})
+}
+
+func (s *Server) handleCreateShare(w http.ResponseWriter, r *http.Request) {
+	var input drive.CreateShareInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	share, err := s.drive.CreateShare(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"share": share})
+}
+
+func (s *Server) handleUpdateShare(w http.ResponseWriter, r *http.Request) {
+	var input drive.UpdateShareInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	share, err := s.drive.UpdateShare(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"share": share})
+}
+
+func (s *Server) handleDeleteShare(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errBadRequest("thiếu id share"))
+		return
+	}
+	if err := s.drive.DeleteShare(r.Context(), id); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {

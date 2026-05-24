@@ -174,6 +174,14 @@ func migrate(db *sql.DB) error {
 	}); err != nil {
 		return err
 	}
+	if err := addColumns(db, "shares", map[string]string{
+		"target_kind":   "TEXT NOT NULL DEFAULT 'file'",
+		"target_id":     "TEXT NOT NULL DEFAULT ''",
+		"updated_at":    "INTEGER NOT NULL DEFAULT 0",
+		"max_downloads": "INTEGER NOT NULL DEFAULT 0",
+	}); err != nil {
+		return err
+	}
 	return addColumns(db, "sync_roots", map[string]string{
 		"status":       "TEXT NOT NULL DEFAULT 'idle'",
 		"last_scan_at": "INTEGER NOT NULL DEFAULT 0",
