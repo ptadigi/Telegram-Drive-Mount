@@ -1,6 +1,6 @@
-import { FolderSync, Plus, RefreshCw } from "lucide-react";
+import { FolderSync, Pause, Play, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { createSyncRoot, listSyncRoots, scanSyncRoot, SyncRoot } from "../api/agent";
+import { createSyncRoot, deleteSyncRoot, listSyncRoots, scanSyncRoot, SyncRoot, updateSyncRoot } from "../api/agent";
 
 export function SyncRootsPanel() {
   const [roots, setRoots] = useState<SyncRoot[]>([]);
@@ -35,11 +35,11 @@ export function SyncRootsPanel() {
     }
   }
 
-  async function scan(id: string) {
+  async function runAction(action: () => Promise<{ roots: SyncRoot[] }>) {
     setLoading(true);
     setError(null);
     try {
-      const result = await scanSyncRoot(id);
+      const result = await action();
       setRoots(result.roots);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -72,7 +72,13 @@ export function SyncRootsPanel() {
               <strong>{root.local_path}</strong>
               <span>{root.mode} · {root.enabled ? "Đang bật" : "Đã tắt"} · {root.status}</span>
             </div>
-            <button className="button button--ghost" onClick={() => scan(root.id)} disabled={loading}>Quét lại</button>
+            <div className="sync-root__actions">
+              <button className="button button--ghost" onClick={() => runAction(() => scanSyncRoot(root.id))} disabled={loading || !root.enabled}>Quét lại</button>
+              <button className="button button--ghost" onClick={() => runAction(() => updateSyncRoot(root.id, !root.enabled))} disabled={loading}>
+                {root.enabled ? <Pause size={15} /> : <Play size={15} />} {root.enabled ? "Tạm dừng" : "Bật lại"}
+              </button>
+              <button className="button button--ghost" onClick={() => runAction(() => deleteSyncRoot(root.id))} disabled={loading}><Trash2 size={15} /> Xóa</button>
+            </div>
           </div>
         ))}
       </div>}

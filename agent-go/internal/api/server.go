@@ -39,6 +39,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/transfers", s.handleTransfers)
 	mux.HandleFunc("GET /v1/sync/roots", s.handleListSyncRoots)
 	mux.HandleFunc("POST /v1/sync/roots", s.handleCreateSyncRoot)
+	mux.HandleFunc("PUT /v1/sync/roots", s.handleUpdateSyncRoot)
+	mux.HandleFunc("DELETE /v1/sync/roots", s.handleDeleteSyncRoot)
 	mux.HandleFunc("POST /v1/sync/roots/scan", s.handleScanSyncRoot)
 	mux.HandleFunc("GET /v1/files", s.handleListFiles)
 	mux.HandleFunc("GET /v1/drive/contents", s.handleDriveContents)
@@ -134,6 +136,33 @@ func (s *Server) handleCreateSyncRoot(w http.ResponseWriter, r *http.Request) {
 	}
 	roots, _ := s.drive.ListSyncRoots(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{"root": root, "roots": roots})
+}
+
+func (s *Server) handleUpdateSyncRoot(w http.ResponseWriter, r *http.Request) {
+	var input drive.UpdateSyncRootInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if err := s.drive.UpdateSyncRoot(r.Context(), input); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	roots, _ := s.drive.ListSyncRoots(r.Context())
+	writeJSON(w, http.StatusOK, map[string]any{"roots": roots})
+}
+
+func (s *Server) handleDeleteSyncRoot(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errBadRequest("thiếu id thư mục đồng bộ"))
+		return
+	}
+	if err := s.drive.DeleteSyncRoot(r.Context(), id); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	roots, _ := s.drive.ListSyncRoots(r.Context())
+	writeJSON(w, http.StatusOK, map[string]any{"roots": roots})
 }
 
 func (s *Server) handleScanSyncRoot(w http.ResponseWriter, r *http.Request) {

@@ -56,6 +56,15 @@ export function listTransfers(signal?: AbortSignal) { return getJSON<{ transfers
 export function listSyncRoots(signal?: AbortSignal) { return getJSON<{ roots: SyncRoot[] }>("/v1/sync/roots", signal); }
 export function createSyncRoot(localPath: string, remoteFolderId = "") { return sendJSON<{ root: SyncRoot; roots: SyncRoot[] }>("/v1/sync/roots", { local_path: localPath, remote_folder_id: remoteFolderId, mode: "upload_only" }); }
 export function scanSyncRoot(id: string) { return sendJSON<{ roots: SyncRoot[] }>("/v1/sync/roots/scan", { id }); }
+export function updateSyncRoot(id: string, enabled: boolean) { return putJSON<{ roots: SyncRoot[] }>("/v1/sync/roots", { id, enabled }); }
+export async function deleteSyncRoot(id: string) {
+  const response = await fetch(`${AGENT_BASE_URL}/v1/sync/roots?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: `Agent API lỗi ${response.status}` }));
+    throw new Error(data.error || `Agent API lỗi ${response.status}`);
+  }
+  return response.json() as Promise<{ roots: SyncRoot[] }>;
+}
 export function createFolder(name: string, parentId = "") { return sendJSON<{ folder: DriveFolder; contents: DriveContents }>("/v1/folders", { name, parent_id: parentId }); }
 export function downloadFileUrl(id: string) { return `${AGENT_BASE_URL}/v1/files/download?id=${encodeURIComponent(id)}`; }
 export function thumbnailUrl(id: string) { return `${AGENT_BASE_URL}/v1/files/thumbnail?id=${encodeURIComponent(id)}`; }

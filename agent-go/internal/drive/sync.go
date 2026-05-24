@@ -30,10 +30,16 @@ type CreateSyncRootInput struct {
 	Mode           string `json:"mode"`
 }
 
+type UpdateSyncRootInput struct {
+	ID      string `json:"id"`
+	Enabled *bool  `json:"enabled"`
+}
+
 func (s *Service) ListSyncRoots(ctx context.Context) ([]SyncRoot, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, local_path, COALESCE(remote_folder_id, ''), mode, enabled, COALESCE(status, 'idle'), COALESCE(last_scan_at, 0), created_at, updated_at
 		FROM sync_roots
+		WHERE enabled IN (0, 1)
 		ORDER BY updated_at DESC
 	`)
 	if err != nil {
@@ -94,10 +100,38 @@ func (s *Service) CreateSyncRoot(ctx context.Context, input CreateSyncRootInput)
 	return root, nil
 }
 
+func (s *Service) UpdateSyncRoot(ctx context.Context, input UpdateSyncRootInput) error {
+	if input.ID == "" {
+		return fmt.Errorf("thiếu id thư mục đồng bộ")
+	}
+	if input.Enabled == nil {
+		return nil
+	}
+	enabled := 0
+	status := "paused"
+	if *input.Enabled {
+		enabled = 1
+		status = "watching"
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE sync_roots SET enabled = ?, status = ?, updated_at = ? WHERE id = ?`, enabled, status, time.Now().Unix(), input.ID)
+	return err
+}
+
+func (s *Service) DeleteSyncRoot(ctx context.Context, id string) error {
+	if id == "" {
+		return fmt.Errorf("thiếu id thư mục đồng bộ")
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE sync_roots SET enabled = -1, status = 'removed', updated_at = ? WHERE id = ?`, time.Now().Unix(), id)
+	return err
+}
+
 func (s *Service) ScanSyncRoot(ctx context.Context, id string) error {
 	root, err := s.getSyncRoot(ctx, id)
 	if err != nil {
 		return err
+	}
+	if !root.Enabled {
+		return fmt.Errorf("thư mục đồng bộ đang tắt")
 	}
 	if err := s.setSyncRootStatus(ctx, root.ID, "scanning"); err != nil {
 		return err
@@ -125,28 +159,44 @@ func (s *Service) ScanSyncRoot(ctx context.Context, id string) error {
 }
 
 func (s *Service) SyncRootWatcher(ctx context.Context) {
+	known := map[string]int64{}
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			roots, err := s.ListSyncRoots(ctx)
+			if err != nil {
+				continue
+			}
+			for _, root := range roots {
+				if !root.Enabled {
+					continue
+				}
+				if known[root.ID] == root.UpdatedAt {
+					continue
+				}
+				known[root.ID] = root.UpdatedAt
+				go s.watchSingleRoot(ctx, root)
+			}
+		}
+	}
+}
+
+func (s *Service) watchSingleRoot(ctx context.Context, root SyncRoot) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return
 	}
 	defer watcher.Close()
-	roots, err := s.ListSyncRoots(ctx)
-	if err != nil {
-		return
-	}
-	rootByPath := map[string]SyncRoot{}
-	for _, root := range roots {
-		if !root.Enabled {
-			continue
+	_ = filepath.WalkDir(root.LocalPath, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr == nil && entry.IsDir() {
+			_ = watcher.Add(path)
 		}
-		_ = filepath.WalkDir(root.LocalPath, func(path string, entry os.DirEntry, walkErr error) error {
-			if walkErr == nil && entry.IsDir() {
-				_ = watcher.Add(path)
-			}
-			return nil
-		})
-		rootByPath[root.LocalPath] = root
-	}
+		return nil
+	})
 	for {
 		select {
 		case <-ctx.Done():
@@ -159,16 +209,11 @@ func (s *Service) SyncRootWatcher(ctx context.Context) {
 			if err != nil {
 				continue
 			}
-			for _, root := range rootByPath {
-				if !strings.HasPrefix(event.Name, root.LocalPath) {
-					continue
-				}
-				if info.IsDir() {
-					_ = watcher.Add(event.Name)
-					continue
-				}
-				_ = s.importLocalFile(ctx, root, event.Name, info)
+			if info.IsDir() {
+				_ = watcher.Add(event.Name)
+				continue
 			}
+			_ = s.importLocalFile(ctx, root, event.Name, info)
 		case <-watcher.Errors:
 		}
 	}
@@ -179,7 +224,7 @@ func (s *Service) getSyncRoot(ctx context.Context, id string) (SyncRoot, error) 
 	var enabled int
 	err := s.db.QueryRowContext(ctx, `
 		SELECT id, local_path, COALESCE(remote_folder_id, ''), mode, enabled, COALESCE(status, 'idle'), COALESCE(last_scan_at, 0), created_at, updated_at
-		FROM sync_roots WHERE id = ?
+		FROM sync_roots WHERE id = ? AND enabled IN (0, 1)
 	`, id).Scan(&root.ID, &root.LocalPath, &root.RemoteFolderID, &root.Mode, &enabled, &root.Status, &root.LastScanAt, &root.CreatedAt, &root.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
