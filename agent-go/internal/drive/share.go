@@ -224,6 +224,89 @@ func boolToInt(value bool) int {
 	return 0
 }
 
+type ResolvedShare struct {
+	Share Share
+	File  *File
+}
+
+func (s *Service) ResolveShare(ctx context.Context, slug string, password string) (ResolvedShare, error) {
+	share, err := s.getShareBySlug(ctx, slug)
+	if err != nil {
+		return ResolvedShare{}, err
+	}
+	if share.Revoked {
+		return ResolvedShare{}, fmt.Errorf("link chia sẻ đã bị thu hồi")
+	}
+	if share.ExpiresAt > 0 && share.ExpiresAt < time.Now().Unix() {
+		return ResolvedShare{}, fmt.Errorf("link chia sẻ đã hết hạn")
+	}
+	if share.MaxDownloads > 0 && share.AccessCount >= share.MaxDownloads {
+		return ResolvedShare{}, fmt.Errorf("link chia sẻ đã đạt giới hạn lượt tải")
+	}
+	if share.HasPassword {
+		hash, err := s.getSharePasswordHash(ctx, share.ID)
+		if err != nil {
+			return ResolvedShare{}, err
+		}
+		if password == "" {
+			return ResolvedShare{Share: share}, errSharePasswordRequired
+		}
+		if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
+			return ResolvedShare{}, fmt.Errorf("mật khẩu chia sẻ không đúng")
+		}
+	}
+	resolved := ResolvedShare{Share: share}
+	if share.TargetKind == "file" {
+		file, err := s.getFile(ctx, share.TargetID)
+		if err != nil {
+			return ResolvedShare{}, err
+		}
+		resolved.File = &file
+	}
+	return resolved, nil
+}
+
+func (s *Service) RecordShareAccess(ctx context.Context, id string) {
+	now := time.Now().Unix()
+	_, _ = s.db.ExecContext(ctx, `UPDATE shares SET access_count = access_count + 1, last_accessed_at = ?, updated_at = ? WHERE id = ?`, now, now, id)
+}
+
+func (s *Service) getShareBySlug(ctx context.Context, slug string) (Share, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT id, COALESCE(slug, ''), COALESCE(target_kind, 'file'), COALESCE(target_id, COALESCE(file_id, '')), CASE WHEN password_hash IS NULL OR password_hash = '' THEN 0 ELSE 1 END, COALESCE(expires_at, 0), revoked, COALESCE(max_downloads, 0), access_count, COALESCE(last_accessed_at, 0), created_at, COALESCE(updated_at, created_at) FROM shares WHERE slug = ?`, slug)
+	var share Share
+	var hasPassword, revoked int
+	if err := row.Scan(&share.ID, &share.Slug, &share.TargetKind, &share.TargetID, &hasPassword, &share.ExpiresAt, &revoked, &share.MaxDownloads, &share.AccessCount, &share.LastAccessedAt, &share.CreatedAt, &share.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return Share{}, fmt.Errorf("không tìm thấy link chia sẻ")
+		}
+		return Share{}, err
+	}
+	share.HasPassword = hasPassword == 1
+	share.Revoked = revoked == 1
+	return share, nil
+}
+
+func (s *Service) getSharePasswordHash(ctx context.Context, id string) (string, error) {
+	var hash sql.NullString
+	if err := s.db.QueryRowContext(ctx, `SELECT password_hash FROM shares WHERE id = ?`, id).Scan(&hash); err != nil {
+		return "", err
+	}
+	return hash.String, nil
+}
+
+var errSharePasswordRequired = fmt.Errorf("link chia sẻ yêu cầu mật khẩu")
+
+func IsSharePasswordRequired(err error) bool {
+	return err == errSharePasswordRequired
+}
+
+func (s *Service) DownloadableForShare(ctx context.Context, share Share) (DownloadableFile, error) {
+	if share.TargetKind != "file" {
+		return DownloadableFile{}, fmt.Errorf("link chia sẻ thư mục chưa được hỗ trợ")
+	}
+	return s.GetDownloadableFile(ctx, share.TargetID)
+}
+
 func generateSlug() (string, error) {
 	buf := make([]byte, 9)
 	if _, err := rand.Read(buf); err != nil {

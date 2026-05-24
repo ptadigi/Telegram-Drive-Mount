@@ -57,6 +57,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/shares", s.handleCreateShare)
 	mux.HandleFunc("PUT /v1/shares", s.handleUpdateShare)
 	mux.HandleFunc("DELETE /v1/shares", s.handleDeleteShare)
+	mux.HandleFunc("GET /v1/share/config", s.handleShareConfigGet)
+	mux.HandleFunc("PUT /v1/share/config", s.handleShareConfigPut)
+	mux.HandleFunc("GET /.td-check", s.handleShareHealthCheck)
+	mux.HandleFunc("GET /share/{slug}", s.handleSharePage)
+	mux.HandleFunc("POST /share/{slug}/unlock", s.handleShareUnlock)
+	mux.HandleFunc("GET /share/{slug}/raw", s.handleShareRaw)
 	mux.HandleFunc("GET /v1/files/download", s.handleDownloadFile)
 	mux.HandleFunc("GET /v1/files/thumbnail", s.handleFileThumbnail)
 	mux.HandleFunc("POST /v1/files/upload", s.handleUploadFile)
@@ -381,6 +387,112 @@ func (s *Server) handleDeleteShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleShareConfigGet(w http.ResponseWriter, r *http.Request) {
+	cfg, err := s.drive.GetShareConfig(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"config": cfg})
+}
+
+func (s *Server) handleShareConfigPut(w http.ResponseWriter, r *http.Request) {
+	var input drive.UpdateShareConfigInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	host := r.Host
+	if host == "" {
+		host = s.config.Addr()
+	}
+	localBase := "http://" + host
+	cfg, err := s.drive.UpdateShareConfig(r.Context(), input, localBase)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"config": cfg})
+}
+
+func (s *Server) handleShareHealthCheck(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "service": "telegram-drive-share"})
+}
+
+func (s *Server) handleSharePage(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	if slug == "" {
+		writeError(w, http.StatusBadRequest, errBadRequest("thiếu slug"))
+		return
+	}
+	resolved, err := s.drive.ResolveShare(r.Context(), slug, r.URL.Query().Get("password"))
+	if err != nil {
+		if drive.IsSharePasswordRequired(err) {
+			writeJSON(w, http.StatusOK, map[string]any{"requires_password": true, "share": map[string]any{"slug": slug, "has_password": true, "target_kind": resolved.Share.TargetKind}})
+			return
+		}
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	share := resolved.Share
+	payload := map[string]any{
+		"share": map[string]any{
+			"slug":          share.Slug,
+			"target_kind":   share.TargetKind,
+			"has_password":  share.HasPassword,
+			"expires_at":    share.ExpiresAt,
+			"max_downloads": share.MaxDownloads,
+			"access_count":  share.AccessCount,
+		},
+	}
+	if resolved.File != nil {
+		file := *resolved.File
+		payload["file"] = map[string]any{
+			"name":       file.Name,
+			"size":       file.Size,
+			"mime_type":  file.MimeType,
+			"kind":       file.Kind,
+			"updated_at": file.UpdatedAt,
+		}
+	}
+	writeJSON(w, http.StatusOK, payload)
+}
+
+func (s *Server) handleShareUnlock(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	var input struct {
+		Password string `json:"password"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	resolved, err := s.drive.ResolveShare(r.Context(), slug, input.Password)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"slug": resolved.Share.Slug, "ok": true})
+}
+
+func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	password := r.URL.Query().Get("password")
+	resolved, err := s.drive.ResolveShare(r.Context(), slug, password)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err)
+		return
+	}
+	file, err := s.drive.DownloadableForShare(r.Context(), resolved.Share)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	s.drive.RecordShareAccess(r.Context(), resolved.Share.ID)
+	w.Header().Set("Content-Type", file.MimeType)
+	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
+	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+urlQueryEscape(file.Name))
+	http.ServeFile(w, r, file.LocalPath)
 }
 
 func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {

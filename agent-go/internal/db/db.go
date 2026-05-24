@@ -158,6 +158,18 @@ func migrate(db *sql.DB) error {
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS share_config (
+			id TEXT PRIMARY KEY,
+			mode TEXT NOT NULL DEFAULT 'lan',
+			domain TEXT,
+			base_url TEXT,
+			local_base_url TEXT,
+			port INTEGER NOT NULL DEFAULT 8750,
+			gateway_token TEXT,
+			health_ok INTEGER NOT NULL DEFAULT 0,
+			health_message TEXT,
+			updated_at INTEGER NOT NULL DEFAULT 0
+		)`,
 	}
 
 	for _, stmt := range statements {
