@@ -46,6 +46,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/files", s.handleListFiles)
 	mux.HandleFunc("GET /v1/drive/contents", s.handleDriveContents)
 	mux.HandleFunc("POST /v1/folders", s.handleCreateFolder)
+	mux.HandleFunc("PUT /v1/folders/rename", s.handleRenameFolder)
+	mux.HandleFunc("POST /v1/folders/trash", s.handleTrashFolder)
+	mux.HandleFunc("POST /v1/folders/restore", s.handleRestoreFolder)
+	mux.HandleFunc("PUT /v1/files/rename", s.handleRenameFile)
+	mux.HandleFunc("POST /v1/files/trash", s.handleTrashFile)
+	mux.HandleFunc("POST /v1/files/restore", s.handleRestoreFile)
+	mux.HandleFunc("GET /v1/trash", s.handleListTrash)
 	mux.HandleFunc("GET /v1/files/download", s.handleDownloadFile)
 	mux.HandleFunc("GET /v1/files/thumbnail", s.handleFileThumbnail)
 	mux.HandleFunc("POST /v1/files/upload", s.handleUploadFile)
@@ -239,6 +246,89 @@ func (s *Server) handleCreateFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"folder": folder, "contents": contents})
+}
+
+func (s *Server) handleRenameFolder(w http.ResponseWriter, r *http.Request) {
+	var input drive.RenameInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	folder, err := s.drive.RenameFolder(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"folder": folder})
+}
+
+func (s *Server) handleRenameFile(w http.ResponseWriter, r *http.Request) {
+	var input drive.RenameInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	file, err := s.drive.RenameFile(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"file": file})
+}
+
+func (s *Server) handleTrashFile(w http.ResponseWriter, r *http.Request) {
+	var input drive.IDInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if err := s.drive.TrashFile(r.Context(), input.ID); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleTrashFolder(w http.ResponseWriter, r *http.Request) {
+	var input drive.IDInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if err := s.drive.TrashFolder(r.Context(), input.ID); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleRestoreFile(w http.ResponseWriter, r *http.Request) {
+	var input drive.IDInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if err := s.drive.RestoreFile(r.Context(), input.ID); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleRestoreFolder(w http.ResponseWriter, r *http.Request) {
+	var input drive.IDInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if err := s.drive.RestoreFolder(r.Context(), input.ID); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleListTrash(w http.ResponseWriter, r *http.Request) {
+	contents, err := s.drive.ListTrash(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, contents)
 }
 
 func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {

@@ -5,6 +5,7 @@ import { AgentConfig, AgentInfo, AuthStatus, createFolder, DatabaseStatus, getAu
 import { DriveBrowser } from "./components/DriveBrowser";
 import { SyncRootsPanel } from "./components/SyncRootsPanel";
 import { TelegramLoginPanel } from "./components/TelegramLoginPanel";
+import { TrashView } from "./components/TrashView";
 import { UploadDock } from "./components/UploadDock";
 import { useUploadQueue } from "./state/uploads";
 
@@ -110,7 +111,7 @@ export function App() {
         {view === "computers" && <ComputersView t={t} />}
         {view === "shared" && <PlaceholderView title={t("drive.shared")} text={t("drive.sharedSoon")} />}
         {view === "starred" && <PlaceholderView title={t("drive.starred")} text={t("drive.starredSoon")} />}
-        {view === "trash" && <PlaceholderView title={t("drive.trash")} text={t("drive.trashSoon")} />}
+        {view === "trash" && <TrashView />}
 
         <section className="agent-drawer">
           <Database size={18} />

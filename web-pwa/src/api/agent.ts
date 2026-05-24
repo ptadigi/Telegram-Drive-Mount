@@ -67,6 +67,13 @@ export async function deleteSyncRoot(id: string) {
   return response.json() as Promise<{ roots: SyncRoot[] }>;
 }
 export function createFolder(name: string, parentId = "") { return sendJSON<{ folder: DriveFolder; contents: DriveContents }>("/v1/folders", { name, parent_id: parentId }); }
+export function renameFolder(id: string, name: string) { return putJSON<{ folder: DriveFolder }>("/v1/folders/rename", { id, name }); }
+export function trashFolder(id: string) { return sendJSON<{ ok: boolean }>("/v1/folders/trash", { id }); }
+export function restoreFolder(id: string) { return sendJSON<{ ok: boolean }>("/v1/folders/restore", { id }); }
+export function renameFile(id: string, name: string) { return putJSON<{ file: DriveFile }>("/v1/files/rename", { id, name }); }
+export function trashFile(id: string) { return sendJSON<{ ok: boolean }>("/v1/files/trash", { id }); }
+export function restoreFile(id: string) { return sendJSON<{ ok: boolean }>("/v1/files/restore", { id }); }
+export function listTrash(signal?: AbortSignal) { return getJSON<DriveContents>("/v1/trash", signal); }
 export function downloadFileUrl(id: string) { return `${AGENT_BASE_URL}/v1/files/download?id=${encodeURIComponent(id)}`; }
 export function thumbnailUrl(id: string) { return `${AGENT_BASE_URL}/v1/files/thumbnail?id=${encodeURIComponent(id)}`; }
 export function seedDemoFile() { return sendJSON<{ contents?: DriveContents; files: DriveFile[] }>("/v1/files/demo", {}); }
