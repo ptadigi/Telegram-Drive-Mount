@@ -1,8 +1,9 @@
 import { Cloud, Database, FolderOpen, HardDrive, Home, Link2, Search, Settings, Share2, Star, Trash2, UploadCloud } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AgentConfig, AgentInfo, AuthStatus, createFolder, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo } from "./api/agent";
+import { AgentConfig, AgentInfo, AppUser, AuthStatus, createFolder, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo, appLogout } from "./api/agent";
 import { ActivityView } from "./components/ActivityView";
+import { AuthGate } from "./components/AuthGate";
 import { DriveBrowser } from "./components/DriveBrowser";
 import { HomeView } from "./components/HomeView";
 import { SearchView } from "./components/SearchView";
@@ -23,10 +24,18 @@ export function App() {
   if (sharedPath) {
     return <SharePage slug={decodeURIComponent(sharedPath[1])} />;
   }
-  return <DriveApp />;
+  return <AuthGuard />;
 }
 
-function DriveApp() {
+function AuthGuard() {
+  const [user, setUser] = useState<AppUser | null>(null);
+  if (!user) {
+    return <AuthGate onAuthorized={setUser} />;
+  }
+  return <DriveApp currentUser={user} onLogout={async () => { await appLogout().catch(() => undefined); setUser(null); }} />;
+}
+
+function DriveApp({ currentUser, onLogout }: { currentUser: AppUser; onLogout: () => void }) {
   const { t } = useTranslation();
   const [agentState, setAgentState] = useState<AgentState>("checking");
   const [info, setInfo] = useState<AgentInfo | null>(null);
@@ -116,6 +125,7 @@ function DriveApp() {
             <StatusPill state={agentState} text={agentState === "online" ? t("status.agentOnline") : agentState === "offline" ? t("status.agentOffline") : t("status.agentChecking")} />
             <StatusPill state={auth?.authorized ? "online" : "offline"} text={auth?.authorized ? t("login.connectedTitle") : t("login.title")} />
             <button className="icon-button" onClick={() => setView("settings")}><Settings size={18} /></button>
+            <button className="icon-button" onClick={onLogout} title={`Đăng xuất ${currentUser.email}`}>↩</button>
           </div>
         </header>
 

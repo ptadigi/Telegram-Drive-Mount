@@ -14,6 +14,7 @@ import (
 	"telegram-drive-agent/internal/config"
 	"telegram-drive-agent/internal/drive"
 	"telegram-drive-agent/internal/tunnel"
+	"telegram-drive-agent/internal/users"
 )
 
 type Server struct {
@@ -23,12 +24,13 @@ type Server struct {
 	auth      *agentauth.Service
 	drive     *drive.Service
 	tunnel    *tunnel.Service
+	users     *users.Service
 	shareRate *rateLimiter
 	authMu    sync.RWMutex
 	authCfg   config.AuthConfig
 }
 
-func NewServer(version string, cfg config.Config, authService *agentauth.Service, driveService *drive.Service, tunnelService *tunnel.Service) *Server {
+func NewServer(version string, cfg config.Config, authService *agentauth.Service, driveService *drive.Service, tunnelService *tunnel.Service, userService *users.Service) *Server {
 	return &Server{
 		startedAt: time.Now(),
 		version:   version,
@@ -36,6 +38,7 @@ func NewServer(version string, cfg config.Config, authService *agentauth.Service
 		auth:      authService,
 		drive:     driveService,
 		tunnel:    tunnelService,
+		users:     userService,
 		shareRate: newRateLimiter(20, time.Minute),
 		authCfg:   cfg.Auth,
 	}
@@ -86,6 +89,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/audit", s.handleListAudit)
 	mux.HandleFunc("GET /v1/auth/api-config", s.handleAPIAuthGet)
 	mux.HandleFunc("PUT /v1/auth/api-config", s.handleAPIAuthPut)
+	mux.HandleFunc("POST /v1/users/register", s.handleUserRegister)
+	mux.HandleFunc("POST /v1/users/login", s.handleUserLogin)
+	mux.HandleFunc("POST /v1/users/logout", s.handleUserLogout)
+	mux.HandleFunc("GET /v1/users/me", s.handleUserMe)
 	mux.Handle("/webdav/", s.webdavHandler())
 	mux.Handle("/webdav", s.webdavHandler())
 	mux.HandleFunc("GET /v1/cache", s.handleCacheStats)
@@ -155,6 +162,9 @@ func isPublicPath(path string) bool {
 		return true
 	}
 	if strings.HasPrefix(path, "/share/") {
+		return true
+	}
+	if path == "/v1/users/login" || path == "/v1/users/register" || path == "/v1/users/me" || path == "/v1/users/logout" {
 		return true
 	}
 	return false

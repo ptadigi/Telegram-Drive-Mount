@@ -187,6 +187,22 @@ func migrate(db *sql.DB) error {
 			target_id TEXT,
 			detail TEXT
 		)`,
+		`CREATE TABLE IF NOT EXISTS users (
+			id TEXT PRIMARY KEY,
+			email TEXT NOT NULL UNIQUE,
+			password_hash TEXT NOT NULL,
+			display_name TEXT,
+			role TEXT NOT NULL DEFAULT 'admin',
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS user_sessions (
+			token TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			created_at INTEGER NOT NULL,
+			expires_at INTEGER NOT NULL,
+			user_agent TEXT
+		)`,
 	}
 
 	for _, stmt := range statements {

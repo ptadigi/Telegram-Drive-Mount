@@ -21,6 +21,7 @@ import (
 	"telegram-drive-agent/internal/telegramstorage"
 	"telegram-drive-agent/internal/tray"
 	"telegram-drive-agent/internal/tunnel"
+	"telegram-drive-agent/internal/users"
 )
 
 const version = "0.1.0-dev"
@@ -71,7 +72,8 @@ func main() {
 	driveService := drive.NewService(metadataDB, cfg.DataDir, telegramStorage)
 	driveService.SetCachePolicy(cfg.Cache.Mode, cfg.Cache.MaxBytes)
 	tunnelSvc := tunnel.New(driveTunnelListener{drive: driveService})
-	apiServer := api.NewServer(version, cfg, authService, driveService, tunnelSvc)
+	userService := users.New(metadataDB)
+	apiServer := api.NewServer(version, cfg, authService, driveService, tunnelSvc, userService)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

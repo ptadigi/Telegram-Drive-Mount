@@ -13,6 +13,8 @@ export type ShareConfig = { mode: string; domain?: string; base_url?: string; lo
 export type CacheStats = { mode: string; max_bytes: number; used_bytes: number; files: number; };
 export type StorageSettings = { peer_kind: string; channel_id: number; access_hash: number; title?: string; updated_at?: number; };
 export type APIAuthConfig = { mode: string; username: string; has_password: boolean; };
+export type AppUser = { id: string; email: string; display_name?: string; role: string; created_at: number; };
+export type AppMe = { user?: AppUser; setup?: boolean };
 export type AuthStatus = { configured: boolean; session_exists: boolean; login_started: boolean; authorized: boolean; phone?: string; code_type?: string; };
 export type SyncRoot = { id: string; local_path: string; remote_folder_id?: string; mode: string; enabled: boolean; status: string; last_scan_at: number; created_at: number; updated_at: number; };
 export type UploadProgress = { phase: "uploading_agent" | "processing" | "completed" | "failed"; percent: number; fileName: string; error?: string; };
@@ -157,6 +159,10 @@ export function updateStorageSettings(payload: { peer_kind: string; channel_id?:
 export function createStorageChannel(title: string) { return sendJSON<{ storage: StorageSettings }>("/v1/storage/channel", { title }); }
 export function getAPIAuth(signal?: AbortSignal) { return getJSON<{ auth: APIAuthConfig }>("/v1/auth/api-config", signal); }
 export function updateAPIAuth(payload: { mode: string; username?: string; password?: string }) { return putJSON<{ auth: APIAuthConfig }>("/v1/auth/api-config", payload); }
+export function getAppMe(signal?: AbortSignal) { return getJSON<AppMe>("/v1/users/me", signal); }
+export function appRegister(email: string, password: string, displayName = "") { return sendJSON<{ user: AppUser }>("/v1/users/register", { email, password, display_name: displayName }); }
+export function appLogin(email: string, password: string) { return sendJSON<{ user: AppUser }>("/v1/users/login", { email, password }); }
+export function appLogout() { return sendJSON<{ ok: boolean }>("/v1/users/logout", {}); }
 export function shareLink(config: ShareConfig | null, slug: string) {
   const base = (config?.base_url && config.base_url.trim()) || (config?.local_base_url && config.local_base_url.trim()) || `${AGENT_BASE_URL}`;
   return `${base.replace(/\/$/, "")}/share/${slug}`;
