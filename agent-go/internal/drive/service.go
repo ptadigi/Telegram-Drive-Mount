@@ -59,6 +59,12 @@ type CreateFolderInput struct {
 	Name     string `json:"name"`
 }
 
+type StoragePeer struct {
+	Kind       string
+	ChannelID  int64
+	AccessHash int64
+}
+
 type TelegramUploader interface {
 	UploadToSavedMessages(ctx context.Context, localPath string, originalName string) (UploadedObject, error)
 	DownloadFromSavedMessages(ctx context.Context, messageID int, targetPath string) error

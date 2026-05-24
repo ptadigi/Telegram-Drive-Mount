@@ -77,6 +77,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/share/config", s.handleShareConfigPut)
 	mux.HandleFunc("GET /v1/storage", s.handleStorageGet)
 	mux.HandleFunc("PUT /v1/storage", s.handleStoragePut)
+	mux.HandleFunc("GET /v1/storage", s.handleStorageGet)
+	mux.HandleFunc("PUT /v1/storage", s.handleStoragePut)
 	mux.HandleFunc("GET /v1/cache", s.handleCacheStats)
 	mux.HandleFunc("PUT /v1/cache", s.handleCacheConfig)
 	mux.HandleFunc("POST /v1/cache/cleanup", s.handleCacheCleanup)
