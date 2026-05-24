@@ -1,318 +1,161 @@
-# Roadmap phat trien: Telegram-backed Virtual Cloud Drive
+# Roadmap Ổ Đĩa Cloud Ảo
 
-## 1. Muc tieu tong quat
+Bản cập nhật theo mục tiêu đã chốt với chủ dự án.
 
-Xay dung mot he sinh thai o cung cloud ao dung Telegram lam tang luu tru phia sau. San pham gom PWA cho upload/xem/share/stream, Go desktop agent cho autosync/mount/cache, va public gateway cho domain sharing.
+## Nguyên tắc cốt lõi (đã chốt)
 
-Repo hien tai `Telegram-Drive` duoc dung lam prototype va reference implementation cho Telegram auth, upload/download, streaming, share va dashboard UI.
+1. **Telegram là source of truth duy nhất**. Mọi file gốc nằm ở Telegram.
+2. **Agent (desktop hoặc VPS)** chỉ là **cache nóng + gateway** giữa PWA/mobile và Telegram.
+3. **PWA/mobile** là client thuần. Không lưu cố định gì trên máy người dùng cuối, chỉ xem qua HTTP.
+4. **Cache, thumbnail, metadata** được phép lưu ở Agent với 3 chính sách: `mirror`, `smart`, `cloud_only`.
+5. **Tiếng Việt có dấu** trong toàn bộ giao diện và thông báo.
+6. **Tự lo phía sau, đơn giản phía trước**: người dùng không cần biết đến API ID, channel Telegram, token, v.v.
 
-## 2. Nguyen tac trien khai
+## Hai kịch bản triển khai
 
-- Khong rewrite tat ca ngay lap tuc.
-- Dung repo hien tai de hoc va tao demo nhanh.
-- Viet tai lieu kien truc truoc khi tach core.
-- Viet Go agent rieng de phuc vu sync/mount/stream dai han.
-- PWA khong phu trach autosync nen.
-- Uu tien MVP chay duoc truoc, sau do moi them two-way sync va FUSE.
+| | Chạy desktop | Deploy VPS |
+|---|---|---|
+| Agent ở đâu | Máy người dùng | Máy chủ |
+| Cache file ở đâu | Máy người dùng | VPS |
+| Điện thoại có lưu file? | Không | Không |
+| Mỗi lần xem | HTTP localhost / LAN | HTTP qua domain/tunnel |
+| Khi cache miss | Agent kéo từ Telegram | VPS kéo từ Telegram |
 
-## 3. Phase 0: Khao sat va chay prototype hien tai
+Cả 2 kịch bản dùng chung 1 codebase, chỉ khác:
+- Desktop có tray app, autostart, mount ổ ảo.
+- VPS chạy headless, có CLI flag và docs deploy.
 
-Muc tieu:
-- Dam bao repo hien tai build/chay duoc.
-- Test cac tinh nang Telegram co san.
-- Ghi lai bug va gioi han.
+## Đã hoàn thành
 
-Cong viec:
-- Cai dependency trong `app`.
-- Chay frontend build.
-- Chay `npm run tauri dev`.
-- Test login Telegram.
-- Test upload/download/list folder.
-- Test video/audio streaming.
-- Test share link.
-- Test proxy/VPN settings neu can.
+- Đăng nhập Telegram số điện thoại + 2FA.
+- Upload nhiều file, kéo thả file/thư mục, tự tạo cây thư mục.
+- Sync nền lên Telegram (queue + worker + retry).
+- Hash SHA-256 chống upload trùng.
+- Fallback: tải lại file từ Telegram khi cache mất.
+- Thumbnail ảnh.
+- File manager: rename, di chuyển, sao, thùng rác, xóa hẳn, ZIP folder.
+- Tìm kiếm theo tên, sort, grid/list view.
+- Multi-select bulk: sao/bỏ sao, di chuyển, xóa hàng loạt.
+- Drag & drop nâng cao: thả file ngoài vào folder card, kéo file giữa folder.
+- Tạo link chia sẻ: mật khẩu (bcrypt), hết hạn, giới hạn lượt tải, thu hồi, xóa.
+- Trang public `/share/<slug>` HTML đẹp tiếng Việt, hỗ trợ folder ZIP.
+- Cấu hình domain chia sẻ: LAN, tên miền riêng, Cloudflare Tunnel auto.
+- Sync thư mục desktop: thêm/quét lại/tạm dừng/bật lại/xóa, watcher fsnotify.
+- Realtime SSE cho file/transfer/sync root/share/cache.
+- 3 chính sách cache: mirror / smart / cloud_only, có nút dọn cache thủ công.
+- File viewer trực tiếp: ảnh, video, audio, PDF, markdown, text.
+- PWA installable, bottom nav mobile, Home view, toast/confirm.
+- Backend: WAL SQLite, busy_timeout, rate-limit `/share/*`.
+- Deploy: CLI flag `--config / --data-dir / --addr`.
 
-Lenh du kien:
+## Mốc đang làm
 
-```powershell
-cd Telegram-Drive/app
-npm install
-npm run build
-npm run tauri dev
-```
+### M1 — Sync watcher robust + Telegram stream (đang ưu tiên)
 
-Ket qua mong muon:
-- Co ban demo desktop hien tai.
-- Co danh sach bug/han che.
-- Co nhan xet phan nao nen migrate sang Go.
+Mục tiêu: cache miss trên VPS không còn phải tải full file rồi mới serve. Sync watcher không bỏ sót/lặp.
 
-## 4. Phase 1: Viet hoa va chuan hoa UI hien tai
+- Stream Telegram chunk-by-chunk theo HTTP Range:
+  - `GET /v1/files/stream?id=...` proxy Telegram, hỗ trợ `Range`.
+  - Khi xem video chưa cache: vừa tải vừa serve, không chờ full.
+  - Cache write-through trong lúc stream để lần sau dùng cache.
+- Sync watcher:
+  - Debounce file đang copy (đợi mtime+size ổn định 2 lần).
+  - Xử lý sự kiện `rename`, `delete`, `move` (soft delete metadata).
+  - Bỏ qua file trùng hash đã có trên Telegram.
+  - Cập nhật trạng thái sync per file rõ ràng.
+- Storage adapter chuẩn:
+  - Chuyển từ Telegram Saved Messages sang storage channel/chat riêng (private channel cá nhân).
+  - Tự tạo channel khi user đăng nhập lần đầu nếu cần.
+  - Lưu đủ `telegram_channel_id`, `access_hash`, `file_reference` vào `file_versions`.
 
-Muc tieu:
-- Bien prototype hien tai thanh ban demo tieng Viet.
-- Tao nen tang UX cho san pham moi.
+### M2 — Tray app + autostart + native folder picker
 
-Cong viec:
-- Them i18n cho frontend.
-- Tao `vi.json` va `en.json`.
-- Gom tat ca text UI vao locale files.
-- Dich dashboard, auth, settings, share dialog, queue, toast.
-- Chuan hoa format file size, date/time theo tieng Viet.
-- Chuan hoa error message than thien.
-- Ap dung `docs/DESIGN.md` vao UI dan dan.
+Mục tiêu: người dùng cài 1 lần, app luôn sẵn sàng, không phải `go run`.
 
-Ket qua mong muon:
-- App desktop hien tai co giao dien tieng Viet.
-- Co ngon ngu san pham ro: "o dia ao", "dong bo", "tai len", "lien ket chia se".
+- Tray bằng `getlantern/systray`.
+- Menu tiếng Việt: Mở giao diện, Mở thư mục dữ liệu, Thêm thư mục đồng bộ, Tạm dừng/Tiếp tục, Trạng thái Telegram, Thoát.
+- Embed Agent trong cùng process, không cần shell ngoài.
+- Native folder picker khi `Thêm thư mục đồng bộ`.
+- Auto start theo OS:
+  - Windows: registry `Run` key.
+  - macOS: LaunchAgent plist.
+  - Linux: `~/.config/autostart`.
+- Notification khi sync xong/lỗi.
 
-## 5. Phase 2: Thiet ke Drive Core va metadata schema
+### M3 — Mount ổ ảo
 
-Muc tieu:
-- Tach tu duy "Telegram message" thanh "Drive file/object".
-- Xac dinh data model chuan cho PWA, agent va gateway.
+Mục tiêu: người dùng thấy ổ đĩa thật trên máy, mở file = mở từ ổ ảo.
 
-Cong viec:
-- Chot schema SQLite/PostgreSQL cho folders, files, versions, shares, sync.
-- Dinh nghia `StorageBackend` interface.
-- Dinh nghia Telegram object mapping.
-- Dinh nghia API contract bang OpenAPI.
-- Dinh nghia event contract cho WebSocket/SSE.
-
-Ket qua mong muon:
-- Co specification de Go agent va PWA cung implement.
-- Khong phu thuoc truc tiep vao UI hien tai.
-
-## 6. Phase 3: Go Telegram Core MVP
-
-Muc tieu:
-- Tao Go module moi co kha nang login, upload, download, list file qua Telegram.
-
-Thu muc de xuat:
-
-```text
-agent-go/
-  cmd/agent/
-  internal/auth/
-  internal/storage/telegram/
-  internal/drive/
-  internal/db/
-  internal/api/
-  internal/stream/
-```
-
-Cong nghe:
-- Go.
-- `gotd/td` cho Telegram MTProto.
-- SQLite cho local metadata.
-- `net/http` hoac `chi` cho local API.
-
-Cong viec:
-- Login Telegram bang phone/code/password.
-- Luu session local.
-- Upload file len Telegram.
-- Download file tu Telegram.
-- List object/file.
-- Ghi metadata vao SQLite.
-- Expose local API co ban.
-
-API MVP:
-
-```text
-POST /auth/start
-POST /auth/code
-POST /auth/password
-GET  /drive/files
-POST /drive/upload
-GET  /drive/download/{fileId}
-GET  /health
-```
-
-Ket qua mong muon:
-- Co binary Go chay doc lap.
-- Co the upload/download file khong can Tauri/Rust.
-
-## 7. Phase 4: Local streaming bang Go
-
-Muc tieu:
-- Thay the/bo sung streaming Rust hien tai bang Go streaming service.
-
-Cong viec:
-- Implement `/stream/{fileId}`.
-- Ho tro HTTP Range.
-- Fetch byte range tu Telegram.
-- Cache chunk local.
-- MIME detection.
-- Signed stream URL.
-
-Tieu chi thanh cong:
-- Browser co the play MP4/MP3.
-- Co the tua video.
-- Stream file lon khong can tai het truoc.
-
-## 8. Phase 5: PWA MVP
-
-Muc tieu:
-- Tao app web/PWA de upload tu dien thoai va quan ly file co ban.
-
-Thu muc de xuat:
-
-```text
-web-pwa/
-  src/
-  public/manifest.webmanifest
-  src/locales/vi.json
-  src/locales/en.json
-```
-
-Cong viec:
-- Login/connect account theo flow gateway/agent.
-- Upload file tu mobile.
-- Browse folder/file.
-- Search.
-- Preview/stream media.
-- Tao share link.
-- PWA manifest + service worker.
-- IndexedDB cache metadata gan day.
-
-Khong lam trong MVP:
-- Autosync nen.
-- Mount drive.
-- Offline full file sync.
-
-## 9. Phase 6: Desktop autosync trong Go Agent
-
-Muc tieu:
-- Go agent dong bo thu muc desktop len Telegram.
-
-Cong viec:
-- Chon sync root.
-- Scan local folder.
-- Theo doi thay doi bang `fsnotify`.
-- Upload-only sync.
-- Queue + retry.
-- Pause/resume.
-- Bandwidth limit.
-- Sync status event qua WebSocket/SSE.
-
-Trang thai file:
-- `synced`.
-- `pending_upload`.
-- `uploading`.
-- `error`.
-- `conflict`.
-
-Tieu chi thanh cong:
-- User chon mot folder tren PC.
-- File moi tu dong upload len Telegram.
-- UI thay progress realtime.
-
-## 10. Phase 7: Public Gateway va proxy domain
-
-Muc tieu:
-- Tao URL public cho file qua domain rieng.
-
-Cong viec:
-- Tao gateway Go.
-- Tao share slug.
-- Password optional.
-- Expiration.
-- Revoke.
-- Download endpoint.
-- Stream endpoint co Range.
-- Rate limit.
-- CORS va security headers.
-- Domain + TLS qua Caddy/Cloudflare.
-
-URL de xuat:
-
-```text
-https://files.domain.com/s/{slug}/{filename}
-https://files.domain.com/stream/{slug}/{filename}
-```
-
-Tieu chi thanh cong:
-- Gui link cho nguoi khac download/stream duoc.
-- Link het han/bi thu hoi dung chinh xac.
-
-## 11. Phase 8: WebDAV virtual drive MVP
-
-Muc tieu:
-- Bien drive thanh network drive mount duoc tren OS.
-
-Cong viec:
-- Go agent expose WebDAV local.
-- Map folder/file metadata sang WebDAV tree.
-- Doc file bang lazy download.
-- Cache file local.
-- Ghi file moi qua WebDAV neu kha thi.
-
-Tieu chi thanh cong:
-- Windows/macOS/Linux mount duoc drive.
-- Mo file tu Explorer/Finder thanh cong.
-- File lon co cache va progress hop ly.
-
-## 12. Phase 9: FUSE/WinFsp virtual drive nang cao
-
-Muc tieu:
-- Tao trai nghiem o dia ao native tot hon WebDAV.
-
-Cong nghe:
-- `winfsp/cgofuse`.
 - Windows: WinFsp.
-- macOS: macFUSE.
-- Linux: FUSE2/FUSE3.
+- macOS: macFUSE / FUSE-T.
+- Linux: FUSE.
+- Đọc:
+  - Folder list từ metadata.
+  - Mở file → nếu cache có thì đọc local, không có thì stream Telegram.
+- Ghi:
+  - Tạo file mới trong ổ ảo → đẩy queue upload.
+  - Sửa file → version mới.
+- Quyền: read-only trước, sau đó mới read-write.
 
-Cong viec:
-- Read-only mount truoc.
-- Lazy read + cache.
-- Metadata operations.
-- Write support sau.
-- Conflict handling.
+## Mốc tiếp theo (sau M1-M3)
 
-## 13. Phase 10: Two-way sync va conflict resolver
+### M4 — Multi-user và bảo mật cho VPS
 
-Muc tieu:
-- Dong bo hai chieu giong Google Drive.
+Khi deploy VPS, có nhiều người dùng chung:
 
-Cong viec:
-- Remote change detection.
-- Local change detection.
-- Rename/move detection.
-- Delete policy.
-- Conflict copies.
-- Version history.
-- UI resolve conflict.
+- App-level login (email/password hoặc magic link).
+- Mỗi user có space metadata riêng, channel Telegram riêng.
+- API token cho client gọi.
+- Audit log thao tác file/share.
+- Backup metadata DB tự động.
 
-Can than:
-- Day la phase kho, khong nen lam truoc khi upload-only on dinh.
+### M5 — Stream tối ưu và preview office
 
-## 14. Uu tien ngan han de lam ngay
+- Adaptive streaming cho video lớn (HLS hoặc range chunk).
+- Office Online viewer khi có domain public (docx/xlsx/pptx).
+- PDF.js fallback cho mobile.
+- Markdown render rich text (marked + sanitize).
 
-1. Cai dependency va build repo hien tai.
-2. Tao issue list/bug list sau khi chay app.
-3. Them i18n va Viet hoa frontend hien tai.
-4. Tao skeleton `agent-go`.
-5. Implement Go auth/upload/download MVP bang `gotd/td`.
-6. Viet OpenAPI cho local agent.
-7. Tao PWA skeleton dua tren `docs/DESIGN.md`.
+### M6 — Distribution
 
-## 15. Ranh gioi MVP dau tien
+- Installer Windows MSIX/Inno Setup.
+- macOS .pkg ký notarized.
+- Linux AppImage/deb.
+- `docker-compose.yml` cho self-host VPS.
+- Systemd unit mẫu.
+- `docs/DEPLOY.md` quickstart self-host.
+- GitHub Actions build cho 3 OS.
 
-MVP dau tien nen gom:
-- Desktop prototype hien tai chay duoc.
-- UI tieng Viet co ban.
-- Go agent login Telegram va upload/download duoc.
-- PWA upload file tu dien thoai qua API.
-- Stream media co Range.
-- Share link public co expiration/revoke.
+### M7 — UX nâng cao
 
-Chua can gom:
-- FUSE native.
-- Two-way sync.
-- HLS transcoding.
-- Multi-tenant SaaS day du.
-- End-to-end encryption rieng.
+- Filter chip Loại / Người / Lần sửa đổi.
+- Bin auto-retention sau N ngày.
+- Multi-select bulk download (ZIP nhiều mục).
+- Shortcut tới folder.
+- Recent activity log riêng.
 
-## 16. Ket luan
+## Việc đang KHÔNG làm (loại khỏi scope ngắn hạn)
 
-Duong di tot nhat la dung repo hien tai de tang toc hieu biet va demo, dong thoi xay core moi bang Go theo tung phase. San pham cuoi cung se khong bi gioi han boi Tauri/Rust hien tai, nhung van tan dung duoc rat nhieu bai hoc va logic da co.
+- Bot Telegram phụ trợ.
+- Trình quản lý kế toán/cộng tác.
+- AI search nội dung.
+- Mobile native app riêng (iOS/Android).
+- Bridge sang Drive/Dropbox khác.
+
+Sẽ xét sau M3.
+
+## Tiêu chí xong cho mỗi mốc
+
+Mỗi mốc xem như xong khi:
+1. Backend `go test ./...` pass.
+2. Frontend `npm run build` pass.
+3. Smoke test thật một flow end-to-end.
+4. Trong 2 kịch bản triển khai (desktop + VPS) đều hoạt động đúng.
+5. Có dòng cập nhật trong README.
+
+## Quyết định chốt
+
+- Em không làm tray, mount, deploy docs trước khi xong M1.
+- M1 là gốc của trải nghiệm: nếu stream Telegram chậm thì VPS deploy không có ý nghĩa.
+- Sau M1 mới qua M2 (tray) rồi M3 (mount).
+- Mỗi mốc đóng kín end-to-end, không nửa nhơ.
