@@ -1,10 +1,11 @@
-import { Archive, Download, FileAudio, FileText, FileVideo, Folder, Image, Info, LayoutGrid, Link2, List, MoreVertical, Pencil, RefreshCw, Star, Trash2 } from "lucide-react";
+import { Archive, Download, FileAudio, FileText, FileVideo, Folder, FolderInput, Image, Info, LayoutGrid, Link2, List, MoreVertical, Pencil, RefreshCw, Star, Trash2 } from "lucide-react";
 import React, { ChangeEvent, DragEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { createFolder, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, renameFile, renameFolder, starFile, starFolder, thumbnailUrl, trashFile, trashFolder, zipFolderUrl } from "../api/agent";
+import { createFolder, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, moveFile, moveFolder, renameFile, renameFolder, starFile, starFolder, thumbnailUrl, trashFile, trashFolder, zipFolderUrl } from "../api/agent";
 import { useConfirm, useToast } from "../state/ui";
 import { ContextMenu, ContextMenuItem } from "./ContextMenu";
 import { DetailPanel } from "./DetailPanel";
+import { MoveDialog } from "./MoveDialog";
 import { ShareDialog } from "./ShareDialog";
 
 type SortKey = "updated_at" | "name" | "size";
@@ -25,6 +26,9 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [dropping, setDropping] = useState(false);
   const [shareTarget, setShareTarget] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null);
+  const [moveTarget, setMoveTarget] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null);
+  const [dropTargetFolder, setDropTargetFolder] = useState<string | null>(null);
+  const [dragItem, setDragItem] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const [selection, setSelection] = useState<{ kind: "file"; data: DriveFile } | { kind: "folder"; data: DriveFolder } | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("updated_at");
@@ -107,6 +111,64 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     if (event.currentTarget === event.target) setDropping(false);
   }
 
+  async function handleDropOnFolder(folderId: string, event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDropTargetFolder(null);
+    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+      const items = event.dataTransfer.items;
+      const collected: { file: File; relativePath: string }[] = [];
+      if (items && items.length > 0 && typeof items[0].webkitGetAsEntry === "function") {
+        const entries = Array.from(items).map((item) => item.webkitGetAsEntry()).filter(Boolean) as FileSystemEntry[];
+        for (const entry of entries) await collectEntry(entry, "", collected);
+      } else {
+        const fileList = Array.from(event.dataTransfer.files || []);
+        for (const file of fileList) collected.push({ file, relativePath: file.name });
+      }
+      if (collected.length === 0) return;
+      const usePath = collected.some((item) => item.relativePath.includes("/"));
+      if (usePath) {
+        const filesWithPath = collected.map((item) => attachRelativePath(item.file, item.relativePath));
+        await uploadQueue.enqueue(filesWithPath, { folderId, preserveRelativePath: true });
+      } else {
+        await uploadQueue.enqueue(collected.map((item) => item.file), { folderId, preserveRelativePath: false });
+      }
+      return;
+    }
+    if (!dragItem) return;
+    if (dragItem.kind === "folder" && dragItem.id === folderId) return;
+    try {
+      if (dragItem.kind === "file") await moveFile(dragItem.id, folderId);
+      else await moveFolder(dragItem.id, folderId);
+      toast(`Đã chuyển ${dragItem.name}`, "success");
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setDragItem(null);
+    }
+  }
+
+  async function handleDropOnRoot(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDropTargetFolder(null);
+    if (!dragItem) {
+      handleDrop(event);
+      return;
+    }
+    try {
+      if (dragItem.kind === "file") await moveFile(dragItem.id, "");
+      else await moveFolder(dragItem.id, "");
+      toast(`Đã chuyển ${dragItem.name} ra root`, "success");
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setDragItem(null);
+    }
+  }
+
   async function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setDropping(false);
@@ -140,6 +202,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
       y: event.clientY,
       items: [
         { key: "rename", label: t("files.rename"), icon: <Pencil size={14} />, onSelect: () => promptRenameFolder(folder) },
+        { key: "move", label: "Di chuyển đến", icon: <FolderInput size={14} />, onSelect: () => setMoveTarget({ kind: "folder", id: folder.id, name: folder.name }) },
         { key: "share", label: t("files.share"), icon: <Link2 size={14} />, onSelect: () => setShareTarget({ kind: "folder", id: folder.id, name: folder.name }) },
         { key: "star", label: folder.starred ? "Bỏ đánh dấu sao" : "Đánh dấu sao", icon: <Star size={14} />, onSelect: () => toggleStarFolder(folder) },
         { key: "zip", label: "Tải xuống dạng ZIP", icon: <Download size={14} />, onSelect: () => window.location.assign(zipFolderUrl(folder.id)) },
@@ -160,6 +223,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
         { key: "share", label: t("files.share"), icon: <Link2 size={14} />, onSelect: () => setShareTarget({ kind: "file", id: file.id, name: file.name }) },
         { key: "star", label: file.starred ? "Bỏ đánh dấu sao" : "Đánh dấu sao", icon: <Star size={14} />, onSelect: () => toggleStarFile(file) },
         { key: "rename", label: t("files.rename"), icon: <Pencil size={14} />, onSelect: () => promptRenameFile(file) },
+        { key: "move", label: "Di chuyển đến", icon: <FolderInput size={14} />, onSelect: () => setMoveTarget({ kind: "file", id: file.id, name: file.name }) },
         { key: "download", label: t("files.download"), icon: <Download size={14} />, onSelect: () => window.location.assign(downloadFileUrl(file.id)) },
         { key: "trash", label: t("files.trash"), icon: <Trash2 size={14} />, danger: true, onSelect: () => promptTrashFile(file) },
       ],
@@ -232,7 +296,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
         className={dropping ? "drive-browser drive-browser--dropping" : "drive-browser"}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        onDrop={handleDropOnRoot}
       >
       <div className="drive-browser__header">
         <div>
@@ -266,7 +330,15 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
       {!loading && !isEmpty && (
         <div className={viewMode === "grid" ? "file-grid" : "file-list"}>
           {sortedFolders.map((folder) => (
-            <div className="drive-card drive-card--folder" key={folder.id}>
+            <div
+              className={`drive-card drive-card--folder ${dropTargetFolder === folder.id ? "drive-card--drop" : ""}`}
+              key={folder.id}
+              draggable
+              onDragStart={(event) => { setDragItem({ kind: "folder", id: folder.id, name: folder.name }); event.dataTransfer.setData("text/plain", folder.name); }}
+              onDragOver={(event) => { event.preventDefault(); setDropTargetFolder(folder.id); }}
+              onDragLeave={() => setDropTargetFolder((current) => (current === folder.id ? null : current))}
+              onDrop={(event) => handleDropOnFolder(folder.id, event)}
+            >
               <button className="drive-card__open" onClick={() => openFolder(folder)}>
                 <div className="drive-card__thumb"><Folder size={36} /></div>
                 <div className="drive-card__name"><strong>{folder.name}{folder.starred && <Star size={12} className="star-mark" />}</strong><span>{t("files.folder")}</span></div>
@@ -275,7 +347,14 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
             </div>
           ))}
           {sortedFiles.map((file) => (
-            <div className="drive-card" key={file.id} onClick={() => setSelection({ kind: "file", data: file })}>
+            <div
+              className="drive-card"
+              key={file.id}
+              onClick={() => setSelection({ kind: "file", data: file })}
+              draggable
+              onDragStart={(event) => { setDragItem({ kind: "file", id: file.id, name: file.name }); event.dataTransfer.setData("text/plain", file.name); }}
+              onDragEnd={() => setDragItem(null)}
+            >
               <div className="drive-card__thumb">
                 {file.preview_status === "ready" && file.kind === "image" ? <img src={thumbnailUrl(file.id)} alt="" /> : kindIcon(file.kind)}
               </div>
@@ -299,6 +378,12 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
         targetKind={shareTarget?.kind || "file"}
         targetId={shareTarget?.id || ""}
         targetName={shareTarget?.name || ""}
+      />
+      <MoveDialog
+        open={!!moveTarget}
+        onClose={() => setMoveTarget(null)}
+        target={moveTarget}
+        onMoved={refresh}
       />
       </section>
       <DetailPanel selection={selection} onClose={() => setSelection(null)} onShare={() => {

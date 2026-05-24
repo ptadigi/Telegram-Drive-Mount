@@ -131,6 +131,7 @@ a.button { text-decoration: none; }
 .drive-card__menu { position: absolute; top: 8px; right: 8px; border: 0; border-radius: 999px; width: 28px; height: 28px; background: rgba(255, 255, 255, 0.85); display: grid; place-items: center; cursor: pointer; color: #475569; }
 .drive-card__menu:hover { background: #eef4ff; }
 .drive-card--folder { cursor: pointer; background: #f8fbff; }
+.drive-card--drop { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(11, 102, 239, 0.18); }
 .drive-card__thumb { display: grid; place-items: center; border-radius: 14px; background: #eef4ff; color: var(--blue); overflow: hidden; }
 .drive-card__thumb img { width: 100%; height: 100%; object-fit: cover; }
 .drive-card__name { min-width: 0; }
