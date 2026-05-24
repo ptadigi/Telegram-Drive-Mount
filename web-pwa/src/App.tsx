@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentConfig, AgentInfo, AuthStatus, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo } from "./api/agent";
 import { FileManager } from "./components/FileManager";
+import { SyncRootsPanel } from "./components/SyncRootsPanel";
 import { TelegramLoginPanel } from "./components/TelegramLoginPanel";
 
 type AgentState = "checking" | "online" | "offline";
@@ -72,6 +73,7 @@ export function App() {
 
         {!auth?.authorized && <TelegramLoginPanel auth={auth} />}
         <FileManager />
+        <SyncRootsPanel />
 
         <section className="agent-drawer">
           <Database size={18} />

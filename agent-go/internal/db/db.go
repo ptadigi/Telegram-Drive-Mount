@@ -110,12 +110,18 @@ func migrate(db *sql.DB) error {
 			return fmt.Errorf("chạy migration sqlite: %w", err)
 		}
 	}
-	return addColumns(db, "files", map[string]string{
+	if err := addColumns(db, "files", map[string]string{
 		"extension":      "TEXT NOT NULL DEFAULT ''",
 		"kind":           "TEXT NOT NULL DEFAULT 'other'",
 		"local_path":     "TEXT NOT NULL DEFAULT ''",
 		"thumbnail_path": "TEXT NOT NULL DEFAULT ''",
 		"preview_status": "TEXT NOT NULL DEFAULT 'pending'",
+	}); err != nil {
+		return err
+	}
+	return addColumns(db, "sync_roots", map[string]string{
+		"status":       "TEXT NOT NULL DEFAULT 'idle'",
+		"last_scan_at": "INTEGER NOT NULL DEFAULT 0",
 	})
 }
 

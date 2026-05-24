@@ -156,6 +156,24 @@ func (s *Service) CreateFolder(ctx context.Context, input CreateFolderInput) (Fo
 }
 
 func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHeader, folderID string, relativePath string) (File, error) {
+	source, err := header.Open()
+	if err != nil {
+		return File{}, fmt.Errorf("mở file upload: %w", err)
+	}
+	defer source.Close()
+	return s.saveFileFromReader(ctx, source, header.Filename, header.Header.Get("Content-Type"), folderID, relativePath, true)
+}
+
+func (s *Service) SaveLocalFile(ctx context.Context, sourcePath string, folderID string, relativePath string) (File, error) {
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return File{}, fmt.Errorf("mở file local: %w", err)
+	}
+	defer source.Close()
+	return s.saveFileFromReader(ctx, source, filepath.Base(sourcePath), "", folderID, relativePath, false)
+}
+
+func (s *Service) saveFileFromReader(ctx context.Context, source io.Reader, filename string, headerMime string, folderID string, relativePath string, copyToCache bool) (File, error) {
 	if folderID != "" {
 		if err := s.ensureFolderExists(ctx, folderID); err != nil {
 			return File{}, err
@@ -166,19 +184,13 @@ func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHe
 		return File{}, err
 	}
 
-	source, err := header.Open()
-	if err != nil {
-		return File{}, fmt.Errorf("mở file upload: %w", err)
-	}
-	defer source.Close()
-
 	id := newID()
 	storageDir := filepath.Join(s.dataDir, "uploads")
 	if err := os.MkdirAll(storageDir, 0o755); err != nil {
 		return File{}, fmt.Errorf("tạo thư mục upload: %w", err)
 	}
 
-	safeName := filepath.Base(header.Filename)
+	safeName := filepath.Base(filename)
 	targetPath := filepath.Join(storageDir, id+"-"+safeName)
 	target, err := os.Create(targetPath)
 	if err != nil {
@@ -191,7 +203,7 @@ func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHe
 	if readErr != nil && readErr != io.EOF {
 		return File{}, fmt.Errorf("đọc file upload: %w", readErr)
 	}
-	mimeType := detectMimeType(safeName, header.Header.Get("Content-Type"), buffer[:read])
+	mimeType := detectMimeType(safeName, headerMime, buffer[:read])
 	if _, err := target.Write(buffer[:read]); err != nil {
 		return File{}, fmt.Errorf("lưu file local: %w", err)
 	}
@@ -200,6 +212,7 @@ func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHe
 		return File{}, fmt.Errorf("lưu file local: %w", err)
 	}
 	size := int64(read) + rest
+	_ = copyToCache
 
 	now := time.Now().Unix()
 	ext := strings.ToLower(filepath.Ext(safeName))

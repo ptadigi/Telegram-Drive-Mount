@@ -37,6 +37,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/config", s.handleConfig)
 	mux.HandleFunc("GET /v1/database/status", s.handleDatabaseStatus)
 	mux.HandleFunc("GET /v1/transfers", s.handleTransfers)
+	mux.HandleFunc("GET /v1/sync/roots", s.handleListSyncRoots)
+	mux.HandleFunc("POST /v1/sync/roots", s.handleCreateSyncRoot)
+	mux.HandleFunc("POST /v1/sync/roots/scan", s.handleScanSyncRoot)
 	mux.HandleFunc("GET /v1/files", s.handleListFiles)
 	mux.HandleFunc("GET /v1/drive/contents", s.handleDriveContents)
 	mux.HandleFunc("POST /v1/folders", s.handleCreateFolder)
@@ -108,6 +111,48 @@ func (s *Server) handleTransfers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"transfers": transfers})
+}
+
+func (s *Server) handleListSyncRoots(w http.ResponseWriter, r *http.Request) {
+	roots, err := s.drive.ListSyncRoots(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"roots": roots})
+}
+
+func (s *Server) handleCreateSyncRoot(w http.ResponseWriter, r *http.Request) {
+	var input drive.CreateSyncRootInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	root, err := s.drive.CreateSyncRoot(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	roots, _ := s.drive.ListSyncRoots(r.Context())
+	writeJSON(w, http.StatusOK, map[string]any{"root": root, "roots": roots})
+}
+
+func (s *Server) handleScanSyncRoot(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ID string `json:"id"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if input.ID == "" {
+		writeError(w, http.StatusBadRequest, errBadRequest("thiếu id thư mục đồng bộ"))
+		return
+	}
+	if err := s.drive.ScanSyncRoot(r.Context(), input.ID); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	roots, _ := s.drive.ListSyncRoots(r.Context())
+	writeJSON(w, http.StatusOK, map[string]any{"roots": roots})
 }
 
 func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {

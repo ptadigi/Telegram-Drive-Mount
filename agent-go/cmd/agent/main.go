@@ -41,6 +41,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go driveService.SyncWorker(ctx, 2*time.Second)
+	go driveService.SyncRootWatcher(ctx)
 
 	srv := &http.Server{
 		Addr:    cfg.Addr(),

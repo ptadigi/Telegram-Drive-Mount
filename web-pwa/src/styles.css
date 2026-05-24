@@ -75,11 +75,17 @@ label.button { user-select: none; position: relative; overflow: hidden; }
 .success-note { color: #166534; background: #dcfce7; border: 1px solid #bbf7d0; }
 .error-note { color: #991b1b; background: #fee2e2; border: 1px solid #fecaca; }
 
-.file-manager { margin-top: 18px; border: 1px solid var(--line); border-radius: 28px; background: var(--surface); padding: 22px; box-shadow: 0 20px 60px rgba(15, 23, 42, 0.06); }
-.file-manager__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-.file-manager__header h2 { margin: 0 0 8px; font-size: 25px; }
-.file-manager__header p { margin: 0; color: var(--muted); line-height: 1.55; }
-.file-manager__actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.file-manager, .sync-panel { margin-top: 18px; border: 1px solid var(--line); border-radius: 28px; background: var(--surface); padding: 22px; box-shadow: 0 20px 60px rgba(15, 23, 42, 0.06); }
+.file-manager__header, .sync-panel__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.file-manager__header h2, .sync-panel__header h2 { margin: 0 0 8px; font-size: 25px; }
+.file-manager__header p, .sync-panel__header p { margin: 0; color: var(--muted); line-height: 1.55; }
+.file-manager__actions, .sync-panel__actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.sync-root-list { display: grid; gap: 10px; }
+.sync-root { display: grid; grid-template-columns: 46px 1fr auto; gap: 12px; align-items: center; border: 1px solid var(--line); border-radius: 18px; padding: 12px; background: #fff; }
+.sync-root__icon { width: 46px; height: 46px; border-radius: 15px; display: grid; place-items: center; color: #0284c7; background: #e0f2fe; }
+.sync-root__body { min-width: 0; display: grid; gap: 4px; }
+.sync-root__body strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sync-root__body span { color: var(--muted); font-size: 13px; }
 .breadcrumb { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .breadcrumb button { border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; color: #0369a1; background: #f0f9ff; cursor: pointer; }
 .muted-box { border: 1px dashed rgba(14, 165, 233, 0.28); border-radius: 18px; padding: 24px; color: var(--muted); background: #f8fafc; }

@@ -9,6 +9,7 @@ export type DriveContents = { folder_id?: string; folders: DriveFolder[]; files:
 export type SyncResult = { uploaded: number; failed: number; message: string; };
 export type Transfer = { id: string; file_id: string; kind: string; phase: string; percent: number; bytes_done: number; bytes_total: number; last_error?: string; created_at: number; updated_at: number; };
 export type AuthStatus = { configured: boolean; session_exists: boolean; login_started: boolean; authorized: boolean; phone?: string; code_type?: string; };
+export type SyncRoot = { id: string; local_path: string; remote_folder_id?: string; mode: string; enabled: boolean; status: string; last_scan_at: number; created_at: number; updated_at: number; };
 export type UploadProgress = { phase: "uploading_agent" | "processing" | "completed" | "failed"; percent: number; fileName: string; error?: string; };
 
 const currentHost = window.location.hostname || "127.0.0.1";
@@ -52,6 +53,9 @@ export function submitTelegramPassword(password: string) { return sendJSON<{ suc
 export function listFiles(signal?: AbortSignal) { return getJSON<{ files: DriveFile[] }>("/v1/files", signal); }
 export function listDriveContents(folderId = "", signal?: AbortSignal) { return getJSON<DriveContents>(`/v1/drive/contents?folder_id=${encodeURIComponent(folderId)}`, signal); }
 export function listTransfers(signal?: AbortSignal) { return getJSON<{ transfers: Transfer[] }>("/v1/transfers", signal); }
+export function listSyncRoots(signal?: AbortSignal) { return getJSON<{ roots: SyncRoot[] }>("/v1/sync/roots", signal); }
+export function createSyncRoot(localPath: string, remoteFolderId = "") { return sendJSON<{ root: SyncRoot; roots: SyncRoot[] }>("/v1/sync/roots", { local_path: localPath, remote_folder_id: remoteFolderId, mode: "upload_only" }); }
+export function scanSyncRoot(id: string) { return sendJSON<{ roots: SyncRoot[] }>("/v1/sync/roots/scan", { id }); }
 export function createFolder(name: string, parentId = "") { return sendJSON<{ folder: DriveFolder; contents: DriveContents }>("/v1/folders", { name, parent_id: parentId }); }
 export function downloadFileUrl(id: string) { return `${AGENT_BASE_URL}/v1/files/download?id=${encodeURIComponent(id)}`; }
 export function thumbnailUrl(id: string) { return `${AGENT_BASE_URL}/v1/files/thumbnail?id=${encodeURIComponent(id)}`; }
