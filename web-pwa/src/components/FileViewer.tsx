@@ -76,10 +76,16 @@ function ViewerText({ content, loading, error, mono }: { content: string | null;
 }
 
 function OfficeFallback({ url, ext, mime }: { url: string; ext: string; mime: string; }) {
+  if (isPublicHost()) {
+    const viewer = officeViewerUrl(url);
+    return (
+      <iframe title={`office-${ext}`} src={viewer}></iframe>
+    );
+  }
   return (
     <div className="viewer__office">
       <p>Loại file <strong>{ext.replace(".", "") || mime}</strong> chưa thể xem trực tiếp khi link Agent chỉ có trong LAN.</p>
-      <p>Bạn có thể tải xuống và mở bằng ứng dụng Office. Nếu bật Cloudflare Tunnel hoặc tên miền chia sẻ, hệ thống sẽ tự bật xem online ở phiên bản tiếp theo.</p>
+      <p>Bạn có thể tải xuống và mở bằng ứng dụng Office. Khi triển khai trên domain công khai (Cloudflare Tunnel hoặc tên miền riêng), Office Online viewer sẽ tự kích hoạt.</p>
       <a className="button button--primary" href={url}><Download size={14} /> Tải xuống</a>
     </div>
   );
@@ -105,6 +111,20 @@ function detectVariant(file: DriveFile): "image" | "video" | "audio" | "pdf" | "
   if (mime.startsWith("text/")) return "text";
   if ([".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"].includes(ext)) return "office";
   return "binary";
+}
+
+function isPublicHost(): boolean {
+  const host = window.location.hostname;
+  if (!host) return false;
+  if (host === "localhost" || host === "127.0.0.1") return false;
+  if (host.startsWith("192.168.") || host.startsWith("10.")) return false;
+  return true;
+}
+
+function officeViewerUrl(rawUrl: string) {
+  const absolute = new URL(rawUrl, window.location.origin).toString();
+  const encoded = encodeURIComponent(absolute);
+  return `https://view.officeapps.live.com/op/embed.aspx?src=${encoded}`;
 }
 
 function formatBytes(bytes: number) {
