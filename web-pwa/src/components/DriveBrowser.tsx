@@ -29,6 +29,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   const [moveTarget, setMoveTarget] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null);
   const [dropTargetFolder, setDropTargetFolder] = useState<string | null>(null);
   const [dragItem, setDragItem] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<{ files: Set<string>; folders: Set<string> }>({ files: new Set(), folders: new Set() });
   const [menu, setMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const [selection, setSelection] = useState<{ kind: "file"; data: DriveFile } | { kind: "folder"; data: DriveFolder } | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("updated_at");
@@ -99,6 +100,77 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     event.target.value = "";
     if (selected.length === 0) return;
     await uploadQueue.enqueue(selected, { folderId: currentFolderId, preserveRelativePath: true });
+  }
+
+  function clearSelection() {
+    setSelectedIds({ files: new Set(), folders: new Set() });
+  }
+
+  function toggleSelectFile(id: string, additive: boolean) {
+    setSelectedIds((current) => {
+      const files = new Set(additive ? current.files : []);
+      const folders = new Set(additive ? current.folders : []);
+      if (files.has(id)) files.delete(id); else files.add(id);
+      return { files, folders };
+    });
+  }
+
+  function toggleSelectFolder(id: string, additive: boolean) {
+    setSelectedIds((current) => {
+      const files = new Set(additive ? current.files : []);
+      const folders = new Set(additive ? current.folders : []);
+      if (folders.has(id)) folders.delete(id); else folders.add(id);
+      return { files, folders };
+    });
+  }
+
+  async function bulkTrash() {
+    const fileCount = selectedIds.files.size;
+    const folderCount = selectedIds.folders.size;
+    if (fileCount === 0 && folderCount === 0) return;
+    const ok = await confirm({ title: "Xóa nhiều mục", message: `Đưa ${fileCount} file và ${folderCount} thư mục vào thùng rác?`, tone: "error" });
+    if (!ok) return;
+    try {
+      for (const id of selectedIds.files) await trashFile(id);
+      for (const id of selectedIds.folders) await trashFolder(id);
+      clearSelection();
+      toast(`Đã xóa ${fileCount + folderCount} mục`, "success");
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), "error");
+    }
+  }
+
+  async function bulkStar(value: boolean) {
+    try {
+      for (const id of selectedIds.files) await starFile(id, value);
+      for (const id of selectedIds.folders) await starFolder(id, value);
+      clearSelection();
+      toast(value ? "Đã đánh dấu sao" : "Đã bỏ đánh dấu sao", "success");
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), "error");
+    }
+  }
+
+  function bulkMove() {
+    const fileCount = selectedIds.files.size;
+    const folderCount = selectedIds.folders.size;
+    if (fileCount + folderCount === 0) return;
+    const total = fileCount + folderCount;
+    if (total === 1) {
+      const fileId = selectedIds.files.values().next().value as string | undefined;
+      const folderId = selectedIds.folders.values().next().value as string | undefined;
+      if (fileId) {
+        const file = contents.files.find((item) => item.id === fileId);
+        if (file) setMoveTarget({ kind: "file", id: file.id, name: file.name });
+      } else if (folderId) {
+        const folder = contents.folders.find((item) => item.id === folderId);
+        if (folder) setMoveTarget({ kind: "folder", id: folder.id, name: folder.name });
+      }
+      return;
+    }
+    toast("Hiện chỉ hỗ trợ di chuyển từng mục, hãy chọn 1 mục", "info");
   }
 
   function handleDragOver(event: DragEvent<HTMLDivElement>) {
@@ -323,6 +395,18 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
           <input ref={folderInputRef} className="visually-hidden" type="file" multiple onChange={handleFolderInput} {...({ webkitdirectory: "", directory: "" } as Record<string, string>)} />
         </div>
       </div>
+      {selectedIds.files.size + selectedIds.folders.size > 0 && (
+        <div className="bulk-bar">
+          <span>Đã chọn {selectedIds.files.size + selectedIds.folders.size} mục</span>
+          <div className="bulk-bar__actions">
+            <button className="button button--ghost" onClick={() => bulkStar(true)}>★ Sao</button>
+            <button className="button button--ghost" onClick={() => bulkStar(false)}>Bỏ sao</button>
+            <button className="button button--ghost" onClick={bulkMove}>Di chuyển</button>
+            <button className="button button--danger" onClick={bulkTrash}>Xóa vào thùng rác</button>
+            <button className="button button--ghost" onClick={clearSelection}>Hủy</button>
+          </div>
+        </div>
+      )}
       {error && <div className="error-note">{error}</div>}
       {dropping && <div className="drop-overlay">{t("drive.dropHere")}</div>}
       {loading && <div className="muted-box">{t("files.loading")}</div>}
@@ -331,13 +415,23 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
         <div className={viewMode === "grid" ? "file-grid" : "file-list"}>
           {sortedFolders.map((folder) => (
             <div
-              className={`drive-card drive-card--folder ${dropTargetFolder === folder.id ? "drive-card--drop" : ""}`}
+              className={`drive-card drive-card--folder ${dropTargetFolder === folder.id ? "drive-card--drop" : ""} ${selectedIds.folders.has(folder.id) ? "drive-card--selected" : ""}`}
               key={folder.id}
               draggable
               onDragStart={(event) => { setDragItem({ kind: "folder", id: folder.id, name: folder.name }); event.dataTransfer.setData("text/plain", folder.name); }}
               onDragOver={(event) => { event.preventDefault(); setDropTargetFolder(folder.id); }}
               onDragLeave={() => setDropTargetFolder((current) => (current === folder.id ? null : current))}
               onDrop={(event) => handleDropOnFolder(folder.id, event)}
+              onClick={(event) => {
+                if (event.shiftKey || event.ctrlKey || event.metaKey) {
+                  toggleSelectFolder(folder.id, event.shiftKey || event.ctrlKey || event.metaKey);
+                  return;
+                }
+                if (selectedIds.files.size + selectedIds.folders.size > 0) {
+                  toggleSelectFolder(folder.id, true);
+                }
+              }}
+              onDoubleClick={() => openFolder(folder)}
             >
               <button className="drive-card__open" onClick={() => openFolder(folder)}>
                 <div className="drive-card__thumb"><Folder size={36} /></div>
@@ -348,9 +442,19 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
           ))}
           {sortedFiles.map((file) => (
             <div
-              className="drive-card"
+              className={`drive-card ${selectedIds.files.has(file.id) ? "drive-card--selected" : ""}`}
               key={file.id}
-              onClick={() => setSelection({ kind: "file", data: file })}
+              onClick={(event) => {
+                if (event.shiftKey || event.ctrlKey || event.metaKey) {
+                  toggleSelectFile(file.id, event.shiftKey || event.ctrlKey || event.metaKey);
+                  return;
+                }
+                if (selectedIds.files.size + selectedIds.folders.size > 0) {
+                  toggleSelectFile(file.id, true);
+                  return;
+                }
+                setSelection({ kind: "file", data: file });
+              }}
               draggable
               onDragStart={(event) => { setDragItem({ kind: "file", id: file.id, name: file.name }); event.dataTransfer.setData("text/plain", file.name); }}
               onDragEnd={() => setDragItem(null)}
