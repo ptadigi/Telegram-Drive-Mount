@@ -150,16 +150,23 @@ func (f *FileSystem) Stat(ctx context.Context, name string) (os.FileInfo, error)
 
 func (f *FileSystem) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
 	cleaned := cleanPath(name)
-	if flag&(os.O_CREATE|os.O_WRONLY|os.O_RDWR) != 0 {
-		return nil, errReadOnly
-	}
+	wantWrite := flag&(os.O_WRONLY|os.O_RDWR) != 0
+	wantCreate := flag&os.O_CREATE != 0
 	if cleaned == "" || cleaned == "/" {
+		if wantWrite {
+			return nil, errors.New("không thể ghi vào thư mục gốc")
+		}
 		return f.openFolder(ctx, "", "/")
 	}
 	parent, leaf := splitPath(cleaned)
 	parentID, err := f.resolveFolder(ctx, parent)
 	if err != nil {
-		return nil, err
+		if wantCreate && parent != "/" {
+			return nil, err
+		}
+		if !wantCreate {
+			return nil, err
+		}
 	}
 	contents, err := f.svc.ListFolderContents(ctx, parentID)
 	if err != nil {
@@ -167,15 +174,28 @@ func (f *FileSystem) OpenFile(ctx context.Context, name string, flag int, perm o
 	}
 	for _, folder := range contents.Folders {
 		if folder.Name == leaf {
+			if wantWrite {
+				return nil, errors.New("không thể ghi đè thư mục")
+			}
 			return f.openFolder(ctx, folder.ID, cleaned)
 		}
 	}
 	for _, file := range contents.Files {
 		if file.Name == leaf {
+			if wantWrite {
+				return f.newWriteFile(ctx, parentID, leaf), nil
+			}
 			return f.openFile(ctx, file)
 		}
 	}
+	if wantCreate {
+		return f.newWriteFile(ctx, parentID, leaf), nil
+	}
 	return nil, os.ErrNotExist
+}
+
+func (f *FileSystem) newWriteFile(ctx context.Context, parentID, name string) webdav.File {
+	return &writeFile{ctx: ctx, svc: f.svc, parentID: parentID, name: name, info: &entryInfo{name: name, mode: 0o644, modTime: time.Now()}}
 }
 
 func (f *FileSystem) openFolder(ctx context.Context, folderID, name string) (webdav.File, error) {
@@ -321,6 +341,55 @@ func (r *remoteFile) Read(p []byte) (int, error) {
 	}
 	n := copy(p, buf.data)
 	r.offset += int64(n)
+	return n, nil
+}
+
+type writeFile struct {
+	ctx      context.Context
+	svc      *drive.Service
+	parentID string
+	name     string
+	buf      []byte
+	closed   bool
+	info     *entryInfo
+}
+
+func (w *writeFile) Close() error {
+	if w.closed {
+		return nil
+	}
+	w.closed = true
+	reader := &bytesReader{data: w.buf}
+	_, err := w.svc.SaveStreamFile(w.ctx, reader, w.name, "", w.parentID, "")
+	return err
+}
+
+func (w *writeFile) Read(p []byte) (int, error) { return 0, io.EOF }
+func (w *writeFile) Readdir(count int) ([]os.FileInfo, error) {
+	return nil, errors.New("không phải thư mục")
+}
+func (w *writeFile) Seek(offset int64, whence int) (int64, error) {
+	return int64(len(w.buf)), nil
+}
+func (w *writeFile) Stat() (os.FileInfo, error) { return w.info, nil }
+
+func (w *writeFile) Write(p []byte) (int, error) {
+	w.buf = append(w.buf, p...)
+	w.info.size = int64(len(w.buf))
+	return len(p), nil
+}
+
+type bytesReader struct {
+	data []byte
+	off  int
+}
+
+func (b *bytesReader) Read(p []byte) (int, error) {
+	if b.off >= len(b.data) {
+		return 0, io.EOF
+	}
+	n := copy(p, b.data[b.off:])
+	b.off += n
 	return n, nil
 }
 

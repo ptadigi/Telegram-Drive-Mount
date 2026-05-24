@@ -454,6 +454,10 @@ func (s *Service) StreamFromTelegram(ctx context.Context, fileID string, offset,
 	return uploader.StreamFromSavedMessages(ctx, messageID, offset, length, w)
 }
 
+func (s *Service) SaveStreamFile(ctx context.Context, data io.Reader, filename string, mimeHint string, folderID string, relativePath string) (File, error) {
+	return s.saveFileFromReader(ctx, data, filename, mimeHint, folderID, relativePath, true)
+}
+
 func (s *Service) GetThumbnail(ctx context.Context, id string) (ThumbnailFile, error) {
 	file, err := s.getFile(ctx, id)
 	if err != nil {
