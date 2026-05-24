@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	agentauth "telegram-drive-agent/internal/auth"
@@ -572,6 +573,11 @@ func (s *Server) handleSharePage(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	if slug == "" {
 		writeError(w, http.StatusBadRequest, errBadRequest("thiếu slug"))
+		return
+	}
+	if strings.Contains(r.Header.Get("Accept"), "text/html") {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(renderSharePageHTML(slug)))
 		return
 	}
 	resolved, err := s.drive.ResolveShare(r.Context(), slug, r.URL.Query().Get("password"))

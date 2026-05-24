@@ -1,4 +1,4 @@
-import { Archive, Download, FileAudio, FileText, FileVideo, Folder, FolderInput, Image, Info, LayoutGrid, Link2, List, MoreVertical, Pencil, RefreshCw, Star, Trash2 } from "lucide-react";
+import { Archive, CheckCircle2, Download, FileAudio, FileText, FileVideo, Folder, FolderInput, Image, Info, LayoutGrid, Link2, List, MoreVertical, Pencil, RefreshCw, Star, Trash2 } from "lucide-react";
 import React, { ChangeEvent, DragEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createFolder, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, moveFile, moveFolder, renameFile, renameFolder, starFile, starFolder, thumbnailUrl, trashFile, trashFolder, zipFolderUrl } from "../api/agent";
@@ -470,7 +470,9 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
                 <span>{kindLabel(file.kind)} · {formatBytes(file.size)}</span>
               </div>
               <div className="drive-card__footer">
-                <span className={`badge badge--${syncBadge(file.sync_state)}`}>{syncLabel(file.sync_state)}</span>
+                <span className={`badge badge--${syncBadge(file.sync_state)}`} title={syncLabel(file.sync_state)}>
+                  {syncBadge(file.sync_state) === "ok" ? <CheckCircle2 size={14} /> : syncLabel(file.sync_state)}
+                </span>
                 <button className="drive-card__action" onClick={(event) => { event.stopPropagation(); setShareTarget({ kind: "file", id: file.id, name: file.name }); }}><Link2 size={14} /></button>
                 <a className="drive-card__action" href={downloadFileUrl(file.id)} onClick={(event) => event.stopPropagation()}><Download size={14} /></a>
                 <button className="drive-card__menu" onClick={(event) => handleFileMenu(event, file)}><MoreVertical size={16} /></button>
