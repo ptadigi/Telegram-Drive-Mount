@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"telegram-drive-agent/internal/db"
 	"telegram-drive-agent/internal/drive"
 	"telegram-drive-agent/internal/telegramstorage"
+	"telegram-drive-agent/internal/tray"
 	"telegram-drive-agent/internal/tunnel"
 )
 
@@ -35,6 +37,7 @@ func main() {
 	configPath := flag.String("config", "", "đường dẫn file cấu hình JSON (mặc định lấy từ TD_AGENT_CONFIG)")
 	dataDir := flag.String("data-dir", "", "thư mục dữ liệu Agent (ghi đè cấu hình)")
 	addr := flag.String("addr", "", "địa chỉ HTTP, ví dụ 0.0.0.0:8750")
+	withTray := flag.Bool("tray", false, "chạy kèm tray app desktop")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)
@@ -72,7 +75,23 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go driveService.SyncWorker(ctx, 2*time.Second)
+
+	var paused atomic.Bool
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if paused.Load() {
+					continue
+				}
+				_, _ = driveService.SyncPendingToTelegram(ctx)
+			}
+		}
+	}()
 	go driveService.SyncRootWatcher(ctx)
 	go driveService.CacheWorker(ctx, 30*time.Second)
 
@@ -88,6 +107,24 @@ func main() {
 		}
 	}()
 
+	if *withTray {
+		go tray.Run(ctx, tray.Hooks{
+			BaseURL: trayBaseURL(cfg),
+			DataDir: cfg.DataDir,
+			OnPause: func() {
+				paused.Store(true)
+				log.Println("đã tạm dừng đồng bộ qua tray")
+			},
+			OnResume: func() {
+				paused.Store(false)
+				log.Println("đã bật lại đồng bộ qua tray")
+			},
+			OnQuit: func() {
+				stop()
+			},
+		})
+	}
+
 	<-ctx.Done()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
@@ -99,6 +136,14 @@ func main() {
 		log.Fatalf("graceful shutdown failed: %v", err)
 	}
 	log.Println("telegram-drive-agent stopped")
+}
+
+func trayBaseURL(cfg config.Config) string {
+	host := cfg.Host
+	if host == "" || host == "0.0.0.0" {
+		host = "127.0.0.1"
+	}
+	return fmt.Sprintf("http://%s:%d", host, cfg.Port)
 }
 
 func splitAddr(value string) (string, int) {
