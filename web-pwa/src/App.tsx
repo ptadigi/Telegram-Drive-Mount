@@ -135,6 +135,13 @@ function DriveApp() {
       </section>
 
       <UploadDock queue={queue} />
+      <nav className="bottom-nav" aria-label="Điều hướng nhanh">
+        <button className={view === "drive" ? "active" : ""} onClick={() => setView("drive")}><FolderOpen size={18} /> Drive</button>
+        <button className={view === "search" ? "active" : ""} onClick={() => setView("search")}><Search size={18} /> Tìm</button>
+        <button className={view === "starred" ? "active" : ""} onClick={() => setView("starred")}><Star size={18} /> Sao</button>
+        <button className={view === "computers" ? "active" : ""} onClick={() => setView("computers")}><HardDrive size={18} /> Máy tính</button>
+        <button className={view === "settings" ? "active" : ""} onClick={() => setView("settings")}><Settings size={18} /> Cài đặt</button>
+      </nav>
     </main>
   );
 }
