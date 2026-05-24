@@ -54,19 +54,22 @@ Cả 2 kịch bản dùng chung 1 codebase, chỉ khác:
 
 Mục tiêu: cache miss trên VPS không còn phải tải full file rồi mới serve. Sync watcher không bỏ sót/lặp.
 
-- Stream Telegram chunk-by-chunk theo HTTP Range:
+- ✅ Stream Telegram chunk-by-chunk theo HTTP Range:
   - `GET /v1/files/stream?id=...` proxy Telegram, hỗ trợ `Range`.
   - Khi xem video chưa cache: vừa tải vừa serve, không chờ full.
-  - Cache write-through trong lúc stream để lần sau dùng cache.
-- Sync watcher:
-  - Debounce file đang copy (đợi mtime+size ổn định 2 lần).
-  - Xử lý sự kiện `rename`, `delete`, `move` (soft delete metadata).
-  - Bỏ qua file trùng hash đã có trên Telegram.
-  - Cập nhật trạng thái sync per file rõ ràng.
-- Storage adapter chuẩn:
-  - Chuyển từ Telegram Saved Messages sang storage channel/chat riêng (private channel cá nhân).
-  - Tự tạo channel khi user đăng nhập lần đầu nếu cần.
-  - Lưu đủ `telegram_channel_id`, `access_hash`, `file_reference` vào `file_versions`.
+- ✅ Sync watcher:
+  - Debounce file đang copy (đợi mtime+size ổn định).
+  - Xử lý sự kiện `rename`, `delete` (soft delete metadata).
+  - Bỏ qua file trùng mtime đã import.
+
+### M1.5 — Storage channel chuyên dụng
+
+Mục tiêu: chuyển từ Telegram Saved Messages sang storage channel/chat riêng.
+
+- Tự tạo private channel khi user đăng nhập lần đầu nếu cần.
+- Lưu đủ `telegram_channel_id`, `access_hash`, `file_reference` vào `file_versions`.
+- Đổi download/stream sang `ChannelsGetMessages` cho file thuộc channel.
+- UI Settings cho user chọn/đổi storage channel.
 
 ### M2 — Tray app + autostart + native folder picker
 
