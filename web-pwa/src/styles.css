@@ -244,6 +244,21 @@ a.button { text-decoration: none; }
 .home-recent { display: grid; gap: 10px; }
 .home-recent header { display: flex; align-items: center; gap: 8px; }
 .home-recent header h2 { margin: 0; font-size: 18px; }
+.viewer { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.92); display: grid; grid-template-rows: auto 1fr; z-index: 250; color: #f8fafc; }
+.viewer__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 22px; background: rgba(15, 23, 42, 0.85); border-bottom: 1px solid rgba(148, 163, 184, 0.18); }
+.viewer__header strong { display: block; font-size: 15px; }
+.viewer__header span { color: #94a3b8; font-size: 12px; }
+.viewer__actions { display: flex; gap: 10px; align-items: center; }
+.viewer__body { display: grid; place-items: center; padding: 24px; overflow: auto; }
+.viewer__body img { max-width: min(960px, 100%); max-height: 80vh; border-radius: 18px; box-shadow: 0 24px 60px rgba(0,0,0,0.4); }
+.viewer__body video { max-width: min(960px, 100%); max-height: 80vh; border-radius: 18px; background: #000; }
+.viewer__body audio { width: min(560px, 100%); }
+.viewer__body iframe { width: min(960px, 100%); height: 80vh; border: 0; border-radius: 18px; background: #fff; }
+.viewer__text { width: min(960px, 100%); max-height: 80vh; overflow: auto; background: #fff; color: #0f172a; padding: 20px 22px; border-radius: 18px; white-space: pre-wrap; word-break: break-word; line-height: 1.55; box-shadow: 0 24px 60px rgba(0,0,0,0.35); }
+.viewer__text--mono { font-family: "Fira Code", "JetBrains Mono", "Consolas", monospace; font-size: 13px; }
+.viewer__notice { background: #fff; color: #0f172a; padding: 16px 18px; border-radius: 14px; }
+.viewer__notice--error { color: #991b1b; background: #fee2e2; }
+.viewer__office { background: #fff; color: #0f172a; padding: 24px; border-radius: 18px; max-width: 480px; text-align: center; display: grid; gap: 12px; }
 .toast-stack { position: fixed; right: 22px; bottom: 22px; display: grid; gap: 8px; z-index: 200; }
 .toast { border: 0; border-radius: 14px; padding: 12px 16px; min-width: 240px; max-width: 360px; text-align: left; cursor: pointer; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18); color: #1f2937; background: #fff; }
 .toast--info { border-left: 4px solid var(--blue); }

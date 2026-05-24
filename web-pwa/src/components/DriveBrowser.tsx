@@ -5,6 +5,7 @@ import { createFolder, downloadFileUrl, DriveContents, DriveFile, DriveFolder, e
 import { useConfirm, useToast } from "../state/ui";
 import { ContextMenu, ContextMenuItem } from "./ContextMenu";
 import { DetailPanel } from "./DetailPanel";
+import { FileViewer } from "./FileViewer";
 import { MoveDialog } from "./MoveDialog";
 import { ShareDialog } from "./ShareDialog";
 
@@ -30,6 +31,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   const [dropTargetFolder, setDropTargetFolder] = useState<string | null>(null);
   const [dragItem, setDragItem] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null);
   const [selectedIds, setSelectedIds] = useState<{ files: Set<string>; folders: Set<string> }>({ files: new Set(), folders: new Set() });
+  const [viewerFile, setViewerFile] = useState<DriveFile | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const [selection, setSelection] = useState<{ kind: "file"; data: DriveFile } | { kind: "folder"; data: DriveFolder } | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("updated_at");
@@ -295,6 +297,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
       y: event.clientY,
       items: [
         { key: "details", label: t("files.viewDetails"), icon: <Info size={14} />, onSelect: () => setSelection({ kind: "file", data: file }) },
+        { key: "view", label: "Mở xem trực tiếp", icon: <FileText size={14} />, onSelect: () => setViewerFile(file) },
         { key: "share", label: t("files.share"), icon: <Link2 size={14} />, onSelect: () => setShareTarget({ kind: "file", id: file.id, name: file.name }) },
         { key: "star", label: file.starred ? "Bỏ đánh dấu sao" : "Đánh dấu sao", icon: <Star size={14} />, onSelect: () => toggleStarFile(file) },
         { key: "rename", label: t("files.rename"), icon: <Pencil size={14} />, onSelect: () => promptRenameFile(file) },
@@ -458,6 +461,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
                 }
                 setSelection({ kind: "file", data: file });
               }}
+              onDoubleClick={() => setViewerFile(file)}
               draggable
               onDragStart={(event) => { setDragItem({ kind: "file", id: file.id, name: file.name }); event.dataTransfer.setData("text/plain", file.name); }}
               onDragEnd={() => setDragItem(null)}
@@ -481,6 +485,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
           ))}
         </div>
       )}
+      <FileViewer file={viewerFile} onClose={() => setViewerFile(null)} />
       <ShareDialog
         open={!!shareTarget}
         onClose={() => setShareTarget(null)}
