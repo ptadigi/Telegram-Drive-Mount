@@ -17,6 +17,12 @@ type Config struct {
 	DatabasePath    string         `json:"database_path"`
 	ShutdownTimeout time.Duration  `json:"-"`
 	Telegram        TelegramConfig `json:"telegram"`
+	Cache           CacheConfig    `json:"cache"`
+}
+
+type CacheConfig struct {
+	Mode     string `json:"mode"`
+	MaxBytes int64  `json:"max_bytes"`
 }
 
 type TelegramConfig struct {
@@ -36,6 +42,10 @@ func Default() Config {
 		ShutdownTimeout: 5 * time.Second,
 		Telegram: TelegramConfig{
 			SessionPath: filepath.Join(dataDir, "telegram.session"),
+		},
+		Cache: CacheConfig{
+			Mode:     "smart",
+			MaxBytes: 5 * 1024 * 1024 * 1024,
 		},
 	}
 }
@@ -57,6 +67,10 @@ func Load(path string) (Config, error) {
 	cfg.applyEnv()
 	cfg.normalize()
 	return cfg, nil
+}
+
+func (c *Config) Normalize() {
+	c.normalize()
 }
 
 func (c *Config) applyEnv() {
@@ -91,6 +105,12 @@ func (c *Config) normalize() {
 	}
 	if c.ShutdownTimeout == 0 {
 		c.ShutdownTimeout = 5 * time.Second
+	}
+	if c.Cache.Mode == "" {
+		c.Cache.Mode = "smart"
+	}
+	if c.Cache.MaxBytes <= 0 {
+		c.Cache.MaxBytes = 5 * 1024 * 1024 * 1024
 	}
 }
 

@@ -178,12 +178,13 @@ func migrate(db *sql.DB) error {
 		}
 	}
 	if err := addColumns(db, "files", map[string]string{
-		"extension":      "TEXT NOT NULL DEFAULT ''",
-		"kind":           "TEXT NOT NULL DEFAULT 'other'",
-		"local_path":     "TEXT NOT NULL DEFAULT ''",
-		"thumbnail_path": "TEXT NOT NULL DEFAULT ''",
-		"preview_status": "TEXT NOT NULL DEFAULT 'pending'",
-		"starred":        "INTEGER NOT NULL DEFAULT 0",
+		"extension":        "TEXT NOT NULL DEFAULT ''",
+		"kind":             "TEXT NOT NULL DEFAULT 'other'",
+		"local_path":       "TEXT NOT NULL DEFAULT ''",
+		"thumbnail_path":   "TEXT NOT NULL DEFAULT ''",
+		"preview_status":   "TEXT NOT NULL DEFAULT 'pending'",
+		"starred":          "INTEGER NOT NULL DEFAULT 0",
+		"last_accessed_at": "INTEGER NOT NULL DEFAULT 0",
 	}); err != nil {
 		return err
 	}

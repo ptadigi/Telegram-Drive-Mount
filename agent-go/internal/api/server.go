@@ -74,6 +74,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/shares", s.handleDeleteShare)
 	mux.HandleFunc("GET /v1/share/config", s.handleShareConfigGet)
 	mux.HandleFunc("PUT /v1/share/config", s.handleShareConfigPut)
+	mux.HandleFunc("GET /v1/cache", s.handleCacheStats)
+	mux.HandleFunc("PUT /v1/cache", s.handleCacheConfig)
+	mux.HandleFunc("POST /v1/cache/cleanup", s.handleCacheCleanup)
 	mux.HandleFunc("POST /v1/share/tunnel", s.handleShareTunnel)
 	mux.HandleFunc("GET /.td-check", s.handleShareHealthCheck)
 	mux.HandleFunc("GET /share/{slug}", s.handleSharePage)
@@ -509,6 +512,42 @@ func (s *Server) handleDeleteShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleCacheStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := s.drive.CacheStats(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cache": stats})
+}
+
+func (s *Server) handleCacheConfig(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Mode     string `json:"mode"`
+		MaxBytes int64  `json:"max_bytes"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if input.Mode != "smart" && input.Mode != "cloud_only" && input.Mode != "mirror" {
+		writeError(w, http.StatusBadRequest, errBadRequest("chế độ cache không hợp lệ"))
+		return
+	}
+	s.drive.SetCachePolicy(input.Mode, input.MaxBytes)
+	stats, _ := s.drive.CacheStats(r.Context())
+	writeJSON(w, http.StatusOK, map[string]any{"cache": stats})
+}
+
+func (s *Server) handleCacheCleanup(w http.ResponseWriter, r *http.Request) {
+	removed, err := s.drive.CleanupCache(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	stats, _ := s.drive.CacheStats(r.Context())
+	writeJSON(w, http.StatusOK, map[string]any{"removed": removed, "cache": stats})
 }
 
 func (s *Server) handleShareConfigGet(w http.ResponseWriter, r *http.Request) {

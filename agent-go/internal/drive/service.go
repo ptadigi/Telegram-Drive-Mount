@@ -111,10 +111,12 @@ type Service struct {
 	tunnelURL    string
 	tunnelActive bool
 	tunnelMu     sync.RWMutex
+	cachePolicy  CachePolicy
+	cacheMu      sync.RWMutex
 }
 
 func NewService(db *sql.DB, dataDir string, uploader TelegramUploader) *Service {
-	return &Service{db: db, dataDir: dataDir, uploader: uploader, events: NewEventBus()}
+	return &Service{db: db, dataDir: dataDir, uploader: uploader, events: NewEventBus(), cachePolicy: CachePolicy{Mode: "smart", MaxBytes: 5 * 1024 * 1024 * 1024}}
 }
 
 func (s *Service) Events() *EventBus {
@@ -308,12 +310,13 @@ func (s *Service) GetDownloadableFile(ctx context.Context, id string) (Downloada
 		localPath = filepath.Join(s.dataDir, "uploads", file.ID+"-"+filepath.Base(file.Name))
 	}
 	if _, err := os.Stat(localPath); err == nil {
+		s.RecordFileAccess(ctx, file.ID)
 		return DownloadableFile{File: file, LocalPath: localPath}, nil
 	}
 	if err := s.restoreFromTelegram(ctx, file, localPath); err != nil {
 		return DownloadableFile{}, fmt.Errorf("không có cache cục bộ và không tải được từ Telegram: %w", err)
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE files SET local_path = ?, updated_at = ? WHERE id = ?`, localPath, time.Now().Unix(), file.ID); err == nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE files SET local_path = ?, last_accessed_at = ?, updated_at = ? WHERE id = ?`, localPath, time.Now().Unix(), time.Now().Unix(), file.ID); err == nil {
 		file.LocalPath = localPath
 	}
 	return DownloadableFile{File: file, LocalPath: localPath}, nil

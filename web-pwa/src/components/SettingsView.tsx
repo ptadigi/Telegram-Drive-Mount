@@ -1,6 +1,6 @@
 import { CheckCircle2, Cloud, Globe, Wifi, XCircle } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
-import { controlTunnel, eventsUrl, getShareConfig, ShareConfig, updateShareConfig } from "../api/agent";
+import { CacheStats, cleanupCache, controlTunnel, eventsUrl, getCacheStats, getShareConfig, setCacheConfig, ShareConfig, updateShareConfig } from "../api/agent";
 
 type Mode = "lan" | "domain" | "tunnel";
 
@@ -12,6 +12,8 @@ export function SettingsView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [cache, setCache] = useState<CacheStats | null>(null);
+  const [cacheLimitGB, setCacheLimitGB] = useState(5);
 
   async function refresh() {
     setLoading(true);
@@ -22,6 +24,35 @@ export function SettingsView() {
       setMode((result.config.mode as Mode) || "lan");
       setDomain(result.config.domain || "");
       setBaseUrl(result.config.base_url || "");
+      const cacheResult = await getCacheStats();
+      setCache(cacheResult.cache);
+      setCacheLimitGB(Math.max(1, Math.round(cacheResult.cache.max_bytes / (1024 * 1024 * 1024))));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveCache(mode: string, gb: number) {
+    setLoading(true);
+    try {
+      const result = await setCacheConfig(mode, gb * 1024 * 1024 * 1024);
+      setCache(result.cache);
+      setNotice("Đã cập nhật cấu hình cache");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runCleanup() {
+    setLoading(true);
+    try {
+      const result = await cleanupCache();
+      setCache(result.cache);
+      setNotice(`Đã dọn ${result.removed} file khỏi cache local`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -127,8 +158,42 @@ export function SettingsView() {
           </div>
         </div>
       )}
+
+      {cache && (
+        <div className="settings-cache">
+          <header>
+            <h3>Bộ nhớ cache local</h3>
+            <span>{formatBytes(cache.used_bytes)} / {formatBytes(cache.max_bytes)} · {cache.files} file</span>
+          </header>
+          <div className="settings-cache__modes">
+            <button className={`mode-card ${cache.mode === "smart" ? "mode-card--active" : ""}`} onClick={() => saveCache("smart", cacheLimitGB)}>
+              <strong>Smart cache</strong><span>Tự xóa file ít dùng để giữ dưới giới hạn (đề xuất)</span>
+            </button>
+            <button className={`mode-card ${cache.mode === "cloud_only" ? "mode-card--active" : ""}`} onClick={() => saveCache("cloud_only", cacheLimitGB)}>
+              <strong>Chỉ trên cloud</strong><span>Sync xong xóa cache, mỗi lần xem kéo lại từ Telegram</span>
+            </button>
+            <button className={`mode-card ${cache.mode === "mirror" ? "mode-card--active" : ""}`} onClick={() => saveCache("mirror", cacheLimitGB)}>
+              <strong>Giữ tất cả</strong><span>Phù hợp khi máy nhiều ổ, mọi file luôn có sẵn local</span>
+            </button>
+          </div>
+          <label className="settings-cache__limit">
+            Giới hạn cache (GB)
+            <input type="number" min={1} value={cacheLimitGB} onChange={(event) => setCacheLimitGB(Math.max(1, Number(event.target.value)))} onBlur={() => saveCache(cache.mode, cacheLimitGB)} />
+          </label>
+          <button className="button button--secondary" onClick={runCleanup}>Dọn cache ngay</button>
+        </div>
+      )}
     </section>
   );
+}
+
+function formatBytes(bytes: number) {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit += 1; }
+  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
 }
 
 function ModeCard({ active, icon, title, description, onClick, disabled }: { active: boolean; icon: ReactNode; title: string; description: string; onClick: () => void; disabled?: boolean; }) {
