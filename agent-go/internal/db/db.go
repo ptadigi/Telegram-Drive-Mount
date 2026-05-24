@@ -210,6 +210,12 @@ func migrate(db *sql.DB) error {
 			return fmt.Errorf("chạy migration sqlite: %w", err)
 		}
 	}
+	if err := addColumns(db, "folders", map[string]string{
+		"starred": "INTEGER NOT NULL DEFAULT 0",
+		"user_id": "TEXT",
+	}); err != nil {
+		return err
+	}
 	if err := addColumns(db, "files", map[string]string{
 		"extension":        "TEXT NOT NULL DEFAULT ''",
 		"kind":             "TEXT NOT NULL DEFAULT 'other'",
@@ -218,11 +224,7 @@ func migrate(db *sql.DB) error {
 		"preview_status":   "TEXT NOT NULL DEFAULT 'pending'",
 		"starred":          "INTEGER NOT NULL DEFAULT 0",
 		"last_accessed_at": "INTEGER NOT NULL DEFAULT 0",
-	}); err != nil {
-		return err
-	}
-	if err := addColumns(db, "folders", map[string]string{
-		"starred": "INTEGER NOT NULL DEFAULT 0",
+		"user_id":          "TEXT",
 	}); err != nil {
 		return err
 	}
@@ -231,6 +233,7 @@ func migrate(db *sql.DB) error {
 		"target_id":     "TEXT NOT NULL DEFAULT ''",
 		"updated_at":    "INTEGER NOT NULL DEFAULT 0",
 		"max_downloads": "INTEGER NOT NULL DEFAULT 0",
+		"user_id":       "TEXT",
 	}); err != nil {
 		return err
 	}
@@ -243,6 +246,7 @@ func migrate(db *sql.DB) error {
 	return addColumns(db, "sync_roots", map[string]string{
 		"status":       "TEXT NOT NULL DEFAULT 'idle'",
 		"last_scan_at": "INTEGER NOT NULL DEFAULT 0",
+		"user_id":      "TEXT",
 	})
 }
 

@@ -124,26 +124,37 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 		s.authMu.RLock()
 		cfg := s.authCfg
 		s.authMu.RUnlock()
-		if cfg.Mode != "basic" || cfg.Password == "" {
-			next.ServeHTTP(w, r)
-			return
-		}
 		if isPublicPath(r.URL.Path) {
-			next.ServeHTTP(w, r)
+			s.attachUser(r, next, w)
 			return
 		}
-		user := cfg.Username
-		if user == "" {
-			user = "admin"
+		if cfg.Mode == "basic" && cfg.Password != "" {
+			user := cfg.Username
+			if user == "" {
+				user = "admin"
+			}
+			gotUser, gotPass, ok := r.BasicAuth()
+			if !ok || gotUser != user || gotPass != cfg.Password {
+				w.Header().Set("WWW-Authenticate", "Basic realm=\"Ổ Đĩa Cloud Ảo\"")
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
 		}
-		gotUser, gotPass, ok := r.BasicAuth()
-		if !ok || gotUser != user || gotPass != cfg.Password {
-			w.Header().Set("WWW-Authenticate", "Basic realm=\"Ổ Đĩa Cloud Ảo\"")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-		next.ServeHTTP(w, r)
+		s.attachUser(r, next, w)
 	})
+}
+
+func (s *Server) attachUser(r *http.Request, next http.Handler, w http.ResponseWriter) {
+	if s.users == nil {
+		next.ServeHTTP(w, r)
+		return
+	}
+	if user, err := s.users.ResolveSession(r.Context(), users.TokenFromRequest(r)); err == nil {
+		ctx := drive.WithUser(r.Context(), user.ID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+		return
+	}
+	next.ServeHTTP(w, r)
 }
 
 func (s *Server) UpdateAuthConfig(cfg config.AuthConfig) {
