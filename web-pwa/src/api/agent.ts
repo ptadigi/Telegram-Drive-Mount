@@ -11,6 +11,7 @@ export type Transfer = { id: string; file_id: string; kind: string; phase: strin
 export type Share = { id: string; slug: string; target_kind: string; target_id: string; has_password: boolean; expires_at?: number; revoked: boolean; max_downloads: number; access_count: number; last_accessed_at?: number; created_at: number; updated_at: number; };
 export type ShareConfig = { mode: string; domain?: string; base_url?: string; local_base_url: string; port: number; health_ok: boolean; health_message?: string; tunnel_url?: string; tunnel_active?: boolean; updated_at?: number; };
 export type CacheStats = { mode: string; max_bytes: number; used_bytes: number; files: number; };
+export type StorageSettings = { peer_kind: string; channel_id: number; access_hash: number; title?: string; updated_at?: number; };
 export type AuthStatus = { configured: boolean; session_exists: boolean; login_started: boolean; authorized: boolean; phone?: string; code_type?: string; };
 export type SyncRoot = { id: string; local_path: string; remote_folder_id?: string; mode: string; enabled: boolean; status: string; last_scan_at: number; created_at: number; updated_at: number; };
 export type UploadProgress = { phase: "uploading_agent" | "processing" | "completed" | "failed"; percent: number; fileName: string; error?: string; };
@@ -132,6 +133,8 @@ export function controlTunnel(action: "start" | "stop") { return sendJSON<{ tunn
 export function getCacheStats(signal?: AbortSignal) { return getJSON<{ cache: CacheStats }>("/v1/cache", signal); }
 export function setCacheConfig(mode: string, maxBytes: number) { return putJSON<{ cache: CacheStats }>("/v1/cache", { mode, max_bytes: maxBytes }); }
 export function cleanupCache() { return sendJSON<{ removed: number; cache: CacheStats }>("/v1/cache/cleanup", {}); }
+export function getStorageSettings(signal?: AbortSignal) { return getJSON<{ storage: StorageSettings }>("/v1/storage", signal); }
+export function updateStorageSettings(payload: { peer_kind: string; channel_id?: number; access_hash?: number; title?: string }) { return putJSON<{ storage: StorageSettings }>("/v1/storage", payload); }
 export function shareLink(config: ShareConfig | null, slug: string) {
   const base = (config?.base_url && config.base_url.trim()) || (config?.local_base_url && config.local_base_url.trim()) || `${AGENT_BASE_URL}`;
   return `${base.replace(/\/$/, "")}/share/${slug}`;

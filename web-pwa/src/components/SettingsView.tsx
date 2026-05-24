@@ -1,6 +1,6 @@
 import { CheckCircle2, Cloud, Globe, Wifi, XCircle } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
-import { CacheStats, cleanupCache, controlTunnel, eventsUrl, getCacheStats, getShareConfig, setCacheConfig, ShareConfig, updateShareConfig } from "../api/agent";
+import { CacheStats, cleanupCache, controlTunnel, eventsUrl, getCacheStats, getShareConfig, getStorageSettings, setCacheConfig, ShareConfig, StorageSettings, updateShareConfig, updateStorageSettings } from "../api/agent";
 
 type Mode = "lan" | "domain" | "tunnel";
 
@@ -14,6 +14,11 @@ export function SettingsView() {
   const [notice, setNotice] = useState<string | null>(null);
   const [cache, setCache] = useState<CacheStats | null>(null);
   const [cacheLimitGB, setCacheLimitGB] = useState(5);
+  const [storage, setStorage] = useState<StorageSettings | null>(null);
+  const [storageKind, setStorageKind] = useState<"self" | "channel">("self");
+  const [channelID, setChannelID] = useState("");
+  const [accessHash, setAccessHash] = useState("");
+  const [channelTitle, setChannelTitle] = useState("");
 
   async function refresh() {
     setLoading(true);
@@ -27,6 +32,12 @@ export function SettingsView() {
       const cacheResult = await getCacheStats();
       setCache(cacheResult.cache);
       setCacheLimitGB(Math.max(1, Math.round(cacheResult.cache.max_bytes / (1024 * 1024 * 1024))));
+      const storageResult = await getStorageSettings();
+      setStorage(storageResult.storage);
+      setStorageKind((storageResult.storage.peer_kind as "self" | "channel") || "self");
+      setChannelID(storageResult.storage.channel_id ? String(storageResult.storage.channel_id) : "");
+      setAccessHash(storageResult.storage.access_hash ? String(storageResult.storage.access_hash) : "");
+      setChannelTitle(storageResult.storage.title || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -53,6 +64,25 @@ export function SettingsView() {
       const result = await cleanupCache();
       setCache(result.cache);
       setNotice(`Đã dọn ${result.removed} file khỏi cache local`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveStorage() {
+    setLoading(true);
+    try {
+      const payload: { peer_kind: string; channel_id?: number; access_hash?: number; title?: string } = { peer_kind: storageKind };
+      if (storageKind === "channel") {
+        payload.channel_id = Number(channelID || 0);
+        payload.access_hash = Number(accessHash || 0);
+        payload.title = channelTitle;
+      }
+      const result = await updateStorageSettings(payload);
+      setStorage(result.storage);
+      setNotice(storageKind === "self" ? "Đã chuyển về Saved Messages" : "Đã lưu cấu hình storage channel");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -181,6 +211,39 @@ export function SettingsView() {
             <input type="number" min={1} value={cacheLimitGB} onChange={(event) => setCacheLimitGB(Math.max(1, Number(event.target.value)))} onBlur={() => saveCache(cache.mode, cacheLimitGB)} />
           </label>
           <button className="button button--secondary" onClick={runCleanup}>Dọn cache ngay</button>
+        </div>
+      )}
+      {storage && (
+        <div className="settings-cache">
+          <header>
+            <h3>Lưu trữ Telegram</h3>
+            <span>{storage.peer_kind === "channel" ? "Đang dùng channel riêng" : "Đang dùng Saved Messages"}</span>
+          </header>
+          <div className="settings-cache__modes">
+            <button className={`mode-card ${storageKind === "self" ? "mode-card--active" : ""}`} onClick={() => setStorageKind("self")}>
+              <strong>Saved Messages</strong><span>Lưu file trong tin nhắn đã lưu của tài khoản (mặc định)</span>
+            </button>
+            <button className={`mode-card ${storageKind === "channel" ? "mode-card--active" : ""}`} onClick={() => setStorageKind("channel")}>
+              <strong>Channel riêng</strong><span>Dùng private channel để lưu file, tách khỏi Saved Messages</span>
+            </button>
+          </div>
+          {storageKind === "channel" && (
+            <div className="settings-form">
+              <label>
+                <span>Channel ID</span>
+                <input value={channelID} onChange={(event) => setChannelID(event.target.value.replace(/[^0-9-]/g, ""))} placeholder="ví dụ 1234567890" />
+              </label>
+              <label>
+                <span>Access Hash</span>
+                <input value={accessHash} onChange={(event) => setAccessHash(event.target.value.replace(/[^0-9-]/g, ""))} placeholder="ví dụ 9876543210" />
+              </label>
+              <label>
+                <span>Tên channel (tùy chọn)</span>
+                <input value={channelTitle} onChange={(event) => setChannelTitle(event.target.value)} placeholder="Tên hiển thị" />
+              </label>
+            </div>
+          )}
+          <button className="button button--primary" onClick={saveStorage} disabled={loading}>Lưu cấu hình lưu trữ</button>
         </div>
       )}
     </section>
