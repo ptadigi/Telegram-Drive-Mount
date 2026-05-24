@@ -37,6 +37,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/config", s.handleConfig)
 	mux.HandleFunc("GET /v1/database/status", s.handleDatabaseStatus)
 	mux.HandleFunc("GET /v1/transfers", s.handleTransfers)
+	mux.HandleFunc("GET /v1/events", s.handleEvents)
 	mux.HandleFunc("GET /v1/sync/roots", s.handleListSyncRoots)
 	mux.HandleFunc("POST /v1/sync/roots", s.handleCreateSyncRoot)
 	mux.HandleFunc("PUT /v1/sync/roots", s.handleUpdateSyncRoot)
@@ -104,6 +105,25 @@ func (s *Server) handleDatabaseStatus(w http.ResponseWriter, r *http.Request) {
 		"path":   s.config.DatabasePath,
 		"exists": fileExists(s.config.DatabasePath),
 	})
+}
+
+func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, errBadRequest("trình duyệt không hỗ trợ realtime stream"))
+		return
+	}
+	events := s.drive.Events().Subscribe(r.Context())
+	for event := range events {
+		_, _ = w.Write([]byte("event: " + event.Type + "\n"))
+		_, _ = w.Write([]byte("data: "))
+		_, _ = w.Write(event.JSON())
+		_, _ = w.Write([]byte("\n\n"))
+		flusher.Flush()
+	}
 }
 
 func (s *Server) handleTransfers(w http.ResponseWriter, r *http.Request) {

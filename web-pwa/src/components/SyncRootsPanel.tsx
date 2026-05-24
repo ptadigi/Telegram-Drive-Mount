@@ -1,6 +1,6 @@
 import { FolderSync, Pause, Play, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { createSyncRoot, deleteSyncRoot, listSyncRoots, scanSyncRoot, SyncRoot, updateSyncRoot } from "../api/agent";
+import { createSyncRoot, deleteSyncRoot, eventsUrl, listSyncRoots, scanSyncRoot, SyncRoot, updateSyncRoot } from "../api/agent";
 
 export function SyncRootsPanel() {
   const [roots, setRoots] = useState<SyncRoot[]>([]);
@@ -49,6 +49,13 @@ export function SyncRootsPanel() {
   }
 
   useEffect(() => { refresh(); }, []);
+
+  useEffect(() => {
+    const stream = new EventSource(eventsUrl());
+    stream.addEventListener("syncroot.created", refresh);
+    stream.addEventListener("syncroot.updated", refresh);
+    return () => stream.close();
+  }, []);
 
   return (
     <section className="sync-panel">

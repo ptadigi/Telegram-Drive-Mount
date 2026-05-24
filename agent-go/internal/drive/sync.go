@@ -90,6 +90,9 @@ func (s *Service) CreateSyncRoot(ctx context.Context, input CreateSyncRootInput)
 		INSERT INTO sync_roots (id, local_path, remote_folder_id, mode, enabled, status, last_scan_at, created_at, updated_at)
 		VALUES (?, ?, NULLIF(?, ''), ?, 1, ?, 0, ?, ?)
 	`, root.ID, root.LocalPath, root.RemoteFolderID, root.Mode, root.Status, now, now)
+	if err == nil {
+		s.events.Publish("syncroot.created", root)
+	}
 	if err != nil {
 		return SyncRoot{}, fmt.Errorf("tạo sync root: %w", err)
 	}
@@ -237,7 +240,11 @@ func (s *Service) getSyncRoot(ctx context.Context, id string) (SyncRoot, error) 
 }
 
 func (s *Service) setSyncRootStatus(ctx context.Context, id string, status string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE sync_roots SET status = ?, updated_at = ? WHERE id = ?`, status, time.Now().Unix(), id)
+	now := time.Now().Unix()
+	_, err := s.db.ExecContext(ctx, `UPDATE sync_roots SET status = ?, updated_at = ? WHERE id = ?`, status, now, id)
+	if err == nil {
+		s.events.Publish("syncroot.updated", map[string]any{"id": id, "status": status, "updated_at": now})
+	}
 	return err
 }
 

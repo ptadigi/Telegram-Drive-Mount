@@ -1,7 +1,7 @@
 import { Archive, Download, FileAudio, FileText, FileUp, FileVideo, Folder, Image, Plus, RefreshCw } from "lucide-react";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { createFolder, downloadFileUrl, DriveContents, DriveFile, DriveFolder, listDriveContents, listTransfers, seedDemoFile, thumbnailUrl, Transfer, uploadFile, UploadProgress } from "../api/agent";
+import { createFolder, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, listTransfers, seedDemoFile, thumbnailUrl, Transfer, uploadFile, UploadProgress } from "../api/agent";
 
 export function FileManager() {
   const { t } = useTranslation();
@@ -115,18 +115,17 @@ export function FileManager() {
   useEffect(() => { refresh(""); }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(async () => {
-      try {
-        const result = await listTransfers();
-        setTransfers(result.transfers);
-        if (result.transfers.some((transfer) => transfer.phase !== "completed" && transfer.phase !== "failed")) {
-          setContents(await listDriveContents(currentFolderId));
-        }
-      } catch {
-        // Polling chỉ hỗ trợ realtime, lỗi tạm thời không chặn file manager.
+    const stream = new EventSource(eventsUrl());
+    stream.onmessage = () => refresh(currentFolderId);
+    stream.addEventListener("file.created", () => refresh(currentFolderId));
+    stream.addEventListener("transfer.updated", async () => {
+      const result = await listTransfers();
+      setTransfers(result.transfers);
+      if (result.transfers.some((transfer) => transfer.phase !== "completed" && transfer.phase !== "failed")) {
+        setContents(await listDriveContents(currentFolderId));
       }
-    }, 1500);
-    return () => window.clearInterval(timer);
+    });
+    return () => stream.close();
   }, [currentFolderId]);
 
   const isEmpty = contents.folders.length === 0 && contents.files.length === 0;

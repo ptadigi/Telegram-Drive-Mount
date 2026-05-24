@@ -103,10 +103,15 @@ type Service struct {
 	db       *sql.DB
 	dataDir  string
 	uploader TelegramUploader
+	events   *EventBus
 }
 
 func NewService(db *sql.DB, dataDir string, uploader TelegramUploader) *Service {
-	return &Service{db: db, dataDir: dataDir, uploader: uploader}
+	return &Service{db: db, dataDir: dataDir, uploader: uploader, events: NewEventBus()}
+}
+
+func (s *Service) Events() *EventBus {
+	return s.events
 }
 
 func (s *Service) ListFiles(ctx context.Context) ([]File, error) {
@@ -241,7 +246,9 @@ func (s *Service) saveFileFromReader(ctx context.Context, source io.Reader, file
 		return File{}, fmt.Errorf("lưu metadata upload: %w", err)
 	}
 
-	return File{ID: id, FolderID: folderID, Name: safeName, Extension: ext, Kind: kind, Size: size, MimeType: mimeType, SyncState: syncState, LocalPath: targetPath, ThumbnailPath: thumbnailPath, PreviewStatus: previewStatus, CreatedAt: now, UpdatedAt: now}, nil
+	file := File{ID: id, FolderID: folderID, Name: safeName, Extension: ext, Kind: kind, Size: size, MimeType: mimeType, SyncState: syncState, LocalPath: targetPath, ThumbnailPath: thumbnailPath, PreviewStatus: previewStatus, CreatedAt: now, UpdatedAt: now}
+	s.events.Publish("file.created", file)
+	return file, nil
 }
 
 func (s *Service) GetDownloadableFile(ctx context.Context, id string) (DownloadableFile, error) {
@@ -479,11 +486,15 @@ func (s *Service) ensureFolderExists(ctx context.Context, id string) error {
 }
 
 func (s *Service) updateTransfer(ctx context.Context, fileID, phase string, percent int, bytesDone, bytesTotal int64, lastError string) error {
+	now := time.Now().Unix()
 	_, err := s.db.ExecContext(ctx, `
 		UPDATE transfers
 		SET phase = ?, percent = ?, bytes_done = ?, bytes_total = ?, last_error = NULLIF(?, ''), updated_at = ?
 		WHERE file_id = ? AND kind = 'telegram_sync' AND phase NOT IN ('completed')
-	`, phase, percent, bytesDone, bytesTotal, lastError, time.Now().Unix(), fileID)
+	`, phase, percent, bytesDone, bytesTotal, lastError, now, fileID)
+	if err == nil {
+		s.events.Publish("transfer.updated", Transfer{FileID: fileID, Kind: "telegram_sync", Phase: phase, Percent: percent, BytesDone: bytesDone, BytesTotal: bytesTotal, LastError: lastError, UpdatedAt: now})
+	}
 	return err
 }
 

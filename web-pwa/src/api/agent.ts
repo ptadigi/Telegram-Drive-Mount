@@ -53,6 +53,7 @@ export function submitTelegramPassword(password: string) { return sendJSON<{ suc
 export function listFiles(signal?: AbortSignal) { return getJSON<{ files: DriveFile[] }>("/v1/files", signal); }
 export function listDriveContents(folderId = "", signal?: AbortSignal) { return getJSON<DriveContents>(`/v1/drive/contents?folder_id=${encodeURIComponent(folderId)}`, signal); }
 export function listTransfers(signal?: AbortSignal) { return getJSON<{ transfers: Transfer[] }>("/v1/transfers", signal); }
+export function eventsUrl() { return `${AGENT_BASE_URL}/v1/events`; }
 export function listSyncRoots(signal?: AbortSignal) { return getJSON<{ roots: SyncRoot[] }>("/v1/sync/roots", signal); }
 export function createSyncRoot(localPath: string, remoteFolderId = "") { return sendJSON<{ root: SyncRoot; roots: SyncRoot[] }>("/v1/sync/roots", { local_path: localPath, remote_folder_id: remoteFolderId, mode: "upload_only" }); }
 export function scanSyncRoot(id: string) { return sendJSON<{ roots: SyncRoot[] }>("/v1/sync/roots/scan", { id }); }
