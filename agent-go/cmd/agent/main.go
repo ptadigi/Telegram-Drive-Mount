@@ -108,9 +108,11 @@ func main() {
 	}()
 
 	if *withTray {
+		execPath, _ := os.Executable()
 		go tray.Run(ctx, tray.Hooks{
-			BaseURL: trayBaseURL(cfg),
-			DataDir: cfg.DataDir,
+			BaseURL:  trayBaseURL(cfg),
+			DataDir:  cfg.DataDir,
+			ExecPath: execPath,
 			OnPause: func() {
 				paused.Store(true)
 				log.Println("đã tạm dừng đồng bộ qua tray")
@@ -118,6 +120,13 @@ func main() {
 			OnResume: func() {
 				paused.Store(false)
 				log.Println("đã bật lại đồng bộ qua tray")
+			},
+			OnAddRoot: func(path string) error {
+				_, err := driveService.CreateSyncRoot(ctx, drive.CreateSyncRootInput{LocalPath: path, Mode: "upload_only"})
+				if err != nil {
+					log.Printf("không thêm được sync root từ tray: %v", err)
+				}
+				return err
 			},
 			OnQuit: func() {
 				stop()

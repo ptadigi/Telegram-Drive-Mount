@@ -12,11 +12,13 @@ import (
 )
 
 type Hooks struct {
-	BaseURL  string
-	DataDir  string
-	OnPause  func()
-	OnResume func()
-	OnQuit   func()
+	BaseURL   string
+	DataDir   string
+	ExecPath  string
+	OnPause   func()
+	OnResume  func()
+	OnAddRoot func(path string) error
+	OnQuit    func()
 }
 
 func Run(ctx context.Context, hooks Hooks) {
@@ -26,10 +28,13 @@ func Run(ctx context.Context, hooks Hooks) {
 		setIconBytes()
 		open := systray.AddMenuItem("Mở giao diện", "Mở PWA trong trình duyệt")
 		dataDir := systray.AddMenuItem("Mở thư mục dữ liệu", "Mở Explorer/Finder tại thư mục dữ liệu")
+		addRoot := systray.AddMenuItem("Thêm thư mục đồng bộ", "Chọn thư mục local để đồng bộ Telegram")
 		systray.AddSeparator()
 		pause := systray.AddMenuItem("Tạm dừng đồng bộ", "Tạm dừng worker đồng bộ Telegram")
 		resume := systray.AddMenuItem("Tiếp tục đồng bộ", "Bật lại worker đồng bộ Telegram")
 		resume.Hide()
+		systray.AddSeparator()
+		autostart := systray.AddMenuItemCheckbox("Tự khởi động cùng máy", "Kích hoạt khi đăng nhập OS", false)
 		systray.AddSeparator()
 		quit := systray.AddMenuItem("Thoát", "Tắt Agent và thoát")
 
@@ -43,6 +48,12 @@ func Run(ctx context.Context, hooks Hooks) {
 					_ = openURL(hooks.BaseURL)
 				case <-dataDir.ClickedCh:
 					_ = openPath(hooks.DataDir)
+				case <-addRoot.ClickedCh:
+					if hooks.OnAddRoot != nil {
+						if path, err := PickFolder("Chọn thư mục đồng bộ Telegram"); err == nil {
+							_ = hooks.OnAddRoot(path)
+						}
+					}
 				case <-pause.ClickedCh:
 					if hooks.OnPause != nil {
 						hooks.OnPause()
@@ -55,6 +66,14 @@ func Run(ctx context.Context, hooks Hooks) {
 					}
 					resume.Hide()
 					pause.Show()
+				case <-autostart.ClickedCh:
+					if autostart.Checked() {
+						_ = DisableAutostart()
+						autostart.Uncheck()
+					} else {
+						_ = EnableAutostart(hooks.ExecPath)
+						autostart.Check()
+					}
 				case <-quit.ClickedCh:
 					if hooks.OnQuit != nil {
 						hooks.OnQuit()
