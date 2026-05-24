@@ -75,6 +75,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/shares", s.handleDeleteShare)
 	mux.HandleFunc("GET /v1/share/config", s.handleShareConfigGet)
 	mux.HandleFunc("PUT /v1/share/config", s.handleShareConfigPut)
+	mux.HandleFunc("GET /v1/storage", s.handleStorageGet)
+	mux.HandleFunc("PUT /v1/storage", s.handleStoragePut)
 	mux.HandleFunc("GET /v1/cache", s.handleCacheStats)
 	mux.HandleFunc("PUT /v1/cache", s.handleCacheConfig)
 	mux.HandleFunc("POST /v1/cache/cleanup", s.handleCacheCleanup)
@@ -550,6 +552,28 @@ func (s *Server) handleCacheCleanup(w http.ResponseWriter, r *http.Request) {
 	}
 	stats, _ := s.drive.CacheStats(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{"removed": removed, "cache": stats})
+}
+
+func (s *Server) handleStorageGet(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.drive.GetStorageSettings(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"storage": settings})
+}
+
+func (s *Server) handleStoragePut(w http.ResponseWriter, r *http.Request) {
+	var input drive.UpdateStorageInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	settings, err := s.drive.UpdateStorageSettings(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"storage": settings})
 }
 
 func (s *Server) handleShareConfigGet(w http.ResponseWriter, r *http.Request) {

@@ -170,6 +170,14 @@ func migrate(db *sql.DB) error {
 			health_message TEXT,
 			updated_at INTEGER NOT NULL DEFAULT 0
 		)`,
+		`CREATE TABLE IF NOT EXISTS storage_settings (
+			id TEXT PRIMARY KEY,
+			peer_kind TEXT NOT NULL DEFAULT 'self',
+			channel_id INTEGER NOT NULL DEFAULT 0,
+			access_hash INTEGER NOT NULL DEFAULT 0,
+			title TEXT,
+			updated_at INTEGER NOT NULL DEFAULT 0
+		)`,
 	}
 
 	for _, stmt := range statements {
@@ -198,6 +206,12 @@ func migrate(db *sql.DB) error {
 		"target_id":     "TEXT NOT NULL DEFAULT ''",
 		"updated_at":    "INTEGER NOT NULL DEFAULT 0",
 		"max_downloads": "INTEGER NOT NULL DEFAULT 0",
+	}); err != nil {
+		return err
+	}
+	if err := addColumns(db, "file_versions", map[string]string{
+		"telegram_access_hash":    "INTEGER NOT NULL DEFAULT 0",
+		"telegram_file_reference": "BLOB",
 	}); err != nil {
 		return err
 	}
