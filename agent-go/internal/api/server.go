@@ -82,6 +82,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/storage", s.handleStorageGet)
 	mux.HandleFunc("PUT /v1/storage", s.handleStoragePut)
 	mux.HandleFunc("POST /v1/storage/channel", s.handleCreateStorageChannel)
+	mux.HandleFunc("GET /v1/audit", s.handleListAudit)
 	mux.HandleFunc("GET /v1/auth/api-config", s.handleAPIAuthGet)
 	mux.HandleFunc("PUT /v1/auth/api-config", s.handleAPIAuthPut)
 	mux.Handle("/webdav/", s.webdavHandler())
@@ -653,6 +654,21 @@ func (s *Server) handleAPIAuthPut(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"auth": map[string]any{"mode": cfg.Mode, "username": cfg.Username, "has_password": cfg.Password != ""}})
 }
 
+func (s *Server) handleListAudit(w http.ResponseWriter, r *http.Request) {
+	limit := 200
+	if value := r.URL.Query().Get("limit"); value != "" {
+		if parsed, err := strconv.Atoi(value); err == nil {
+			limit = parsed
+		}
+	}
+	entries, err := s.drive.ListAudit(r.Context(), limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
+}
+
 func (s *Server) handleCreateStorageChannel(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Title string `json:"title"`
@@ -687,6 +703,7 @@ func (s *Server) handleStoragePut(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	s.drive.WriteAudit(r.Context(), "settings", "storage.update", "storage", settings.PeerKind, map[string]any{"channel_id": settings.ChannelID, "title": settings.Title})
 	writeJSON(w, http.StatusOK, map[string]any{"storage": settings})
 }
 

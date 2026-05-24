@@ -178,6 +178,15 @@ func migrate(db *sql.DB) error {
 			title TEXT,
 			updated_at INTEGER NOT NULL DEFAULT 0
 		)`,
+		`CREATE TABLE IF NOT EXISTS audit_log (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			ts INTEGER NOT NULL,
+			actor TEXT NOT NULL DEFAULT 'system',
+			action TEXT NOT NULL,
+			target_kind TEXT,
+			target_id TEXT,
+			detail TEXT
+		)`,
 	}
 
 	for _, stmt := range statements {

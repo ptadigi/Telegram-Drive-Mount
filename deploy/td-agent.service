@@ -1,0 +1,30 @@
+[Unit]
+Description=Telegram Virtual Drive Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/td-agent --config /etc/td-agent/config.json --data-dir /var/lib/td-agent --addr 0.0.0.0:8750
+Restart=on-failure
+RestartSec=5
+User=td-agent
+Group=td-agent
+StateDirectory=td-agent
+ConfigurationDirectory=td-agent
+WorkingDirectory=/var/lib/td-agent
+
+# Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/td-agent
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

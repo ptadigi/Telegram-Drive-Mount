@@ -94,6 +94,7 @@ func main() {
 	}()
 	go driveService.SyncRootWatcher(ctx)
 	go driveService.CacheWorker(ctx, 30*time.Second)
+	go driveService.BackupWorker(ctx, 6*time.Hour)
 
 	srv := &http.Server{
 		Addr:    cfg.Addr(),
