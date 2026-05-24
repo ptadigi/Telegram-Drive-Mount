@@ -99,7 +99,40 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/auth/start", s.handleAuthStart)
 	mux.HandleFunc("POST /v1/auth/code", s.handleAuthCode)
 	mux.HandleFunc("POST /v1/auth/password", s.handleAuthPassword)
-	return withJSON(withCORS(mux))
+	return withJSON(s.withAuth(withCORS(mux)))
+}
+
+func (s *Server) withAuth(next http.Handler) http.Handler {
+	if s.config.Auth.Mode != "basic" || s.config.Auth.Password == "" {
+		return next
+	}
+	user := s.config.Auth.Username
+	if user == "" {
+		user = "admin"
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isPublicPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		gotUser, gotPass, ok := r.BasicAuth()
+		if !ok || gotUser != user || gotPass != s.config.Auth.Password {
+			w.Header().Set("WWW-Authenticate", "Basic realm=\"Ổ Đĩa Cloud Ảo\"")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isPublicPath(path string) bool {
+	if path == "/health" || path == "/.td-check" {
+		return true
+	}
+	if strings.HasPrefix(path, "/share/") {
+		return true
+	}
+	return false
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

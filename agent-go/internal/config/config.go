@@ -18,6 +18,13 @@ type Config struct {
 	ShutdownTimeout time.Duration  `json:"-"`
 	Telegram        TelegramConfig `json:"telegram"`
 	Cache           CacheConfig    `json:"cache"`
+	Auth            AuthConfig     `json:"auth"`
+}
+
+type AuthConfig struct {
+	Mode     string `json:"mode"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 type CacheConfig struct {
@@ -46,6 +53,9 @@ func Default() Config {
 		Cache: CacheConfig{
 			Mode:     "smart",
 			MaxBytes: 5 * 1024 * 1024 * 1024,
+		},
+		Auth: AuthConfig{
+			Mode: "open",
 		},
 	}
 }
@@ -111,6 +121,9 @@ func (c *Config) normalize() {
 	}
 	if c.Cache.MaxBytes <= 0 {
 		c.Cache.MaxBytes = 5 * 1024 * 1024 * 1024
+	}
+	if c.Auth.Mode == "" {
+		c.Auth.Mode = "open"
 	}
 }
 
