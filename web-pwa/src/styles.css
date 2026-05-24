@@ -89,8 +89,9 @@ a.button { text-decoration: none; }
 .button--ghost { background: transparent; }
 
 .drive-browser, .computers-view { border: 1px solid var(--line); border-radius: 24px; background: #fff; padding: 18px; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05); position: relative; min-height: 320px; }
-.drive-browser--dropping { outline: 2px dashed var(--blue); }
-.drop-overlay { position: absolute; inset: 12px; border: 2px dashed var(--blue); border-radius: 22px; background: rgba(11, 102, 239, 0.08); color: var(--blue); display: grid; place-items: center; font-weight: 700; pointer-events: none; }
+.drive-browser--dropping { background: rgba(11, 102, 239, 0.04); }
+.drop-overlay { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); padding: 10px 18px; border-radius: 999px; background: var(--blue); color: white; font-size: 13px; font-weight: 600; box-shadow: 0 12px 30px rgba(11, 102, 239, 0.3); pointer-events: none; z-index: 10; }
+.drive-card--drop { background: rgba(11, 102, 239, 0.06); }
 .drive-browser__header, .computers-view__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .drive-browser__header h2, .computers-view__header h2 { margin: 0 0 6px; font-size: 22px; }
 .drive-browser__header p, .computers-view__header p { margin: 0; color: var(--muted); }

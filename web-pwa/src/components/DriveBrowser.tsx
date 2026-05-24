@@ -175,7 +175,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
 
   function handleDragOver(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
-    if (!dropping) setDropping(true);
+    if (event.dataTransfer.types.includes("Files") && !dropping) setDropping(true);
   }
 
   function handleDragLeave(event: DragEvent<HTMLDivElement>) {
@@ -187,6 +187,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     event.preventDefault();
     event.stopPropagation();
     setDropTargetFolder(null);
+    setDropping(false);
     if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
       const items = event.dataTransfer.items;
       const collected: { file: File; relativePath: string }[] = [];
@@ -225,6 +226,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     event.preventDefault();
     event.stopPropagation();
     setDropTargetFolder(null);
+    setDropping(false);
     if (!dragItem) {
       handleDrop(event);
       return;
@@ -244,6 +246,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   async function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setDropping(false);
+    setDropTargetFolder(null);
     const items = event.dataTransfer.items;
     const collected: { file: File; relativePath: string }[] = [];
     if (items && items.length > 0 && typeof items[0].webkitGetAsEntry === "function") {
