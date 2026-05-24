@@ -1,11 +1,21 @@
 {
   "name": "Ổ Đĩa Cloud Ảo",
   "short_name": "Ổ Cloud",
-  "description": "PWA quản lý ổ cứng cloud ảo dùng Telegram làm tầng lưu trữ.",
+  "description": "Cloud drive cá nhân dùng Telegram làm tầng lưu trữ ẩn phía sau.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0B1220",
-  "theme_color": "#0B1220",
+  "orientation": "any",
+  "background_color": "#f6faff",
+  "theme_color": "#0b66ef",
   "lang": "vi",
-  "icons": []
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
 }

@@ -5,6 +5,7 @@ import { AgentConfig, AgentInfo, AuthStatus, createFolder, DatabaseStatus, getAu
 import { DriveBrowser } from "./components/DriveBrowser";
 import { SearchView } from "./components/SearchView";
 import { SettingsView } from "./components/SettingsView";
+import { SharePage } from "./components/SharePage";
 import { StarredView } from "./components/StarredView";
 import { SyncRootsPanel } from "./components/SyncRootsPanel";
 import { TelegramLoginPanel } from "./components/TelegramLoginPanel";
@@ -16,6 +17,14 @@ type AgentState = "checking" | "online" | "offline";
 type ViewKey = "home" | "drive" | "computers" | "shared" | "starred" | "trash" | "settings" | "search";
 
 export function App() {
+  const sharedPath = window.location.pathname.match(/^\/share\/(.+)$/);
+  if (sharedPath) {
+    return <SharePage slug={decodeURIComponent(sharedPath[1])} />;
+  }
+  return <DriveApp />;
+}
+
+function DriveApp() {
   const { t } = useTranslation();
   const [agentState, setAgentState] = useState<AgentState>("checking");
   const [info, setInfo] = useState<AgentInfo | null>(null);

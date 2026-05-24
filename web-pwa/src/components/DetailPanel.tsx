@@ -1,5 +1,5 @@
 import { CalendarClock, FileText, Folder, HardDrive, Link2, X } from "lucide-react";
-import { DriveFile, DriveFolder, thumbnailUrl } from "../api/agent";
+import { AGENT_BASE_URL, DriveFile, DriveFolder, thumbnailUrl } from "../api/agent";
 
 type Props = {
   selection: { kind: "file"; data: DriveFile } | { kind: "folder"; data: DriveFolder } | null;
@@ -22,9 +22,14 @@ export function DetailPanel({ selection, onClose, onShare }: Props) {
         </header>
         <div className="detail-panel__preview">
           {file.preview_status === "ready" && file.kind === "image"
-            ? <img src={thumbnailUrl(file.id)} alt="" />
+            ? <img src={`${AGENT_BASE_URL}/v1/files/download?id=${encodeURIComponent(file.id)}`} alt="" />
             : <FileText size={48} />}
         </div>
+        {file.kind === "audio" && (
+          <div className="detail-panel__media">
+            <audio controls src={`${AGENT_BASE_URL}/v1/files/download?id=${encodeURIComponent(file.id)}`}></audio>
+          </div>
+        )}
         <dl className="detail-panel__list">
           <Row icon={<HardDrive size={14} />} label="Loại" value={file.mime_type || file.kind} />
           <Row icon={<CalendarClock size={14} />} label="Cập nhật" value={formatTimestamp(file.updated_at)} />
