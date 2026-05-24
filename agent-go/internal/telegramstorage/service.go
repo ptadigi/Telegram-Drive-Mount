@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/gotd/td/telegram"
+	"github.com/gotd/td/telegram/downloader"
 	"github.com/gotd/td/telegram/message"
 	"github.com/gotd/td/telegram/message/styling"
 	"github.com/gotd/td/telegram/message/unpack"
+	"github.com/gotd/td/tg"
 
 	"telegram-drive-agent/internal/config"
 	"telegram-drive-agent/internal/drive"
@@ -59,4 +62,69 @@ func (s *Service) UploadToSavedMessages(ctx context.Context, localPath string, o
 	}
 
 	return uploaded, nil
+}
+
+func (s *Service) DownloadFromSavedMessages(ctx context.Context, messageID int, targetPath string) error {
+	if s.cfg.Telegram.APIID == 0 || s.cfg.Telegram.APIHash == "" {
+		return errors.New("chưa cấu hình API Telegram cho Go Agent")
+	}
+	if messageID <= 0 {
+		return errors.New("thiếu Telegram message id")
+	}
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return fmt.Errorf("tạo thư mục cache: %w", err)
+	}
+	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
+		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
+	})
+	return client.Run(ctx, func(runCtx context.Context) error {
+		status, err := client.Auth().Status(runCtx)
+		if err != nil {
+			return fmt.Errorf("kiểm tra session Telegram: %w", err)
+		}
+		if !status.Authorized {
+			return ErrUnauthorized
+		}
+		api := client.API()
+		messages, err := api.MessagesGetMessages(runCtx, []tg.InputMessageClass{&tg.InputMessageID{ID: messageID}})
+		if err != nil {
+			return fmt.Errorf("đọc tin nhắn Telegram: %w", err)
+		}
+		var location tg.InputFileLocationClass
+		switch m := messages.(type) {
+		case *tg.MessagesMessages:
+			location = locationFromMessages(m.Messages, messageID)
+		case *tg.MessagesMessagesSlice:
+			location = locationFromMessages(m.Messages, messageID)
+		default:
+			return fmt.Errorf("loại trả về Telegram không hỗ trợ: %T", messages)
+		}
+		if location == nil {
+			return errors.New("không tìm thấy file Telegram tương ứng")
+		}
+		_, err = downloader.NewDownloader().Download(api, location).ToPath(runCtx, targetPath)
+		if err != nil {
+			return fmt.Errorf("tải file Telegram: %w", err)
+		}
+		return nil
+	})
+}
+
+func locationFromMessages(messages []tg.MessageClass, messageID int) tg.InputFileLocationClass {
+	for _, msg := range messages {
+		concrete, ok := msg.(*tg.Message)
+		if !ok || concrete.ID != messageID {
+			continue
+		}
+		media, ok := concrete.Media.(*tg.MessageMediaDocument)
+		if !ok {
+			continue
+		}
+		doc, ok := media.Document.AsNotEmpty()
+		if !ok {
+			continue
+		}
+		return &tg.InputDocumentFileLocation{ID: doc.ID, AccessHash: doc.AccessHash, FileReference: doc.FileReference}
+	}
+	return nil
 }

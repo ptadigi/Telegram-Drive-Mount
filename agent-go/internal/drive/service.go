@@ -2,7 +2,9 @@ package drive
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -58,6 +60,7 @@ type CreateFolderInput struct {
 
 type TelegramUploader interface {
 	UploadToSavedMessages(ctx context.Context, localPath string, originalName string) (UploadedObject, error)
+	DownloadFromSavedMessages(ctx context.Context, messageID int, targetPath string) error
 }
 
 type UploadedObject struct {
@@ -203,21 +206,30 @@ func (s *Service) saveFileFromReader(ctx context.Context, source io.Reader, file
 	}
 	defer target.Close()
 
+	hasher := sha256.New()
+	teeWriter := io.MultiWriter(target, hasher)
+
 	buffer := make([]byte, 512)
 	read, readErr := source.Read(buffer)
 	if readErr != nil && readErr != io.EOF {
 		return File{}, fmt.Errorf("đọc file upload: %w", readErr)
 	}
 	mimeType := detectMimeType(safeName, headerMime, buffer[:read])
-	if _, err := target.Write(buffer[:read]); err != nil {
+	if _, err := teeWriter.Write(buffer[:read]); err != nil {
 		return File{}, fmt.Errorf("lưu file local: %w", err)
 	}
-	rest, err := io.Copy(target, source)
+	rest, err := io.Copy(teeWriter, source)
 	if err != nil {
 		return File{}, fmt.Errorf("lưu file local: %w", err)
 	}
 	size := int64(read) + rest
+	hashHex := hex.EncodeToString(hasher.Sum(nil))
 	_ = copyToCache
+
+	if existing, err := s.findFileByHash(ctx, hashHex); err == nil && existing.ID != "" {
+		_ = os.Remove(targetPath)
+		return existing, nil
+	}
 
 	now := time.Now().Unix()
 	ext := strings.ToLower(filepath.Ext(safeName))
@@ -231,8 +243,8 @@ func (s *Service) saveFileFromReader(ctx context.Context, source io.Reader, file
 	defer tx.Rollback()
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO files (id, folder_id, name, extension, kind, size, mime_type, hash, current_version_id, sync_state, local_path, thumbnail_path, preview_status, created_at, updated_at)
-		VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, '', NULL, ?, ?, ?, ?, ?, ?)
-	`, id, folderID, safeName, ext, kind, size, mimeType, syncState, targetPath, thumbnailPath, previewStatus, now, now)
+		VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
+	`, id, folderID, safeName, ext, kind, size, mimeType, hashHex, syncState, targetPath, thumbnailPath, previewStatus, now, now)
 	if err != nil {
 		return File{}, fmt.Errorf("ghi metadata file: %w", err)
 	}
@@ -251,6 +263,24 @@ func (s *Service) saveFileFromReader(ctx context.Context, source io.Reader, file
 	return file, nil
 }
 
+func (s *Service) findFileByHash(ctx context.Context, hash string) (File, error) {
+	if hash == "" {
+		return File{}, sql.ErrNoRows
+	}
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, COALESCE(folder_id, ''), name, COALESCE(extension, ''), COALESCE(kind, 'other'), size, COALESCE(mime_type, ''), sync_state, COALESCE(local_path, ''), COALESCE(thumbnail_path, ''), COALESCE(preview_status, 'pending'), created_at, updated_at
+		FROM files
+		WHERE hash = ? AND deleted_at IS NULL
+		ORDER BY updated_at DESC
+		LIMIT 1
+	`, hash)
+	var file File
+	if err := row.Scan(&file.ID, &file.FolderID, &file.Name, &file.Extension, &file.Kind, &file.Size, &file.MimeType, &file.SyncState, &file.LocalPath, &file.ThumbnailPath, &file.PreviewStatus, &file.CreatedAt, &file.UpdatedAt); err != nil {
+		return File{}, err
+	}
+	return file, nil
+}
+
 func (s *Service) GetDownloadableFile(ctx context.Context, id string) (DownloadableFile, error) {
 	file, err := s.getFile(ctx, id)
 	if err != nil {
@@ -260,13 +290,45 @@ func (s *Service) GetDownloadableFile(ctx context.Context, id string) (Downloada
 	if localPath == "" {
 		localPath = filepath.Join(s.dataDir, "uploads", file.ID+"-"+filepath.Base(file.Name))
 	}
-	if _, err := os.Stat(localPath); err != nil {
-		if os.IsNotExist(err) {
-			return DownloadableFile{}, fmt.Errorf("file chưa có cache cục bộ để tải xuống")
-		}
-		return DownloadableFile{}, fmt.Errorf("kiểm tra cache file: %w", err)
+	if _, err := os.Stat(localPath); err == nil {
+		return DownloadableFile{File: file, LocalPath: localPath}, nil
+	}
+	if err := s.restoreFromTelegram(ctx, file, localPath); err != nil {
+		return DownloadableFile{}, fmt.Errorf("không có cache cục bộ và không tải được từ Telegram: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE files SET local_path = ?, updated_at = ? WHERE id = ?`, localPath, time.Now().Unix(), file.ID); err == nil {
+		file.LocalPath = localPath
 	}
 	return DownloadableFile{File: file, LocalPath: localPath}, nil
+}
+
+func (s *Service) restoreFromTelegram(ctx context.Context, file File, localPath string) error {
+	if s.uploader == nil {
+		return fmt.Errorf("chưa có Telegram uploader")
+	}
+	messageID, err := s.latestTelegramMessageID(ctx, file.ID)
+	if err != nil {
+		return err
+	}
+	if messageID == 0 {
+		return fmt.Errorf("file chưa được đồng bộ Telegram")
+	}
+	return s.uploader.DownloadFromSavedMessages(ctx, messageID, localPath)
+}
+
+func (s *Service) latestTelegramMessageID(ctx context.Context, fileID string) (int, error) {
+	var messageID sql.NullInt64
+	err := s.db.QueryRowContext(ctx, `SELECT telegram_message_id FROM file_versions WHERE file_id = ? ORDER BY version_number DESC LIMIT 1`, fileID).Scan(&messageID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, err
+	}
+	if !messageID.Valid {
+		return 0, nil
+	}
+	return int(messageID.Int64), nil
 }
 
 func (s *Service) GetThumbnail(ctx context.Context, id string) (ThumbnailFile, error) {
