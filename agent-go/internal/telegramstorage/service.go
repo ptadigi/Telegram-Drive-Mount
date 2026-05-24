@@ -231,6 +231,123 @@ func documentFromMessages(messages []tg.MessageClass, messageID int) *tg.Documen
 	return nil
 }
 
+func (s *Service) UploadToPeer(ctx context.Context, peer drive.StoragePeer, localPath string, originalName string) (drive.UploadedObject, error) {
+	if peer.Kind != "channel" || peer.ChannelID == 0 {
+		return s.UploadToSavedMessages(ctx, localPath, originalName)
+	}
+	if s.cfg.Telegram.APIID == 0 || s.cfg.Telegram.APIHash == "" {
+		return drive.UploadedObject{}, errors.New("chưa cấu hình API Telegram cho Go Agent")
+	}
+	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
+		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
+	})
+	var uploaded drive.UploadedObject
+	err := client.Run(ctx, func(runCtx context.Context) error {
+		status, err := client.Auth().Status(runCtx)
+		if err != nil {
+			return fmt.Errorf("kiểm tra session Telegram: %w", err)
+		}
+		if !status.Authorized {
+			return ErrUnauthorized
+		}
+		caption := fmt.Sprintf("TD_OBJECT:%s", filepath.Base(localPath))
+		channel := &tg.InputPeerChannel{ChannelID: peer.ChannelID, AccessHash: peer.AccessHash}
+		msg, err := unpack.Message(message.NewSender(client.API()).To(channel).Upload(message.FromPath(localPath)).File(runCtx, styling.Plain(caption)))
+		if err != nil {
+			return fmt.Errorf("upload file lên channel Telegram: %w", err)
+		}
+		uploaded.MessageID = msg.ID
+		uploaded.FileID = fmt.Sprintf("channel:%d:%d", peer.ChannelID, msg.ID)
+		uploaded.ChannelID = peer.ChannelID
+		uploaded.AccessHash = peer.AccessHash
+		return nil
+	})
+	if err != nil {
+		return drive.UploadedObject{}, err
+	}
+	return uploaded, nil
+}
+
+func (s *Service) DownloadFromPeer(ctx context.Context, peer drive.StoragePeer, messageID int, targetPath string) error {
+	if peer.Kind != "channel" || peer.ChannelID == 0 {
+		return s.DownloadFromSavedMessages(ctx, messageID, targetPath)
+	}
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+		return fmt.Errorf("tạo thư mục cache: %w", err)
+	}
+	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
+		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
+	})
+	return client.Run(ctx, func(runCtx context.Context) error {
+		api := client.API()
+		channel := &tg.InputChannel{ChannelID: peer.ChannelID, AccessHash: peer.AccessHash}
+		messages, err := api.ChannelsGetMessages(runCtx, &tg.ChannelsGetMessagesRequest{Channel: channel, ID: []tg.InputMessageClass{&tg.InputMessageID{ID: messageID}}})
+		if err != nil {
+			return fmt.Errorf("đọc tin nhắn channel: %w", err)
+		}
+		location := locationFromChannelMessages(messages, messageID)
+		if location == nil {
+			return errors.New("không tìm thấy file trên channel")
+		}
+		_, err = downloader.NewDownloader().Download(api, location).ToPath(runCtx, targetPath)
+		if err != nil {
+			return fmt.Errorf("tải file channel: %w", err)
+		}
+		return nil
+	})
+}
+
+func (s *Service) StreamFromPeer(ctx context.Context, peer drive.StoragePeer, messageID int, offset int64, length int64, w io.Writer) (drive.StreamResult, error) {
+	if peer.Kind != "channel" || peer.ChannelID == 0 {
+		return s.StreamFromSavedMessages(ctx, messageID, offset, length, w)
+	}
+	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
+		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
+	})
+	var result drive.StreamResult
+	err := client.Run(ctx, func(runCtx context.Context) error {
+		api := client.API()
+		channel := &tg.InputChannel{ChannelID: peer.ChannelID, AccessHash: peer.AccessHash}
+		messages, err := api.ChannelsGetMessages(runCtx, &tg.ChannelsGetMessagesRequest{Channel: channel, ID: []tg.InputMessageClass{&tg.InputMessageID{ID: messageID}}})
+		if err != nil {
+			return fmt.Errorf("đọc tin nhắn channel: %w", err)
+		}
+		doc := documentFromChannelMessages(messages, messageID)
+		if doc == nil {
+			return errors.New("không tìm thấy file trên channel")
+		}
+		result.Size = doc.Size
+		result.MimeType = doc.MimeType
+		location := &tg.InputDocumentFileLocation{ID: doc.ID, AccessHash: doc.AccessHash, FileReference: doc.FileReference}
+		return streamDocument(runCtx, api, location, doc.Size, offset, length, w)
+	})
+	return result, err
+}
+
+func locationFromChannelMessages(resp tg.MessagesMessagesClass, messageID int) tg.InputFileLocationClass {
+	switch m := resp.(type) {
+	case *tg.MessagesMessages:
+		return locationFromMessages(m.Messages, messageID)
+	case *tg.MessagesMessagesSlice:
+		return locationFromMessages(m.Messages, messageID)
+	case *tg.MessagesChannelMessages:
+		return locationFromMessages(m.Messages, messageID)
+	}
+	return nil
+}
+
+func documentFromChannelMessages(resp tg.MessagesMessagesClass, messageID int) *tg.Document {
+	switch m := resp.(type) {
+	case *tg.MessagesMessages:
+		return documentFromMessages(m.Messages, messageID)
+	case *tg.MessagesMessagesSlice:
+		return documentFromMessages(m.Messages, messageID)
+	case *tg.MessagesChannelMessages:
+		return documentFromMessages(m.Messages, messageID)
+	}
+	return nil
+}
+
 func locationFromMessages(messages []tg.MessageClass, messageID int) tg.InputFileLocationClass {
 	for _, msg := range messages {
 		concrete, ok := msg.(*tg.Message)

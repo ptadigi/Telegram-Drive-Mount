@@ -77,8 +77,10 @@ type StreamResult struct {
 }
 
 type UploadedObject struct {
-	MessageID int
-	FileID    string
+	MessageID  int
+	FileID     string
+	ChannelID  int64
+	AccessHash int64
 }
 
 type SyncResult struct {
@@ -338,14 +340,38 @@ func (s *Service) restoreFromTelegram(ctx context.Context, file File, localPath 
 	if s.uploader == nil {
 		return fmt.Errorf("chưa có Telegram uploader")
 	}
-	messageID, err := s.latestTelegramMessageID(ctx, file.ID)
+	peer, messageID, err := s.latestTelegramVersion(ctx, file.ID)
 	if err != nil {
 		return err
 	}
 	if messageID == 0 {
 		return fmt.Errorf("file chưa được đồng bộ Telegram")
 	}
+	uploader, ok := s.uploader.(interface {
+		DownloadFromPeer(ctx context.Context, peer StoragePeer, messageID int, targetPath string) error
+	})
+	if ok {
+		return uploader.DownloadFromPeer(ctx, peer, messageID, localPath)
+	}
 	return s.uploader.DownloadFromSavedMessages(ctx, messageID, localPath)
+}
+
+func (s *Service) latestTelegramVersion(ctx context.Context, fileID string) (StoragePeer, int, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT COALESCE(telegram_message_id, 0), COALESCE(telegram_channel_id, 0), COALESCE(telegram_access_hash, 0) FROM file_versions WHERE file_id = ? ORDER BY version_number DESC LIMIT 1`, fileID)
+	var messageID int
+	var channelID int64
+	var accessHash int64
+	if err := row.Scan(&messageID, &channelID, &accessHash); err != nil {
+		if err == sql.ErrNoRows {
+			return StoragePeer{Kind: "self"}, 0, nil
+		}
+		return StoragePeer{}, 0, err
+	}
+	peer := StoragePeer{Kind: "self"}
+	if channelID != 0 {
+		peer = StoragePeer{Kind: "channel", ChannelID: channelID, AccessHash: accessHash}
+	}
+	return peer, messageID, nil
 }
 
 func (s *Service) latestTelegramMessageID(ctx context.Context, fileID string) (int, error) {
@@ -405,12 +431,18 @@ func (s *Service) StreamFromTelegram(ctx context.Context, fileID string, offset,
 	if s.uploader == nil {
 		return StreamResult{}, fmt.Errorf("chưa có Telegram uploader")
 	}
-	messageID, err := s.latestTelegramMessageID(ctx, fileID)
+	peer, messageID, err := s.latestTelegramVersion(ctx, fileID)
 	if err != nil {
 		return StreamResult{}, err
 	}
 	if messageID == 0 {
 		return StreamResult{}, fmt.Errorf("file chưa được đồng bộ Telegram")
+	}
+	if peerUploader, ok := s.uploader.(interface {
+		StreamFromPeer(ctx context.Context, peer StoragePeer, messageID int, offset int64, length int64, w io.Writer) (StreamResult, error)
+	}); ok {
+		s.RecordFileAccess(ctx, fileID)
+		return peerUploader.StreamFromPeer(ctx, peer, messageID, offset, length, w)
 	}
 	uploader, ok := s.uploader.(interface {
 		StreamFromSavedMessages(ctx context.Context, messageID int, offset int64, length int64, w io.Writer) (StreamResult, error)
@@ -487,6 +519,15 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 		return SyncResult{Message: "Không có file nào đang chờ đồng bộ Telegram"}, nil
 	}
 
+	settings, _ := s.GetStorageSettings(ctx)
+	peer := StoragePeer{Kind: settings.PeerKind, ChannelID: settings.ChannelID, AccessHash: settings.AccessHash}
+	if peer.Kind == "" {
+		peer.Kind = "self"
+	}
+	uploader, _ := s.uploader.(interface {
+		UploadToPeer(ctx context.Context, peer StoragePeer, localPath string, originalName string) (UploadedObject, error)
+	})
+
 	result := SyncResult{}
 	for _, item := range pending {
 		if err := s.markSyncState(ctx, item.ID, "telegram_uploading"); err != nil {
@@ -494,10 +535,16 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 			continue
 		}
 		_ = s.updateTransfer(ctx, item.ID, "syncing_telegram", 15, 0, item.Size, "")
-		uploaded, err := s.uploader.UploadToSavedMessages(ctx, item.LocalPath, item.Name)
-		if err != nil {
+		var uploaded UploadedObject
+		var uploadErr error
+		if uploader != nil {
+			uploaded, uploadErr = uploader.UploadToPeer(ctx, peer, item.LocalPath, item.Name)
+		} else {
+			uploaded, uploadErr = s.uploader.UploadToSavedMessages(ctx, item.LocalPath, item.Name)
+		}
+		if uploadErr != nil {
 			_ = s.markSyncState(ctx, item.ID, "telegram_upload_failed")
-			_ = s.updateTransfer(ctx, item.ID, "failed", 100, 0, item.Size, err.Error())
+			_ = s.updateTransfer(ctx, item.ID, "failed", 100, 0, item.Size, uploadErr.Error())
 			result.Failed++
 			continue
 		}
@@ -690,9 +737,9 @@ func (s *Service) recordTelegramVersion(ctx context.Context, file File, uploaded
 	}
 	defer tx.Rollback()
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO file_versions (id, file_id, version_number, size, hash, telegram_channel_id, telegram_message_id, telegram_file_id, created_at)
-		VALUES (?, ?, 1, ?, '', NULL, ?, ?, ?)
-	`, versionID, file.ID, file.Size, uploaded.MessageID, uploaded.FileID, now)
+		INSERT INTO file_versions (id, file_id, version_number, size, hash, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_access_hash, created_at)
+		VALUES (?, ?, 1, ?, '', NULLIF(?, 0), ?, ?, ?, ?)
+	`, versionID, file.ID, file.Size, uploaded.ChannelID, uploaded.MessageID, uploaded.FileID, uploaded.AccessHash, now)
 	if err != nil {
 		return fmt.Errorf("ghi version Telegram: %w", err)
 	}
