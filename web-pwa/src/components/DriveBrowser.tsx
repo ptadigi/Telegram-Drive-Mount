@@ -1,10 +1,14 @@
-import { Archive, Download, FileAudio, FileText, FileVideo, Folder, Image, Info, Link2, MoreVertical, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { Archive, Download, FileAudio, FileText, FileVideo, Folder, Image, Info, LayoutGrid, Link2, List, MoreVertical, Pencil, RefreshCw, Star, Trash2 } from "lucide-react";
 import React, { ChangeEvent, DragEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { createFolder, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, renameFile, renameFolder, thumbnailUrl, trashFile, trashFolder } from "../api/agent";
+import { createFolder, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, renameFile, renameFolder, starFile, starFolder, thumbnailUrl, trashFile, trashFolder, zipFolderUrl } from "../api/agent";
+import { useConfirm, useToast } from "../state/ui";
 import { ContextMenu, ContextMenuItem } from "./ContextMenu";
 import { DetailPanel } from "./DetailPanel";
 import { ShareDialog } from "./ShareDialog";
+
+type SortKey = "updated_at" | "name" | "size";
+type ViewMode = "grid" | "list";
 import { UploadQueue } from "../state/uploads";
 
 type Props = {
@@ -23,6 +27,10 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   const [shareTarget, setShareTarget] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
   const [selection, setSelection] = useState<{ kind: "file"; data: DriveFile } | { kind: "folder"; data: DriveFolder } | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("updated_at");
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const toast = useToast();
+  const confirm = useConfirm();
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const currentFolderId = folderStack.length > 0 ? folderStack[folderStack.length - 1].id : "";
@@ -133,6 +141,8 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
       items: [
         { key: "rename", label: t("files.rename"), icon: <Pencil size={14} />, onSelect: () => promptRenameFolder(folder) },
         { key: "share", label: t("files.share"), icon: <Link2 size={14} />, onSelect: () => setShareTarget({ kind: "folder", id: folder.id, name: folder.name }) },
+        { key: "star", label: folder.starred ? "Bỏ đánh dấu sao" : "Đánh dấu sao", icon: <Star size={14} />, onSelect: () => toggleStarFolder(folder) },
+        { key: "zip", label: "Tải xuống dạng ZIP", icon: <Download size={14} />, onSelect: () => window.location.assign(zipFolderUrl(folder.id)) },
         { key: "trash", label: t("files.trash"), icon: <Trash2 size={14} />, danger: true, onSelect: () => promptTrashFolder(folder) },
       ],
     });
@@ -148,6 +158,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
       items: [
         { key: "details", label: t("files.viewDetails"), icon: <Info size={14} />, onSelect: () => setSelection({ kind: "file", data: file }) },
         { key: "share", label: t("files.share"), icon: <Link2 size={14} />, onSelect: () => setShareTarget({ kind: "file", id: file.id, name: file.name }) },
+        { key: "star", label: file.starred ? "Bỏ đánh dấu sao" : "Đánh dấu sao", icon: <Star size={14} />, onSelect: () => toggleStarFile(file) },
         { key: "rename", label: t("files.rename"), icon: <Pencil size={14} />, onSelect: () => promptRenameFile(file) },
         { key: "download", label: t("files.download"), icon: <Download size={14} />, onSelect: () => window.location.assign(downloadFileUrl(file.id)) },
         { key: "trash", label: t("files.trash"), icon: <Trash2 size={14} />, danger: true, onSelect: () => promptTrashFile(file) },
@@ -157,23 +168,63 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
 
   function promptRenameFolder(folder: DriveFolder) {
     const name = window.prompt(t("files.renamePrompt"), folder.name);
-    if (name && name !== folder.name) renameFolder(folder.id, name).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+    if (name && name !== folder.name) renameFolder(folder.id, name).then(() => { refresh(); toast(`Đã đổi tên thành ${name}`, "success"); }).catch((err) => toast(err instanceof Error ? err.message : String(err), "error"));
   }
 
   function promptRenameFile(file: DriveFile) {
     const name = window.prompt(t("files.renamePrompt"), file.name);
-    if (name && name !== file.name) renameFile(file.id, name).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+    if (name && name !== file.name) renameFile(file.id, name).then(() => { refresh(); toast(`Đã đổi tên thành ${name}`, "success"); }).catch((err) => toast(err instanceof Error ? err.message : String(err), "error"));
   }
 
-  function promptTrashFolder(folder: DriveFolder) {
-    if (window.confirm(t("files.trashConfirm", { name: folder.name }))) trashFolder(folder.id).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  async function promptTrashFolder(folder: DriveFolder) {
+    const ok = await confirm({ title: "Xóa thư mục", message: `Đưa ${folder.name} vào thùng rác?`, tone: "error" });
+    if (!ok) return;
+    try {
+      await trashFolder(folder.id);
+      await refresh();
+      toast("Đã đưa thư mục vào thùng rác", "success");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), "error");
+    }
   }
 
-  function promptTrashFile(file: DriveFile) {
-    if (window.confirm(t("files.trashConfirm", { name: file.name }))) trashFile(file.id).then(() => refresh()).catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  async function promptTrashFile(file: DriveFile) {
+    const ok = await confirm({ title: "Xóa file", message: `Đưa ${file.name} vào thùng rác?`, tone: "error" });
+    if (!ok) return;
+    try {
+      await trashFile(file.id);
+      await refresh();
+      toast("Đã đưa file vào thùng rác", "success");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), "error");
+    }
+  }
+
+  async function toggleStarFile(file: DriveFile) {
+    try {
+      const next = !file.starred;
+      await starFile(file.id, next);
+      toast(next ? "Đã đánh dấu sao" : "Đã bỏ đánh dấu sao", "success");
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), "error");
+    }
+  }
+
+  async function toggleStarFolder(folder: DriveFolder) {
+    try {
+      const next = !folder.starred;
+      await starFolder(folder.id, next);
+      toast(next ? "Đã đánh dấu sao" : "Đã bỏ đánh dấu sao", "success");
+      refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err), "error");
+    }
   }
 
   const isEmpty = contents.folders.length === 0 && contents.files.length === 0;
+  const sortedFolders = [...contents.folders].sort(folderComparator(sortKey));
+  const sortedFiles = [...contents.files].sort(fileComparator(sortKey));
 
   return (
     <div className={selection ? "drive-layout drive-layout--with-detail" : "drive-layout"}>
@@ -193,6 +244,13 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
           </div>
         </div>
         <div className="drive-browser__actions">
+          <select className="select-control" value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
+            <option value="updated_at">Mới nhất</option>
+            <option value="name">Tên A-Z</option>
+            <option value="size">Dung lượng</option>
+          </select>
+          <button className={`icon-button ${viewMode === "grid" ? "icon-button--active" : ""}`} onClick={() => setViewMode("grid")} aria-label="Lưới"><LayoutGrid size={16} /></button>
+          <button className={`icon-button ${viewMode === "list" ? "icon-button--active" : ""}`} onClick={() => setViewMode("list")} aria-label="Danh sách"><List size={16} /></button>
           <button className="button button--primary" onClick={() => fileInputRef.current?.click()}>{t("files.upload")}</button>
           <button className="button button--secondary" onClick={() => folderInputRef.current?.click()}>{t("files.uploadFolder")}</button>
           <button className="button button--secondary" onClick={createNewFolder}>{t("files.createFolder")}</button>
@@ -206,29 +264,29 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
       {loading && <div className="muted-box">{t("files.loading")}</div>}
       {!loading && isEmpty && <div className="muted-box drop-hint">{t("drive.emptyDrop")}</div>}
       {!loading && !isEmpty && (
-        <div className="file-grid">
-          {contents.folders.map((folder) => (
+        <div className={viewMode === "grid" ? "file-grid" : "file-list"}>
+          {sortedFolders.map((folder) => (
             <div className="drive-card drive-card--folder" key={folder.id}>
               <button className="drive-card__open" onClick={() => openFolder(folder)}>
                 <div className="drive-card__thumb"><Folder size={36} /></div>
-                <div className="drive-card__name"><strong>{folder.name}</strong><span>{t("files.folder")}</span></div>
+                <div className="drive-card__name"><strong>{folder.name}{folder.starred && <Star size={12} className="star-mark" />}</strong><span>{t("files.folder")}</span></div>
               </button>
               <button className="drive-card__menu" onClick={(event) => handleFolderMenu(event, folder)}><MoreVertical size={16} /></button>
             </div>
           ))}
-          {contents.files.map((file) => (
+          {sortedFiles.map((file) => (
             <div className="drive-card" key={file.id} onClick={() => setSelection({ kind: "file", data: file })}>
               <div className="drive-card__thumb">
                 {file.preview_status === "ready" && file.kind === "image" ? <img src={thumbnailUrl(file.id)} alt="" /> : kindIcon(file.kind)}
               </div>
               <div className="drive-card__name">
-                <strong>{file.name}</strong>
+                <strong>{file.name}{file.starred && <Star size={12} className="star-mark" />}</strong>
                 <span>{kindLabel(file.kind)} · {formatBytes(file.size)}</span>
               </div>
               <div className="drive-card__footer">
                 <span className={`badge badge--${syncBadge(file.sync_state)}`}>{syncLabel(file.sync_state)}</span>
-                <button className="drive-card__action" onClick={() => setShareTarget({ kind: "file", id: file.id, name: file.name })}><Link2 size={14} /></button>
-                <a className="drive-card__action" href={downloadFileUrl(file.id)}><Download size={14} /></a>
+                <button className="drive-card__action" onClick={(event) => { event.stopPropagation(); setShareTarget({ kind: "file", id: file.id, name: file.name }); }}><Link2 size={14} /></button>
+                <a className="drive-card__action" href={downloadFileUrl(file.id)} onClick={(event) => event.stopPropagation()}><Download size={14} /></a>
                 <button className="drive-card__menu" onClick={(event) => handleFileMenu(event, file)}><MoreVertical size={16} /></button>
               </div>
             </div>
@@ -256,6 +314,21 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
 function attachRelativePath(file: File, relativePath: string) {
   Object.defineProperty(file, "webkitRelativePath", { value: relativePath, configurable: true });
   return file;
+}
+
+function folderComparator(sortKey: SortKey) {
+  return (a: DriveFolder, b: DriveFolder) => {
+    if (sortKey === "name") return a.name.localeCompare(b.name, "vi");
+    return b.updated_at - a.updated_at;
+  };
+}
+
+function fileComparator(sortKey: SortKey) {
+  return (a: DriveFile, b: DriveFile) => {
+    if (sortKey === "name") return a.name.localeCompare(b.name, "vi");
+    if (sortKey === "size") return b.size - a.size;
+    return b.updated_at - a.updated_at;
+  };
 }
 
 async function collectEntry(entry: FileSystemEntry, parentPath: string, collected: { file: File; relativePath: string }[]) {

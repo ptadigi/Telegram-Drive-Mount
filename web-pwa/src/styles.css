@@ -93,6 +93,14 @@ a.button { text-decoration: none; }
 .drop-hint { text-align: center; }
 
 .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+.file-list { display: grid; gap: 8px; }
+.file-list .drive-card { grid-template-columns: 56px 1fr auto; grid-template-rows: auto; min-height: auto; padding: 10px; }
+.file-list .drive-card__thumb { width: 56px; height: 56px; }
+.file-list .drive-card__name { grid-column: 2; }
+.file-list .drive-card__footer { grid-column: 3; justify-content: flex-end; flex-wrap: nowrap; }
+.star-mark { color: #f59e0b; margin-left: 6px; vertical-align: middle; }
+.select-control { border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; background: #fff; color: #1f2937; font-size: 13px; }
+.icon-button--active { color: #1d4ed8; background: #eef4ff; }
 .drive-card { display: grid; grid-template-rows: 130px 1fr auto; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 18px; background: #fff; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04); cursor: default; position: relative; }
 .drive-card__open { display: contents; border: 0; background: transparent; padding: 0; cursor: pointer; text-align: left; }
 .drive-card__menu { position: absolute; top: 8px; right: 8px; border: 0; border-radius: 999px; width: 28px; height: 28px; background: rgba(255, 255, 255, 0.85); display: grid; place-items: center; cursor: pointer; color: #475569; }
@@ -190,6 +198,19 @@ a.button { text-decoration: none; }
 .settings-status strong { display: block; }
 .settings-status span { display: block; color: var(--muted); font-size: 13px; }
 .success-note { color: #166534; background: #dcfce7; border: 1px solid #bbf7d0; }
+.error-note { color: #991b1b; background: #fee2e2; border: 1px solid #fecaca; }
+.toast-stack { position: fixed; right: 22px; bottom: 22px; display: grid; gap: 8px; z-index: 200; }
+.toast { border: 0; border-radius: 14px; padding: 12px 16px; min-width: 240px; max-width: 360px; text-align: left; cursor: pointer; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18); color: #1f2937; background: #fff; }
+.toast--info { border-left: 4px solid var(--blue); }
+.toast--success { border-left: 4px solid var(--green); color: #166534; background: #f0fdf4; }
+.toast--error { border-left: 4px solid var(--red); color: #991b1b; background: #fef2f2; }
+.modal__panel--confirm { display: grid; gap: 14px; }
+.modal__panel--error strong { color: var(--red); }
+.modal__panel--success strong { color: var(--green); }
+.modal__panel p { margin: 0; color: var(--muted); }
+.modal__footer { display: flex; gap: 10px; justify-content: flex-end; }
+.button--danger { color: white; background: var(--red); }
+.button--danger:hover { background: #dc2626; }
 .error-note { color: #991b1b; background: #fee2e2; border: 1px solid #fecaca; }
 
 .login-card, .panel { margin-top: 14px; border: 1px solid var(--line); border-radius: 22px; background: #fff; padding: 22px; }

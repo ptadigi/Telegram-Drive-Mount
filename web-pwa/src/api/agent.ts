@@ -3,8 +3,8 @@ export type AgentInfo = { name: string; version: string; started_at: string; upt
 export type AgentConfig = { host: string; port: number; data_dir: string; database_path: string; telegram: { api_id_set: boolean; api_hash_set: boolean; session_path: string; session_exists: boolean; }; };
 export type DatabaseStatus = { path: string; exists: boolean; };
 
-export type DriveFile = { id: string; folder_id?: string; name: string; extension: string; kind: "image" | "video" | "audio" | "document" | "archive" | "other"; size: number; mime_type?: string; sync_state: string; thumbnail_path?: string; preview_status: string; created_at: number; updated_at: number; };
-export type DriveFolder = { id: string; parent_id?: string; name: string; created_at: number; updated_at: number; };
+export type DriveFile = { id: string; folder_id?: string; name: string; extension: string; kind: "image" | "video" | "audio" | "document" | "archive" | "other"; size: number; mime_type?: string; sync_state: string; thumbnail_path?: string; preview_status: string; starred?: boolean; created_at: number; updated_at: number; };
+export type DriveFolder = { id: string; parent_id?: string; name: string; starred?: boolean; created_at: number; updated_at: number; };
 export type DriveContents = { folder_id?: string; folders: DriveFolder[]; files: DriveFile[]; };
 export type SyncResult = { uploaded: number; failed: number; message: string; };
 export type Transfer = { id: string; file_id: string; kind: string; phase: string; percent: number; bytes_done: number; bytes_total: number; last_error?: string; created_at: number; updated_at: number; };
@@ -76,6 +76,29 @@ export function renameFile(id: string, name: string) { return putJSON<{ file: Dr
 export function trashFile(id: string) { return sendJSON<{ ok: boolean }>("/v1/files/trash", { id }); }
 export function restoreFile(id: string) { return sendJSON<{ ok: boolean }>("/v1/files/restore", { id }); }
 export function listTrash(signal?: AbortSignal) { return getJSON<DriveContents>("/v1/trash", signal); }
+export function search(query: string, signal?: AbortSignal) { return getJSON<{ folders: DriveFolder[]; files: DriveFile[] }>(`/v1/search?q=${encodeURIComponent(query)}`, signal); }
+export function listStarred(signal?: AbortSignal) { return getJSON<DriveContents>("/v1/starred", signal); }
+export function moveFile(id: string, newParentId: string) { return putJSON<{ file: DriveFile }>("/v1/files/move", { id, new_parent_id: newParentId }); }
+export function moveFolder(id: string, newParentId: string) { return putJSON<{ folder: DriveFolder }>("/v1/folders/move", { id, new_parent_id: newParentId }); }
+export function starFile(id: string, starred: boolean) { return putJSON<{ ok: boolean }>("/v1/files/star", { id, starred }); }
+export function starFolder(id: string, starred: boolean) { return putJSON<{ ok: boolean }>("/v1/folders/star", { id, starred }); }
+export async function permanentDeleteFile(id: string) {
+  const response = await fetch(`${AGENT_BASE_URL}/v1/files?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: `Agent API lỗi ${response.status}` }));
+    throw new Error(data.error || `Agent API lỗi ${response.status}`);
+  }
+  return response.json() as Promise<{ ok: boolean }>;
+}
+export async function permanentDeleteFolder(id: string) {
+  const response = await fetch(`${AGENT_BASE_URL}/v1/folders?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: `Agent API lỗi ${response.status}` }));
+    throw new Error(data.error || `Agent API lỗi ${response.status}`);
+  }
+  return response.json() as Promise<{ ok: boolean }>;
+}
+export function zipFolderUrl(id: string) { return `${AGENT_BASE_URL}/v1/folders/zip?id=${encodeURIComponent(id)}`; }
 export function listShares(targetKind?: string, targetId?: string, signal?: AbortSignal) {
   const params = new URLSearchParams();
   if (targetKind) params.set("target_kind", targetKind);

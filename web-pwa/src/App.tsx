@@ -3,7 +3,9 @@ import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentConfig, AgentInfo, AuthStatus, createFolder, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo } from "./api/agent";
 import { DriveBrowser } from "./components/DriveBrowser";
+import { SearchView } from "./components/SearchView";
 import { SettingsView } from "./components/SettingsView";
+import { StarredView } from "./components/StarredView";
 import { SyncRootsPanel } from "./components/SyncRootsPanel";
 import { TelegramLoginPanel } from "./components/TelegramLoginPanel";
 import { TrashView } from "./components/TrashView";
@@ -11,7 +13,7 @@ import { UploadDock } from "./components/UploadDock";
 import { useUploadQueue } from "./state/uploads";
 
 type AgentState = "checking" | "online" | "offline";
-type ViewKey = "home" | "drive" | "computers" | "shared" | "starred" | "trash" | "settings";
+type ViewKey = "home" | "drive" | "computers" | "shared" | "starred" | "trash" | "settings" | "search";
 
 export function App() {
   const { t } = useTranslation();
@@ -22,6 +24,7 @@ export function App() {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [view, setView] = useState<ViewKey>("drive");
   const [newMenu, setNewMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const newMenuRef = useRef<HTMLDivElement | null>(null);
   const queue = useUploadQueue();
 
@@ -97,7 +100,7 @@ export function App() {
 
       <section className="drive-main">
         <header className="drive-topbar">
-          <div className="search-box"><Search size={18} /><input placeholder={t("drive.search")} /></div>
+          <div className="search-box"><Search size={18} /><input value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); if (event.target.value) setView("search"); }} placeholder={t("drive.search")} /></div>
           <div className="status-pills">
             <StatusPill state={agentState} text={agentState === "online" ? t("status.agentOnline") : agentState === "offline" ? t("status.agentOffline") : t("status.agentChecking")} />
             <StatusPill state={auth?.authorized ? "online" : "offline"} text={auth?.authorized ? t("login.connectedTitle") : t("login.title")} />
@@ -111,7 +114,8 @@ export function App() {
         {view === "drive" && <DriveBrowser uploadQueue={queue} rootLabel={t("drive.myDrive")} description={t("drive.myDriveDesc")} />}
         {view === "computers" && <ComputersView t={t} />}
         {view === "shared" && <PlaceholderView title={t("drive.shared")} text={t("drive.sharedSoon")} />}
-        {view === "starred" && <PlaceholderView title={t("drive.starred")} text={t("drive.starredSoon")} />}
+        {view === "starred" && <StarredView />}
+        {view === "search" && <SearchView query={searchQuery} />}
         {view === "trash" && <TrashView />}
         {view === "settings" && <SettingsView />}
 
