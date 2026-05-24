@@ -20,6 +20,7 @@ type Server struct {
 	auth      *agentauth.Service
 	drive     *drive.Service
 	tunnel    *tunnel.Service
+	shareRate *rateLimiter
 }
 
 func NewServer(version string, cfg config.Config, authService *agentauth.Service, driveService *drive.Service, tunnelService *tunnel.Service) *Server {
@@ -30,6 +31,7 @@ func NewServer(version string, cfg config.Config, authService *agentauth.Service
 		auth:      authService,
 		drive:     driveService,
 		tunnel:    tunnelService,
+		shareRate: newRateLimiter(20, time.Minute),
 	}
 }
 
@@ -56,6 +58,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/files/trash", s.handleTrashFile)
 	mux.HandleFunc("POST /v1/files/restore", s.handleRestoreFile)
 	mux.HandleFunc("GET /v1/trash", s.handleListTrash)
+	mux.HandleFunc("GET /v1/search", s.handleSearch)
+	mux.HandleFunc("GET /v1/starred", s.handleListStarred)
+	mux.HandleFunc("PUT /v1/files/move", s.handleMoveFile)
+	mux.HandleFunc("PUT /v1/files/star", s.handleStarFile)
+	mux.HandleFunc("DELETE /v1/files", s.handleDeleteFile)
+	mux.HandleFunc("PUT /v1/folders/move", s.handleMoveFolder)
+	mux.HandleFunc("PUT /v1/folders/star", s.handleStarFolder)
+	mux.HandleFunc("DELETE /v1/folders", s.handleDeleteFolder)
+	mux.HandleFunc("GET /v1/folders/zip", s.handleZipFolder)
 	mux.HandleFunc("GET /v1/shares", s.handleListShares)
 	mux.HandleFunc("POST /v1/shares", s.handleCreateShare)
 	mux.HandleFunc("PUT /v1/shares", s.handleUpdateShare)
@@ -336,6 +347,112 @@ func (s *Server) handleRestoreFolder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
+	result, err := s.drive.Search(r.Context(), r.URL.Query().Get("q"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleListStarred(w http.ResponseWriter, r *http.Request) {
+	contents, err := s.drive.ListStarred(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, contents)
+}
+
+func (s *Server) handleMoveFile(w http.ResponseWriter, r *http.Request) {
+	var input drive.MoveInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	file, err := s.drive.MoveFile(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"file": file})
+}
+
+func (s *Server) handleMoveFolder(w http.ResponseWriter, r *http.Request) {
+	var input drive.MoveInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	folder, err := s.drive.MoveFolder(r.Context(), input)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"folder": folder})
+}
+
+func (s *Server) handleStarFile(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ID      string `json:"id"`
+		Starred bool   `json:"starred"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if err := s.drive.StarFile(r.Context(), input.ID, input.Starred); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleStarFolder(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ID      string `json:"id"`
+		Starred bool   `json:"starred"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if err := s.drive.StarFolder(r.Context(), input.ID, input.Starred); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleDeleteFile(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if err := s.drive.PermanentDeleteFile(r.Context(), id); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleDeleteFolder(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if err := s.drive.PermanentDeleteFolder(r.Context(), id); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleZipFolder(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errBadRequest("thiếu id thư mục"))
+		return
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", "attachment; filename=folder.zip")
+	if err := s.drive.ZipFolder(r.Context(), id, w); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+}
+
 func (s *Server) handleListTrash(w http.ResponseWriter, r *http.Request) {
 	contents, err := s.drive.ListTrash(r.Context())
 	if err != nil {
@@ -448,6 +565,10 @@ func (s *Server) handleShareHealthCheck(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleSharePage(w http.ResponseWriter, r *http.Request) {
+	if !s.shareRate.allow(clientIP(r)) {
+		writeError(w, http.StatusTooManyRequests, errBadRequest("quá nhiều yêu cầu, vui lòng thử lại sau"))
+		return
+	}
 	slug := r.PathValue("slug")
 	if slug == "" {
 		writeError(w, http.StatusBadRequest, errBadRequest("thiếu slug"))
@@ -487,6 +608,10 @@ func (s *Server) handleSharePage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleShareUnlock(w http.ResponseWriter, r *http.Request) {
+	if !s.shareRate.allow(clientIP(r)) {
+		writeError(w, http.StatusTooManyRequests, errBadRequest("quá nhiều yêu cầu, vui lòng thử lại sau"))
+		return
+	}
 	slug := r.PathValue("slug")
 	var input struct {
 		Password string `json:"password"`
