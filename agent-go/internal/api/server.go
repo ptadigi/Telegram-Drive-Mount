@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -83,6 +84,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /share/{slug}/unlock", s.handleShareUnlock)
 	mux.HandleFunc("GET /share/{slug}/raw", s.handleShareRaw)
 	mux.HandleFunc("GET /v1/files/download", s.handleDownloadFile)
+	mux.HandleFunc("GET /v1/files/stream", s.handleStreamFile)
 	mux.HandleFunc("GET /v1/files/thumbnail", s.handleFileThumbnail)
 	mux.HandleFunc("POST /v1/files/upload", s.handleUploadFile)
 	mux.HandleFunc("POST /v1/files/sync", s.handleSyncFiles)
@@ -701,6 +703,77 @@ func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
 	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+urlQueryEscape(file.Name))
 	http.ServeFile(w, r, file.LocalPath)
+}
+
+func (s *Server) handleStreamFile(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errBadRequest("thiếu id file"))
+		return
+	}
+	stream, err := s.drive.GetStreamableFile(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	if stream.Source == drive.StreamFromCache {
+		w.Header().Set("Content-Type", stream.MimeType)
+		http.ServeFile(w, r, stream.LocalPath)
+		return
+	}
+	offset, length, err := parseRange(r.Header.Get("Range"), stream.Size)
+	if err != nil {
+		writeError(w, http.StatusRequestedRangeNotSatisfiable, err)
+		return
+	}
+	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set("Content-Type", stream.MimeType)
+	if length > 0 && length < stream.Size {
+		w.Header().Set("Content-Range", "bytes "+strconv.FormatInt(offset, 10)+"-"+strconv.FormatInt(offset+length-1, 10)+"/"+strconv.FormatInt(stream.Size, 10))
+		w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
+		w.WriteHeader(http.StatusPartialContent)
+	} else {
+		w.Header().Set("Content-Length", strconv.FormatInt(stream.Size, 10))
+		w.WriteHeader(http.StatusOK)
+	}
+	if _, err := s.drive.StreamFromTelegram(r.Context(), id, offset, length, w); err != nil {
+		// Stream đã bắt đầu, không thể trả status code khác. Ghi log thôi.
+		return
+	}
+}
+
+func parseRange(header string, total int64) (int64, int64, error) {
+	if header == "" {
+		return 0, total, nil
+	}
+	if !strings.HasPrefix(header, "bytes=") {
+		return 0, 0, errBadRequest("range không hợp lệ")
+	}
+	spec := strings.TrimPrefix(header, "bytes=")
+	parts := strings.SplitN(spec, "-", 2)
+	if len(parts) != 2 {
+		return 0, 0, errBadRequest("range không hợp lệ")
+	}
+	var start, end int64
+	if parts[0] != "" {
+		if _, err := fmt.Sscanf(parts[0], "%d", &start); err != nil {
+			return 0, 0, errBadRequest("range không hợp lệ")
+		}
+	}
+	if parts[1] != "" {
+		if _, err := fmt.Sscanf(parts[1], "%d", &end); err != nil {
+			return 0, 0, errBadRequest("range không hợp lệ")
+		}
+	} else {
+		end = total - 1
+	}
+	if total > 0 && end >= total {
+		end = total - 1
+	}
+	if start > end {
+		return 0, 0, errBadRequest("range vượt quá kích thước")
+	}
+	return start, end - start + 1, nil
 }
 
 func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {

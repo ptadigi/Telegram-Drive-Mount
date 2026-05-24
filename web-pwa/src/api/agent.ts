@@ -137,6 +137,7 @@ export function shareLink(config: ShareConfig | null, slug: string) {
   return `${base.replace(/\/$/, "")}/share/${slug}`;
 }
 export function downloadFileUrl(id: string) { return `${AGENT_BASE_URL}/v1/files/download?id=${encodeURIComponent(id)}`; }
+export function streamFileUrl(id: string) { return `${AGENT_BASE_URL}/v1/files/stream?id=${encodeURIComponent(id)}`; }
 export function thumbnailUrl(id: string) { return `${AGENT_BASE_URL}/v1/files/thumbnail?id=${encodeURIComponent(id)}`; }
 export function seedDemoFile() { return sendJSON<{ contents?: DriveContents; files: DriveFile[] }>("/v1/files/demo", {}); }
 

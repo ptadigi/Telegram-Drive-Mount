@@ -62,6 +62,12 @@ type CreateFolderInput struct {
 type TelegramUploader interface {
 	UploadToSavedMessages(ctx context.Context, localPath string, originalName string) (UploadedObject, error)
 	DownloadFromSavedMessages(ctx context.Context, messageID int, targetPath string) error
+	StreamFromSavedMessages(ctx context.Context, messageID int, offset int64, length int64, w io.Writer) (StreamResult, error)
+}
+
+type StreamResult struct {
+	Size     int64
+	MimeType string
 }
 
 type UploadedObject struct {
@@ -349,6 +355,65 @@ func (s *Service) latestTelegramMessageID(ctx context.Context, fileID string) (i
 		return 0, nil
 	}
 	return int(messageID.Int64), nil
+}
+
+type StreamSource int
+
+const (
+	StreamFromCache StreamSource = iota
+	StreamFromTelegram
+)
+
+type StreamFile struct {
+	File
+	Size      int64
+	MimeType  string
+	LocalPath string
+	Source    StreamSource
+}
+
+func (s *Service) GetStreamableFile(ctx context.Context, id string) (StreamFile, error) {
+	file, err := s.getFile(ctx, id)
+	if err != nil {
+		return StreamFile{}, err
+	}
+	localPath := file.LocalPath
+	if localPath == "" {
+		localPath = filepath.Join(s.dataDir, "uploads", file.ID+"-"+filepath.Base(file.Name))
+	}
+	if info, err := os.Stat(localPath); err == nil {
+		s.RecordFileAccess(ctx, file.ID)
+		return StreamFile{File: file, Size: info.Size(), MimeType: file.MimeType, LocalPath: localPath, Source: StreamFromCache}, nil
+	}
+	messageID, err := s.latestTelegramMessageID(ctx, file.ID)
+	if err != nil {
+		return StreamFile{}, err
+	}
+	if messageID == 0 {
+		return StreamFile{}, fmt.Errorf("file chưa được đồng bộ Telegram")
+	}
+	return StreamFile{File: file, Size: file.Size, MimeType: file.MimeType, Source: StreamFromTelegram}, nil
+}
+
+func (s *Service) StreamFromTelegram(ctx context.Context, fileID string, offset, length int64, w io.Writer) (StreamResult, error) {
+	if s.uploader == nil {
+		return StreamResult{}, fmt.Errorf("chưa có Telegram uploader")
+	}
+	messageID, err := s.latestTelegramMessageID(ctx, fileID)
+	if err != nil {
+		return StreamResult{}, err
+	}
+	if messageID == 0 {
+		return StreamResult{}, fmt.Errorf("file chưa được đồng bộ Telegram")
+	}
+	uploader, ok := s.uploader.(interface {
+		StreamFromSavedMessages(ctx context.Context, messageID int, offset int64, length int64, w io.Writer) (StreamResult, error)
+	})
+	if !ok {
+		return StreamResult{}, fmt.Errorf("uploader không hỗ trợ stream")
+	}
+	s.RecordFileAccess(ctx, fileID)
+	return uploader.StreamFromSavedMessages(ctx, messageID, offset, length, w)
 }
 
 func (s *Service) GetThumbnail(ctx context.Context, id string) (ThumbnailFile, error) {

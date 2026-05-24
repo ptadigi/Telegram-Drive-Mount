@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -108,6 +109,126 @@ func (s *Service) DownloadFromSavedMessages(ctx context.Context, messageID int, 
 		}
 		return nil
 	})
+}
+
+type StreamResult = drive.StreamResult
+
+func (s *Service) StreamFromSavedMessages(ctx context.Context, messageID int, offset int64, length int64, w io.Writer) (drive.StreamResult, error) {
+	if s.cfg.Telegram.APIID == 0 || s.cfg.Telegram.APIHash == "" {
+		return drive.StreamResult{}, errors.New("chưa cấu hình API Telegram cho Go Agent")
+	}
+	if messageID <= 0 {
+		return drive.StreamResult{}, errors.New("thiếu Telegram message id")
+	}
+	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
+		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
+	})
+	var result StreamResult
+	err := client.Run(ctx, func(runCtx context.Context) error {
+		status, err := client.Auth().Status(runCtx)
+		if err != nil {
+			return fmt.Errorf("kiểm tra session Telegram: %w", err)
+		}
+		if !status.Authorized {
+			return ErrUnauthorized
+		}
+		api := client.API()
+		messages, err := api.MessagesGetMessages(runCtx, []tg.InputMessageClass{&tg.InputMessageID{ID: messageID}})
+		if err != nil {
+			return fmt.Errorf("đọc tin nhắn Telegram: %w", err)
+		}
+		var doc *tg.Document
+		switch m := messages.(type) {
+		case *tg.MessagesMessages:
+			doc = documentFromMessages(m.Messages, messageID)
+		case *tg.MessagesMessagesSlice:
+			doc = documentFromMessages(m.Messages, messageID)
+		default:
+			return fmt.Errorf("loại trả về Telegram không hỗ trợ: %T", messages)
+		}
+		if doc == nil {
+			return errors.New("không tìm thấy file Telegram tương ứng")
+		}
+		result.Size = doc.Size
+		result.MimeType = doc.MimeType
+		location := &tg.InputDocumentFileLocation{ID: doc.ID, AccessHash: doc.AccessHash, FileReference: doc.FileReference}
+		return streamDocument(runCtx, api, location, doc.Size, offset, length, w)
+	})
+	return result, err
+}
+
+func streamDocument(ctx context.Context, api *tg.Client, location tg.InputFileLocationClass, totalSize, offset, length int64, w io.Writer) error {
+	const chunkLimit = 1024 * 1024
+	const chunkAlign = 1024 * 1024
+	if offset < 0 {
+		offset = 0
+	}
+	if length <= 0 {
+		length = totalSize - offset
+	}
+	end := offset + length
+	if totalSize > 0 && end > totalSize {
+		end = totalSize
+	}
+	current := (offset / chunkAlign) * chunkAlign
+	skip := offset - current
+	for current < end {
+		req := &tg.UploadGetFileRequest{Location: location, Offset: current, Limit: chunkLimit, Precise: true}
+		resp, err := api.UploadGetFile(ctx, req)
+		if err != nil {
+			return fmt.Errorf("đọc chunk Telegram: %w", err)
+		}
+		fileResp, ok := resp.(*tg.UploadFile)
+		if !ok {
+			return fmt.Errorf("Telegram trả về loại không hỗ trợ stream: %T", resp)
+		}
+		bytes := fileResp.Bytes
+		if len(bytes) == 0 {
+			break
+		}
+		from := int64(0)
+		if skip > 0 {
+			if skip >= int64(len(bytes)) {
+				skip -= int64(len(bytes))
+				current += int64(len(bytes))
+				continue
+			}
+			from = skip
+			skip = 0
+		}
+		remaining := end - (current + from)
+		if remaining <= 0 {
+			break
+		}
+		take := int64(len(bytes)) - from
+		if take > remaining {
+			take = remaining
+		}
+		if _, err := w.Write(bytes[from : from+take]); err != nil {
+			return err
+		}
+		current += int64(len(bytes))
+	}
+	return nil
+}
+
+func documentFromMessages(messages []tg.MessageClass, messageID int) *tg.Document {
+	for _, msg := range messages {
+		concrete, ok := msg.(*tg.Message)
+		if !ok || concrete.ID != messageID {
+			continue
+		}
+		media, ok := concrete.Media.(*tg.MessageMediaDocument)
+		if !ok {
+			continue
+		}
+		doc, ok := media.Document.AsNotEmpty()
+		if !ok {
+			continue
+		}
+		return doc
+	}
+	return nil
 }
 
 func locationFromMessages(messages []tg.MessageClass, messageID int) tg.InputFileLocationClass {

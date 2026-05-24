@@ -1,6 +1,6 @@
 import { Download, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { AGENT_BASE_URL, DriveFile, downloadFileUrl } from "../api/agent";
+import { AGENT_BASE_URL, DriveFile, downloadFileUrl, streamFileUrl } from "../api/agent";
 
 type Props = {
   file: DriveFile | null;
@@ -13,6 +13,7 @@ export function FileViewer({ file, onClose }: Props) {
   const [textError, setTextError] = useState<string | null>(null);
 
   const url = file ? `${AGENT_BASE_URL}/v1/files/download?id=${encodeURIComponent(file.id)}` : "";
+  const streamUrl = file ? streamFileUrl(file.id) : "";
   const ext = (file?.extension || "").toLowerCase();
   const mime = (file?.mime_type || "").toLowerCase();
   const variant = file ? detectVariant(file) : "binary";
@@ -55,8 +56,8 @@ export function FileViewer({ file, onClose }: Props) {
       </header>
       <main className="viewer__body">
         {variant === "image" && <img src={url} alt={file.name} />}
-        {variant === "video" && <video controls src={url}></video>}
-        {variant === "audio" && <audio controls src={url}></audio>}
+        {variant === "video" && <video controls src={streamUrl}></video>}
+        {variant === "audio" && <audio controls src={streamUrl}></audio>}
         {variant === "pdf" && <iframe title={file.name} src={url}></iframe>}
         {variant === "markdown" && <ViewerText content={textContent} loading={loadingText} error={textError} mono={false} />}
         {variant === "text" && <ViewerText content={textContent} loading={loadingText} error={textError} mono={true} />}
