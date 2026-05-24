@@ -36,6 +36,7 @@ type File struct {
 	LocalPath     string `json:"-"`
 	ThumbnailPath string `json:"thumbnail_path,omitempty"`
 	PreviewStatus string `json:"preview_status"`
+	Starred       bool   `json:"starred,omitempty"`
 	CreatedAt     int64  `json:"created_at"`
 	UpdatedAt     int64  `json:"updated_at"`
 }
@@ -44,6 +45,7 @@ type Folder struct {
 	ID        string `json:"id"`
 	ParentID  string `json:"parent_id,omitempty"`
 	Name      string `json:"name"`
+	Starred   bool   `json:"starred,omitempty"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
 }
@@ -187,9 +189,9 @@ func (s *Service) CreateFolder(ctx context.Context, input CreateFolderInput) (Fo
 	now := time.Now().Unix()
 	folder := Folder{ID: newID(), ParentID: input.ParentID, Name: name, CreatedAt: now, UpdatedAt: now}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO folders (id, parent_id, name, created_at, updated_at)
-		VALUES (?, NULLIF(?, ''), ?, ?, ?)
-	`, folder.ID, folder.ParentID, folder.Name, now, now)
+		INSERT INTO folders (id, parent_id, name, starred, user_id, created_at, updated_at)
+		VALUES (?, NULLIF(?, ''), ?, 0, NULLIF(?, ''), ?, ?)
+	`, folder.ID, folder.ParentID, folder.Name, UserFromContext(ctx), now, now)
 	if err != nil {
 		return Folder{}, fmt.Errorf("tạo thư mục: %w", err)
 	}
@@ -275,9 +277,9 @@ func (s *Service) saveFileFromReader(ctx context.Context, source io.Reader, file
 	}
 	defer tx.Rollback()
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO files (id, folder_id, name, extension, kind, size, mime_type, hash, current_version_id, sync_state, local_path, thumbnail_path, preview_status, created_at, updated_at)
-		VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
-	`, id, folderID, safeName, ext, kind, size, mimeType, hashHex, syncState, targetPath, thumbnailPath, previewStatus, now, now)
+		INSERT INTO files (id, folder_id, name, extension, kind, size, mime_type, hash, current_version_id, sync_state, local_path, thumbnail_path, preview_status, user_id, created_at, updated_at)
+		VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULLIF(?, ''), ?, ?)
+	`, id, folderID, safeName, ext, kind, size, mimeType, hashHex, syncState, targetPath, thumbnailPath, previewStatus, UserFromContext(ctx), now, now)
 	if err != nil {
 		return File{}, fmt.Errorf("ghi metadata file: %w", err)
 	}
@@ -568,11 +570,11 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 
 func (s *Service) listFolders(ctx context.Context, parentID string) ([]Folder, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, COALESCE(parent_id, ''), name, created_at, updated_at
+		SELECT id, COALESCE(parent_id, ''), name, COALESCE(starred, 0), created_at, updated_at
 		FROM folders
-		WHERE deleted_at IS NULL AND COALESCE(parent_id, '') = ?
+		WHERE deleted_at IS NULL AND COALESCE(parent_id, '') = ? AND COALESCE(user_id, '') = COALESCE(?, '')
 		ORDER BY name ASC
-	`, parentID)
+	`, parentID, UserFromContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("đọc danh sách thư mục: %w", err)
 	}
@@ -580,9 +582,11 @@ func (s *Service) listFolders(ctx context.Context, parentID string) ([]Folder, e
 	folders := make([]Folder, 0)
 	for rows.Next() {
 		var folder Folder
-		if err := rows.Scan(&folder.ID, &folder.ParentID, &folder.Name, &folder.CreatedAt, &folder.UpdatedAt); err != nil {
+		var starred int
+		if err := rows.Scan(&folder.ID, &folder.ParentID, &folder.Name, &starred, &folder.CreatedAt, &folder.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("đọc thư mục: %w", err)
 		}
+		folder.Starred = starred == 1
 		folders = append(folders, folder)
 	}
 	return folders, rows.Err()
@@ -590,11 +594,11 @@ func (s *Service) listFolders(ctx context.Context, parentID string) ([]Folder, e
 
 func (s *Service) listFilesInFolder(ctx context.Context, folderID string) ([]File, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, COALESCE(folder_id, ''), name, COALESCE(extension, ''), COALESCE(kind, 'other'), size, COALESCE(mime_type, ''), sync_state, COALESCE(local_path, ''), COALESCE(thumbnail_path, ''), COALESCE(preview_status, 'pending'), created_at, updated_at
+		SELECT id, COALESCE(folder_id, ''), name, COALESCE(extension, ''), COALESCE(kind, 'other'), size, COALESCE(mime_type, ''), sync_state, COALESCE(local_path, ''), COALESCE(thumbnail_path, ''), COALESCE(preview_status, 'pending'), COALESCE(starred, 0), created_at, updated_at
 		FROM files
-		WHERE deleted_at IS NULL AND COALESCE(folder_id, '') = ?
+		WHERE deleted_at IS NULL AND COALESCE(folder_id, '') = ? AND COALESCE(user_id, '') = COALESCE(?, '')
 		ORDER BY updated_at DESC, name ASC
-	`, folderID)
+	`, folderID, UserFromContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("đọc danh sách file: %w", err)
 	}
@@ -602,9 +606,11 @@ func (s *Service) listFilesInFolder(ctx context.Context, folderID string) ([]Fil
 	files := make([]File, 0)
 	for rows.Next() {
 		var file File
-		if err := rows.Scan(&file.ID, &file.FolderID, &file.Name, &file.Extension, &file.Kind, &file.Size, &file.MimeType, &file.SyncState, &file.LocalPath, &file.ThumbnailPath, &file.PreviewStatus, &file.CreatedAt, &file.UpdatedAt); err != nil {
+		var starred int
+		if err := rows.Scan(&file.ID, &file.FolderID, &file.Name, &file.Extension, &file.Kind, &file.Size, &file.MimeType, &file.SyncState, &file.LocalPath, &file.ThumbnailPath, &file.PreviewStatus, &starred, &file.CreatedAt, &file.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("đọc file: %w", err)
 		}
+		file.Starred = starred == 1
 		files = append(files, file)
 	}
 	return files, rows.Err()
@@ -612,18 +618,32 @@ func (s *Service) listFilesInFolder(ctx context.Context, folderID string) ([]Fil
 
 func (s *Service) getFile(ctx context.Context, id string) (File, error) {
 	var file File
+	var starred int
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, COALESCE(folder_id, ''), name, COALESCE(extension, ''), COALESCE(kind, 'other'), size, COALESCE(mime_type, ''), sync_state, COALESCE(local_path, ''), COALESCE(thumbnail_path, ''), COALESCE(preview_status, 'pending'), created_at, updated_at
+		SELECT id, COALESCE(folder_id, ''), name, COALESCE(extension, ''), COALESCE(kind, 'other'), size, COALESCE(mime_type, ''), sync_state, COALESCE(local_path, ''), COALESCE(thumbnail_path, ''), COALESCE(preview_status, 'pending'), COALESCE(starred, 0), created_at, updated_at
 		FROM files
-		WHERE id = ? AND deleted_at IS NULL
-	`, id).Scan(&file.ID, &file.FolderID, &file.Name, &file.Extension, &file.Kind, &file.Size, &file.MimeType, &file.SyncState, &file.LocalPath, &file.ThumbnailPath, &file.PreviewStatus, &file.CreatedAt, &file.UpdatedAt)
+		WHERE id = ? AND deleted_at IS NULL AND COALESCE(user_id, '') = COALESCE(?, '')
+	`, id, UserFromContext(ctx)).Scan(&file.ID, &file.FolderID, &file.Name, &file.Extension, &file.Kind, &file.Size, &file.MimeType, &file.SyncState, &file.LocalPath, &file.ThumbnailPath, &file.PreviewStatus, &starred, &file.CreatedAt, &file.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return File{}, fmt.Errorf("không tìm thấy file")
 		}
 		return File{}, fmt.Errorf("đọc metadata file: %w", err)
 	}
+	file.Starred = starred == 1
 	return file, nil
+}
+
+func (s *Service) ensureFolderExists(ctx context.Context, id string) error {
+	var exists int
+	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM folders WHERE id = ? AND deleted_at IS NULL AND COALESCE(user_id, '') = COALESCE(?, '')`, id, UserFromContext(ctx)).Scan(&exists)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("không tìm thấy thư mục")
+		}
+		return fmt.Errorf("kiểm tra thư mục: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) ensureRelativeFolderPath(ctx context.Context, parentID string, relativePath string) (string, error) {
@@ -657,8 +677,8 @@ func (s *Service) getOrCreateFolder(ctx context.Context, parentID string, name s
 	err := s.db.QueryRowContext(ctx, `
 		SELECT id, COALESCE(parent_id, ''), name, created_at, updated_at
 		FROM folders
-		WHERE deleted_at IS NULL AND COALESCE(parent_id, '') = ? AND name = ?
-	`, parentID, name).Scan(&folder.ID, &folder.ParentID, &folder.Name, &folder.CreatedAt, &folder.UpdatedAt)
+		WHERE deleted_at IS NULL AND COALESCE(parent_id, '') = ? AND name = ? AND COALESCE(user_id, '') = COALESCE(?, '')
+	`, parentID, name, UserFromContext(ctx)).Scan(&folder.ID, &folder.ParentID, &folder.Name, &folder.CreatedAt, &folder.UpdatedAt)
 	if err == nil {
 		return folder, nil
 	}
@@ -668,16 +688,16 @@ func (s *Service) getOrCreateFolder(ctx context.Context, parentID string, name s
 	now := time.Now().Unix()
 	folder = Folder{ID: newID(), ParentID: parentID, Name: name, CreatedAt: now, UpdatedAt: now}
 	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO folders (id, parent_id, name, created_at, updated_at)
-		VALUES (?, NULLIF(?, ''), ?, ?, ?)
-	`, folder.ID, folder.ParentID, folder.Name, now, now)
+		INSERT INTO folders (id, parent_id, name, starred, user_id, created_at, updated_at)
+		VALUES (?, NULLIF(?, ''), ?, 0, NULLIF(?, ''), ?, ?)
+	`, folder.ID, folder.ParentID, folder.Name, UserFromContext(ctx), now, now)
 	if err != nil {
 		return Folder{}, fmt.Errorf("tạo thư mục: %w", err)
 	}
 	return folder, nil
 }
 
-func (s *Service) ensureFolderExists(ctx context.Context, id string) error {
+func (s *Service) ensureFolderExistsLegacy(ctx context.Context, id string) error {
 	var exists int
 	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM folders WHERE id = ? AND deleted_at IS NULL`, id).Scan(&exists)
 	if err != nil {
