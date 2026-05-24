@@ -33,6 +33,9 @@ func (s *Server) handleUserRegister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	if err := s.drive.AdoptOrphanedData(r.Context(), user.ID); err != nil {
+		s.drive.WriteAudit(r.Context(), user.ID, "user.adopt_failed", "user", user.ID, map[string]any{"error": err.Error()})
+	}
 	token, expires, err := s.users.CreateSession(r.Context(), user.ID, r.Header.Get("User-Agent"))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)

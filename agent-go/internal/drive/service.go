@@ -139,6 +139,28 @@ func (s *Service) Events() *EventBus {
 	return s.events
 }
 
+func (s *Service) AdoptOrphanedData(ctx context.Context, userID string) error {
+	if userID == "" {
+		return fmt.Errorf("thiếu user_id")
+	}
+	now := time.Now().Unix()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, table := range []string{"folders", "files"} {
+		if _, err := tx.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET user_id = ?, updated_at = ? WHERE user_id IS NULL OR user_id = ''`, table), userID, now); err != nil {
+			return fmt.Errorf("gán %s về user: %w", table, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.events.Publish("user.adopted", map[string]any{"user_id": userID})
+	return nil
+}
+
 func (s *Service) SetTunnelStatus(active bool, url string) {
 	s.tunnelMu.Lock()
 	s.tunnelActive = active
