@@ -1,8 +1,19 @@
-import { Lock, Phone, ShieldCheck } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { Lock, Phone, QrCode, ShieldCheck } from "lucide-react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AuthStatus, startTelegramLogin, submitTelegramCode, submitTelegramPassword } from "../api/agent";
+import {
+  AuthStatus,
+  cancelTelegramQR,
+  getTelegramQRStatus,
+  startTelegramLogin,
+  startTelegramQR,
+  submitTelegramCode,
+  submitTelegramPassword,
+  submitTelegramQRPassword,
+  TelegramQRStatus,
+} from "../api/agent";
 
+type Mode = "phone" | "qr";
 type Step = "phone" | "code" | "password" | "done";
 
 type Props = {
@@ -11,6 +22,7 @@ type Props = {
 
 export function TelegramLoginPanel({ auth }: Props) {
   const { t } = useTranslation();
+  const [mode, setMode] = useState<Mode>("qr");
   const [step, setStep] = useState<Step>(auth?.authorized ? "done" : "phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
@@ -18,6 +30,79 @@ export function TelegramLoginPanel({ auth }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [codeInfo, setCodeInfo] = useState<string | null>(null);
+  const [qr, setQr] = useState<TelegramQRStatus | null>(null);
+  const [qrPassword, setQrPassword] = useState("");
+  const pollRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, []);
+
+  function stopPolling() {
+    if (pollRef.current !== null) {
+      window.clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
+  function pollQRStatus() {
+    stopPolling();
+    pollRef.current = window.setInterval(async () => {
+      try {
+        const status = await getTelegramQRStatus();
+        setQr(status);
+        if (status.state === "authorized") {
+          stopPolling();
+          setStep("done");
+        }
+        if (status.state === "expired" || status.state === "error" || status.state === "idle") {
+          stopPolling();
+        }
+      } catch (err) {
+        setError(readableLoginError(err));
+        stopPolling();
+      }
+    }, 2000);
+  }
+
+  async function startQR() {
+    setLoading(true);
+    setError(null);
+    try {
+      const status = await startTelegramQR();
+      setQr(status);
+      pollQRStatus();
+    } catch (err) {
+      setError(readableLoginError(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitQRPassword(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const status = await submitTelegramQRPassword(qrPassword);
+      setQr(status);
+      setQrPassword("");
+    } catch (err) {
+      setError(readableLoginError(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function cancelQR() {
+    stopPolling();
+    try {
+      await cancelTelegramQR();
+    } catch (err) {
+      // ignore
+    }
+    setQr(null);
+  }
 
   async function submitPhone(event: FormEvent) {
     event.preventDefault();
@@ -93,7 +178,57 @@ export function TelegramLoginPanel({ auth }: Props) {
         </div>
       </div>
 
-      {step === "phone" && (
+      <div className="login-tabs">
+        <button type="button" className={mode === "qr" ? "active" : ""} onClick={() => { setMode("qr"); setError(null); }}>
+          <QrCode size={16} /> Quét QR Telegram
+        </button>
+        <button type="button" className={mode === "phone" ? "active" : ""} onClick={() => { setMode("phone"); setError(null); cancelQR(); }}>
+          <Phone size={16} /> Số điện thoại
+        </button>
+      </div>
+
+      {mode === "qr" && (
+        <div className="qr-login">
+          {!qr || qr.state === "idle" ? (
+            <button className="button button--primary" onClick={startQR} disabled={loading}>
+              {loading ? "Đang tạo mã..." : "Tạo mã QR Telegram"}
+            </button>
+          ) : null}
+
+          {qr && (qr.state === "pending") && qr.token_url && (
+            <div className="qr-block">
+              <img alt="Telegram QR" src={qrImageUrl(qr.token_url)} />
+              <p className="form-hint">
+                Mở Telegram trên điện thoại → Cài đặt → Thiết bị → Liên kết thiết bị → Quét mã.
+              </p>
+              {qr.expires_at ? <p className="form-hint">Mã hết hạn lúc {new Date(qr.expires_at * 1000).toLocaleTimeString()}.</p> : null}
+              <button type="button" className="link-button" onClick={cancelQR}>Huỷ</button>
+            </div>
+          )}
+
+          {qr && qr.state === "awaiting_password" && (
+            <form className="form" onSubmit={submitQRPassword}>
+              <label>
+                Mật khẩu xác minh hai bước
+                <div className="input-wrap"><Lock size={17} /><input value={qrPassword} onChange={(e) => setQrPassword(e.target.value)} type="password" placeholder={t("login.passwordPlaceholder")} /></div>
+              </label>
+              <button className="button button--primary" disabled={loading}>{loading ? t("login.loading") : t("login.unlock")}</button>
+            </form>
+          )}
+
+          {qr && qr.state === "expired" && (
+            <div className="error-note">Mã QR đã hết hạn. Bấm tạo mã mới.</div>
+          )}
+          {qr && qr.state === "error" && qr.error && (
+            <div className="error-note">{qr.error}</div>
+          )}
+          {qr && qr.state === "authorized" && (
+            <div className="success-note">{t("login.done")}</div>
+          )}
+        </div>
+      )}
+
+      {mode === "phone" && step === "phone" && (
         <form className="form" onSubmit={submitPhone}>
           <label>
             {t("login.phone")}
@@ -103,7 +238,7 @@ export function TelegramLoginPanel({ auth }: Props) {
         </form>
       )}
 
-      {step === "code" && (
+      {mode === "phone" && step === "code" && (
         <form className="form" onSubmit={submitCode}>
           <label>
             {t("login.code")}
@@ -115,7 +250,7 @@ export function TelegramLoginPanel({ auth }: Props) {
         </form>
       )}
 
-      {step === "password" && (
+      {mode === "phone" && step === "password" && (
         <form className="form" onSubmit={submitPassword}>
           <label>
             {t("login.password")}
@@ -125,10 +260,15 @@ export function TelegramLoginPanel({ auth }: Props) {
         </form>
       )}
 
-      {step === "done" && <div className="success-note">{t("login.done")}</div>}
+      {mode === "phone" && step === "done" && <div className="success-note">{t("login.done")}</div>}
       {error && <div className="error-note">{error}</div>}
     </section>
   );
+}
+
+function qrImageUrl(tokenUrl: string) {
+  const encoded = encodeURIComponent(tokenUrl);
+  return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encoded}`;
 }
 
 function normalizePhone(value: string) {

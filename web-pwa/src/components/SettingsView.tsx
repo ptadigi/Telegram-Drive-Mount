@@ -1,6 +1,6 @@
-import { CheckCircle2, Cloud, Globe, Wifi, XCircle } from "lucide-react";
+import { CheckCircle2, Cloud, Globe, HardDrive, Wifi, XCircle } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
-import { APIAuthConfig, CacheStats, cleanupCache, controlTunnel, createStorageChannel, eventsUrl, getAPIAuth, getCacheStats, getShareConfig, getStorageSettings, setCacheConfig, ShareConfig, StorageSettings, updateAPIAuth, updateShareConfig, updateStorageSettings } from "../api/agent";
+import { APIAuthConfig, CacheStats, cleanupCache, controlTunnel, createStorageChannel, eventsUrl, getAPIAuth, getCacheStats, getMountStatus, getShareConfig, getStorageSettings, MountStatus, setCacheConfig, ShareConfig, startMount, stopMount, StorageSettings, updateAPIAuth, updateShareConfig, updateStorageSettings } from "../api/agent";
 
 type Mode = "lan" | "domain" | "tunnel";
 
@@ -23,6 +23,9 @@ export function SettingsView() {
   const [authMode, setAuthMode] = useState<"open" | "basic">("open");
   const [authUser, setAuthUser] = useState("");
   const [authPass, setAuthPass] = useState("");
+  const [mountInfo, setMountInfo] = useState<MountStatus | null>(null);
+  const [mountPoint, setMountPoint] = useState("");
+  const [mountLoading, setMountLoading] = useState(false);
 
   async function refresh() {
     setLoading(true);
@@ -47,6 +50,13 @@ export function SettingsView() {
       setAuthMode((authResult.auth.mode as "open" | "basic") || "open");
       setAuthUser(authResult.auth.username || "");
       setAuthPass("");
+      try {
+        const mountResult = await getMountStatus();
+        setMountInfo(mountResult);
+        if (mountResult.mount_point) setMountPoint(mountResult.mount_point);
+      } catch (err) {
+        // mount endpoint optional in older builds
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -115,6 +125,35 @@ export function SettingsView() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function runMount() {
+    setMountLoading(true);
+    setError(null);
+    try {
+      const status = await startMount(mountPoint || undefined);
+      setMountInfo(status);
+      if (status.mount_point) setMountPoint(status.mount_point);
+      setNotice(status.mounted ? `Đã mount ổ ảo tại ${status.mount_point || ""}` : "Đang khởi động mount, kiểm tra trạng thái sau vài giây.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMountLoading(false);
+    }
+  }
+
+  async function runUnmount() {
+    setMountLoading(true);
+    setError(null);
+    try {
+      const status = await stopMount();
+      setMountInfo(status);
+      setNotice("Đã unmount ổ ảo");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setMountLoading(false);
     }
   }
 
@@ -319,6 +358,34 @@ export function SettingsView() {
           <button className="button button--primary" onClick={saveAuth} disabled={loading}>Lưu cài đặt bảo mật</button>
         </div>
       )}
+
+      <div className="settings-cache">
+        <header>
+          <h3><HardDrive size={16} /> Ổ ảo Telegram Drive</h3>
+          <span>{mountInfo?.available ? `Backend: ${mountInfo.backend}` : "Bản build hiện tại không kèm mount engine"}</span>
+        </header>
+        {mountInfo?.available ? (
+          <div className="settings-form">
+            <label>
+              <span>Điểm mount</span>
+              <input value={mountPoint} onChange={(event) => setMountPoint(event.target.value)} placeholder="T:" />
+            </label>
+            <p className="form-hint">
+              Windows nên dùng drive letter dạng <code>T:</code>. macOS dùng <code>/Volumes/Telegram Drive</code>. Linux nên trỏ vào thư mục trống.
+            </p>
+            {mountInfo.error && <div className="error-note">{mountInfo.error}</div>}
+            <div style={{ display: "flex", gap: 8 }}>
+              {!mountInfo.mounted && <button className="button button--primary" onClick={runMount} disabled={mountLoading}>Mount ổ ảo</button>}
+              {mountInfo.mounted && <button className="button button--secondary" onClick={runUnmount} disabled={mountLoading}>Unmount</button>}
+              {mountInfo.mounted && mountInfo.mount_point && <span className="form-hint">Đang mount tại <strong>{mountInfo.mount_point}</strong></span>}
+            </div>
+          </div>
+        ) : (
+          <p className="form-hint">
+            Để bật ổ ảo, build agent với <code>go build -tags fuse ./cmd/agent</code> và cài WinFsp (Windows) hoặc FUSE (macOS/Linux).
+          </p>
+        )}
+      </div>
     </section>
   );
 }

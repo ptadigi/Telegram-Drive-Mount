@@ -1,52 +1,81 @@
 # Hướng dẫn mount Ổ Đĩa Cloud Ảo
 
-Agent mở sẵn endpoint WebDAV ở:
+Có 2 chế độ mount hỗ trợ chính thức:
+
+1. Native mount (production) - dùng WinFsp/FUSE qua cgofuse.
+2. WebDAV (legacy/dev) - dùng cho khi không có WinFsp/FUSE.
+
+## 1. Native mount qua FUSE/WinFsp
+
+### Build agent có mount
+
+```powershell
+# Windows
+choco install winfsp -y
+cd agent-go
+go build -tags fuse -o td-agent.exe ./cmd/agent
+```
+
+```bash
+# macOS (FUSE-T khuyên dùng)
+brew tap macos-fuse-t/cask
+brew install --cask fuse-t
+cd agent-go
+go build -tags fuse -o td-agent ./cmd/agent
+```
+
+```bash
+# Linux
+sudo apt-get install -y libfuse-dev pkg-config
+cd agent-go
+go build -tags fuse -o td-agent ./cmd/agent
+```
+
+### Mount/unmount qua PWA
+
+1. Mở `Cài đặt > Ổ ảo Telegram Drive`.
+2. Chọn drive letter / mount point (mặc định `T:` trên Windows, `/Volumes/Telegram Drive` trên macOS, `/tmp/telegram-drive` trên Linux).
+3. Bấm `Mount ổ ảo`.
+4. Khi xong việc bấm `Unmount`.
+
+### Mount/unmount qua API
+
+```bash
+curl http://127.0.0.1:8750/v1/mount        # status
+curl -X POST http://127.0.0.1:8750/v1/mount -d '{"mount_point":"T:"}' -H 'Content-Type: application/json'
+curl -X DELETE http://127.0.0.1:8750/v1/mount
+```
+
+### Tray menu
+
+Khi chạy `td-agent --tray`, menu có sẵn `Mount ổ ảo` / `Unmount ổ ảo`.
+
+## 2. WebDAV (legacy)
+
+Agent vẫn mở endpoint:
 
 ```
 http://<địa chỉ Agent>:8750/webdav
 ```
 
-Mặc định Agent listen `0.0.0.0:8750`. Nếu chạy trên máy khác, dùng IP LAN/VPS.
+Cách map ổ qua WebDAV xem phần legacy bên dưới. Khuyên dùng native mount khi có sẵn.
 
-## Windows
-
-Cách 1 — Map ổ trong Explorer:
-
-1. Mở Explorer, click chuột phải vào `This PC` → `Map network drive...`
-2. Folder: `\\127.0.0.1@8750\webdav` (hoặc `\\192.168.1.198@8750\webdav` cho LAN).
-3. Tích `Connect using different credentials` nếu cần. Để trống user/pass.
-4. Bấm `Finish`.
-
-Cách 2 — Command line:
+### Windows WebDAV
 
 ```powershell
 net use Z: http://127.0.0.1:8750/webdav
 ```
 
-Lưu ý:
-- Windows yêu cầu service `WebClient` đang chạy (`services.msc` → WebClient → Auto).
-- Mặc định Windows giới hạn dung lượng file 50MB qua WebDAV. Mở regedit:
-  - `HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters\FileSizeLimitInBytes`
-  - Đổi sang `4294967295` (≈4GB) hoặc giá trị lớn hơn.
-  - Restart service WebClient.
+Yêu cầu service `WebClient` đang chạy. Mặc định Windows giới hạn file 50MB qua WebDAV; chỉnh registry `HKLM\SYSTEM\CurrentControlSet\Services\WebClient\Parameters\FileSizeLimitInBytes` lên `4294967295` rồi restart `WebClient`.
 
-## macOS
-
-1. Mở Finder.
-2. `Cmd + K` mở Connect to Server.
-3. Nhập `http://127.0.0.1:8750/webdav`.
-4. Bấm `Connect`. Chọn `Guest`.
-
-Hoặc dùng Terminal:
+### macOS WebDAV
 
 ```bash
 mkdir -p /tmp/td-drive
 mount_webdav http://127.0.0.1:8750/webdav /tmp/td-drive
 ```
 
-## Linux
-
-Cài `davfs2`:
+### Linux WebDAV
 
 ```bash
 sudo apt install davfs2
@@ -54,16 +83,13 @@ sudo mkdir -p /mnt/td-drive
 sudo mount -t davfs http://127.0.0.1:8750/webdav /mnt/td-drive
 ```
 
-Để mount tự động sau đăng nhập, thêm vào `/etc/fstab` hoặc dùng `~/.config/davfs2/secrets` cho user thường.
+## Recycle Bin OS
 
-## Chế độ hiện tại
-
-- Read-only đầy đủ: list folder, mở file, stream qua Telegram khi cache trống.
-- Đổi tên, di chuyển, xóa: hoạt động qua WebDAV.
-- Tạo file mới qua mount: chưa hỗ trợ ở phiên bản này, vui lòng dùng PWA hoặc thư mục đồng bộ desktop.
+- Khi cache local bị evict, Agent ưu tiên đẩy vào Recycle Bin/Trash hệ thống. Nếu không khả dụng (CI/headless) sẽ fallback xóa cứng.
+- File trong sync folder không bao giờ bị xóa tự động.
 
 ## Khi VPS deploy
 
-- Mount qua domain công khai phải bật HTTPS, ví dụ `https://drive.tencuaban.com/webdav`.
-- macOS bắt buộc HTTPS. Windows hỗ trợ HTTP nhưng cần bật `BasicAuthLevel = 2` trong registry.
-- Nên đặt sau reverse proxy (Nginx/Caddy) có Basic Auth nếu chia sẻ nhiều người.
+- Mount qua domain công khai phải bật HTTPS.
+- macOS bắt buộc HTTPS. Windows hỗ trợ HTTP nhưng cần `BasicAuthLevel = 2` registry.
+- Khi expose ra internet, bật Basic Auth ở `Settings > Bảo mật API`.

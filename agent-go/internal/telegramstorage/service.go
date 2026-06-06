@@ -11,7 +11,6 @@ import (
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/downloader"
 	"github.com/gotd/td/telegram/message"
-	"github.com/gotd/td/telegram/message/styling"
 	"github.com/gotd/td/telegram/message/unpack"
 	"github.com/gotd/td/tg"
 
@@ -48,10 +47,13 @@ func (s *Service) UploadToSavedMessages(ctx context.Context, localPath string, o
 			return ErrUnauthorized
 		}
 
-		caption := fmt.Sprintf("TD_OBJECT:%s", filepath.Base(localPath))
-		msg, err := unpack.Message(message.NewSender(client.API()).Self().Upload(message.FromPath(localPath)).File(runCtx, styling.Plain(caption)))
+		inputFile, err := message.NewSender(client.API()).Self().Upload(message.FromPath(localPath)).AsInputFile(runCtx)
 		if err != nil {
 			return fmt.Errorf("upload file lên Telegram Saved Messages: %w", err)
+		}
+		msg, err := unpack.Message(message.NewSender(client.API()).Self().Media(runCtx, message.File(inputFile).Filename(telegramFilename(originalName))))
+		if err != nil {
+			return fmt.Errorf("gửi file lên Telegram Saved Messages: %w", err)
 		}
 
 		uploaded.MessageID = msg.ID
@@ -63,6 +65,14 @@ func (s *Service) UploadToSavedMessages(ctx context.Context, localPath string, o
 	}
 
 	return uploaded, nil
+}
+
+func telegramFilename(originalName string) string {
+	name := filepath.Base(originalName)
+	if name == "." || name == string(filepath.Separator) || name == "" {
+		return "telegram-drive-file"
+	}
+	return name
 }
 
 func (s *Service) DownloadFromSavedMessages(ctx context.Context, messageID int, targetPath string) error {
@@ -250,11 +260,14 @@ func (s *Service) UploadToPeer(ctx context.Context, peer drive.StoragePeer, loca
 		if !status.Authorized {
 			return ErrUnauthorized
 		}
-		caption := fmt.Sprintf("TD_OBJECT:%s", filepath.Base(localPath))
 		channel := &tg.InputPeerChannel{ChannelID: peer.ChannelID, AccessHash: peer.AccessHash}
-		msg, err := unpack.Message(message.NewSender(client.API()).To(channel).Upload(message.FromPath(localPath)).File(runCtx, styling.Plain(caption)))
+		inputFile, err := message.NewSender(client.API()).To(channel).Upload(message.FromPath(localPath)).AsInputFile(runCtx)
 		if err != nil {
 			return fmt.Errorf("upload file lên channel Telegram: %w", err)
+		}
+		msg, err := unpack.Message(message.NewSender(client.API()).To(channel).Media(runCtx, message.File(inputFile).Filename(telegramFilename(originalName))))
+		if err != nil {
+			return fmt.Errorf("gửi file lên channel Telegram: %w", err)
 		}
 		uploaded.MessageID = msg.ID
 		uploaded.FileID = fmt.Sprintf("channel:%d:%d", peer.ChannelID, msg.ID)

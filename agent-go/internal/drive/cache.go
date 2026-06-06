@@ -2,11 +2,15 @@ package drive
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
+
+	"telegram-drive-agent/internal/trash"
 )
 
 type CacheStats struct {
@@ -70,6 +74,7 @@ type cacheItem struct {
 	size     int64
 	accessed int64
 	state    string
+	origin   string
 }
 
 func (s *Service) CleanupCache(ctx context.Context) (int, error) {
@@ -77,7 +82,7 @@ func (s *Service) CleanupCache(ctx context.Context) (int, error) {
 	if policy.Mode == "mirror" {
 		return 0, nil
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, COALESCE(local_path, ''), size, COALESCE(last_accessed_at, updated_at), sync_state FROM files WHERE deleted_at IS NULL AND COALESCE(local_path, '') <> ''`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, COALESCE(local_path, ''), size, COALESCE(last_accessed_at, updated_at), sync_state, COALESCE(cache_origin, 'upload_cache') FROM files WHERE deleted_at IS NULL AND COALESCE(local_path, '') <> ''`)
 	if err != nil {
 		return 0, err
 	}
@@ -85,20 +90,36 @@ func (s *Service) CleanupCache(ctx context.Context) (int, error) {
 	items := make([]cacheItem, 0)
 	for rows.Next() {
 		var item cacheItem
-		if err := rows.Scan(&item.id, &item.path, &item.size, &item.accessed, &item.state); err != nil {
+		var origin string
+		if err := rows.Scan(&item.id, &item.path, &item.size, &item.accessed, &item.state, &origin); err != nil {
 			return 0, err
 		}
+		item.origin = origin
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
 		return 0, err
 	}
+	evictable := func(item cacheItem) bool {
+		if item.origin == CacheOriginSync {
+			return false
+		}
+		if !s.pathInsideCache(item.path) {
+			return false
+		}
+		return true
+	}
 	if policy.Mode == "cloud_only" {
-		return s.removeCacheItems(ctx, items, func(item cacheItem) bool { return item.state == "telegram_synced" }), nil
+		return s.removeCacheItems(ctx, items, func(item cacheItem) bool {
+			return item.state == "telegram_synced" && evictable(item)
+		}), nil
 	}
 	if policy.Mode == "smart" {
 		var used int64
 		for _, item := range items {
+			if !evictable(item) {
+				continue
+			}
 			used += item.size
 		}
 		if policy.MaxBytes <= 0 || used <= policy.MaxBytes {
@@ -110,7 +131,7 @@ func (s *Service) CleanupCache(ctx context.Context) (int, error) {
 			if used <= policy.MaxBytes {
 				break
 			}
-			if item.state != "telegram_synced" {
+			if item.state != "telegram_synced" || !evictable(item) {
 				continue
 			}
 			if err := s.evictCacheItem(ctx, item); err != nil {
@@ -122,6 +143,31 @@ func (s *Service) CleanupCache(ctx context.Context) (int, error) {
 		return removed, nil
 	}
 	return 0, nil
+}
+
+func (s *Service) pathInsideCache(p string) bool {
+	if p == "" {
+		return false
+	}
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return false
+	}
+	cacheDir, err := filepath.Abs(filepath.Join(s.dataDir, "uploads"))
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(cacheDir, abs)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	if strings.HasPrefix(rel, "..") {
+		return false
+	}
+	return !strings.HasPrefix(rel, string(filepath.Separator))
 }
 
 func (s *Service) removeCacheItems(ctx context.Context, items []cacheItem, predicate func(cacheItem) bool) int {
@@ -142,8 +188,17 @@ func (s *Service) evictCacheItem(ctx context.Context, item cacheItem) error {
 	if item.path == "" {
 		return nil
 	}
-	if err := os.Remove(item.path); err != nil && !os.IsNotExist(err) {
-		return err
+	if !s.pathInsideCache(item.path) {
+		return nil
+	}
+	if err := trash.MoveToTrash(item.path); err != nil {
+		if !errors.Is(err, trash.ErrNotSupported) {
+			if removeErr := os.Remove(item.path); removeErr != nil && !os.IsNotExist(removeErr) {
+				return removeErr
+			}
+		} else if removeErr := os.Remove(item.path); removeErr != nil && !os.IsNotExist(removeErr) {
+			return removeErr
+		}
 	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE files SET local_path = '', updated_at = ? WHERE id = ?`, time.Now().Unix(), item.id); err != nil {
 		return err
