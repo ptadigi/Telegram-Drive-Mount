@@ -87,8 +87,8 @@ func (s *Service) Start(localPort int) (Status, error) {
 
 func (s *Service) Stop() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if !s.status.Active {
+		s.mu.Unlock()
 		return
 	}
 	if s.cancel != nil {
@@ -97,13 +97,18 @@ func (s *Service) Stop() {
 	if s.cmd != nil && s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()
 	}
-	s.status = Status{LastError: "Đã dừng Cloudflare Tunnel"}
+	s.status.Active = false
+	s.status.LastError = "Đã dừng Cloudflare Tunnel"
+	s.status.URL = ""
 	s.notify()
+	s.mu.Unlock()
 }
 
 func (s *Service) parseOutput(reader io.Reader) {
 	scanner := bufio.NewScanner(reader)
-	scanner.Buffer(make([]byte, 0, 1024), 1024*1024)
+	// Cloudflared can emit very long debug lines; start at 64 KB and allow
+	// growing up to 1 MB to avoid swallowing the URL announcement.
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	urlPattern := regexp.MustCompile(`https://[a-z0-9-]+\.trycloudflare\.com`)
 	for scanner.Scan() {
 		line := scanner.Text()

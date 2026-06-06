@@ -165,10 +165,13 @@ func (s *Service) AdoptOrphanedData(ctx context.Context, userID string) error {
 		return err
 	}
 	defer tx.Rollback()
-	for _, table := range []string{"folders", "files"} {
+	for _, table := range []string{"folders", "files", "shares", "sync_roots"} {
 		if _, err := tx.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET user_id = ?, updated_at = ? WHERE user_id IS NULL OR user_id = ''`, table), userID, now); err != nil {
 			return fmt.Errorf("gán %s về user: %w", table, err)
 		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE audit_log SET actor = ? WHERE actor IS NULL OR actor = '' OR actor = 'system'`, userID); err != nil {
+		// audit_log adoption is best-effort
 	}
 	if err := tx.Commit(); err != nil {
 		return err

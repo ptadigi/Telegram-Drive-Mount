@@ -39,6 +39,9 @@ func Run(ctx context.Context, hooks Hooks) {
 		mountItem := systray.AddMenuItem("Mount ổ ảo", "Mount ổ Telegram Drive")
 		unmountItem := systray.AddMenuItem("Unmount ổ ảo", "Tháo ổ Telegram Drive")
 		unmountItem.Hide()
+		if hooks.OnMount == nil && hooks.OnUnmount == nil {
+			mountItem.Hide()
+		}
 		systray.AddSeparator()
 		autostart := systray.AddMenuItemCheckbox("Tự khởi động cùng máy", "Kích hoạt khi đăng nhập OS", false)
 		systray.AddSeparator()

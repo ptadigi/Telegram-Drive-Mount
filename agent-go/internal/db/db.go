@@ -30,7 +30,7 @@ func Open(path string) (*sql.DB, error) {
 		db.Close()
 		return nil, err
 	}
-	if err := migrate(db); err != nil {
+	if err := runMigrations(db); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -77,6 +77,43 @@ func applyPragmas(db *sql.DB) error {
 			return fmt.Errorf("áp dụng %s: %w", stmt, err)
 		}
 	}
+	return nil
+}
+
+// runMigrations applies sequential migrations and bumps PRAGMA user_version.
+func runMigrations(db *sql.DB) error {
+	migrations := []struct {
+		version int
+		fn      func(*sql.DB) error
+	}{
+		{1, migrate001Schema},
+		{2, migrate002Columns},
+	}
+	var current int
+	if err := db.QueryRow(`PRAGMA user_version`).Scan(&current); err != nil {
+		return fmt.Errorf("đọc user_version: %w", err)
+	}
+	for _, m := range migrations {
+		if m.version <= current {
+			continue
+		}
+		if err := m.fn(db); err != nil {
+			return fmt.Errorf("migration v%d: %w", m.version, err)
+		}
+		if _, err := db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, m.version)); err != nil {
+			return fmt.Errorf("đặt user_version=%d: %w", m.version, err)
+		}
+	}
+	return nil
+}
+
+func migrate001Schema(db *sql.DB) error {
+	return migrate(db)
+}
+
+func migrate002Columns(db *sql.DB) error {
+	// Future migrations will live here. Keeping this no-op to claim
+	// version slot for the new tracking scheme.
 	return nil
 }
 

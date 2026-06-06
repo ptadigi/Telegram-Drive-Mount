@@ -237,29 +237,7 @@ func (f *FileSystem) resolveFolder(ctx context.Context, name string) (string, er
 	if cleaned == "" || cleaned == "/" {
 		return "", nil
 	}
-	parts := strings.Split(strings.Trim(cleaned, "/"), "/")
-	currentID := ""
-	for _, part := range parts {
-		if part == "" {
-			continue
-		}
-		contents, err := f.svc.ListFolderContents(ctx, currentID)
-		if err != nil {
-			return "", err
-		}
-		match := ""
-		for _, folder := range contents.Folders {
-			if folder.Name == part {
-				match = folder.ID
-				break
-			}
-		}
-		if match == "" {
-			return "", os.ErrNotExist
-		}
-		currentID = match
-	}
-	return currentID, nil
+	return f.svc.ResolveFolderByPath(ctx, cleaned)
 }
 
 type dir struct {
