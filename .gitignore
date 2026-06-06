@@ -27,3 +27,7 @@ Error.html
 agent-go/config.local.json
 agent-go/agent-dev.log
 web-pwa/vite-dev.log
+
+# Build output
+td-agent.exe
+agent-go/agent-dev.log.err
