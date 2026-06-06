@@ -915,7 +915,10 @@ func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if resolved.Share.TargetKind == "folder" {
-		s.drive.RecordShareAccess(r.Context(), resolved.Share.ID)
+		if err := s.drive.RecordShareAccess(r.Context(), resolved.Share.ID); err != nil {
+			writeError(w, http.StatusForbidden, err)
+			return
+		}
 		if err := s.drive.StreamFolderShareZip(r.Context(), resolved.Share, w); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 		}
@@ -926,7 +929,10 @@ func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err)
 		return
 	}
-	s.drive.RecordShareAccess(r.Context(), resolved.Share.ID)
+	if err := s.drive.RecordShareAccess(r.Context(), resolved.Share.ID); err != nil {
+		writeError(w, http.StatusForbidden, err)
+		return
+	}
 	w.Header().Set("Content-Type", file.MimeType)
 	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
 	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+urlQueryEscape(file.Name))
