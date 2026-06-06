@@ -565,14 +565,18 @@ func (s *Service) GetDownloadableFile(ctx context.Context, id string) (Downloada
 		s.RecordFileAccess(ctx, file.ID)
 		return DownloadableFile{File: file, LocalPath: localPath}, nil
 	}
-	if err := s.restoreFromTelegram(ctx, file, localPath); err != nil {
+	restorePath := s.safeRestorePath(file)
+	if err := os.MkdirAll(filepath.Dir(restorePath), 0o755); err != nil {
+		return DownloadableFile{}, fmt.Errorf("tạo thư mục cache: %w", err)
+	}
+	if err := s.restoreFromTelegram(ctx, file, restorePath); err != nil {
 		return DownloadableFile{}, fmt.Errorf("không có cache cục bộ và không tải được từ Telegram: %w", err)
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE files SET local_path = ?, cache_origin = ?, last_accessed_at = ?, updated_at = ? WHERE id = ?`, localPath, CacheOriginRestored, time.Now().Unix(), time.Now().Unix(), file.ID); err == nil {
-		file.LocalPath = localPath
+	if _, err := s.db.ExecContext(ctx, `UPDATE files SET local_path = ?, cache_origin = ?, last_accessed_at = ?, updated_at = ? WHERE id = ?`, restorePath, CacheOriginRestored, time.Now().Unix(), time.Now().Unix(), file.ID); err == nil {
+		file.LocalPath = restorePath
 		file.CacheOrigin = CacheOriginRestored
 	}
-	return DownloadableFile{File: file, LocalPath: localPath}, nil
+	return DownloadableFile{File: file, LocalPath: restorePath}, nil
 }
 
 func (s *Service) restoreFromTelegram(ctx context.Context, file File, localPath string) error {
@@ -593,6 +597,57 @@ func (s *Service) restoreFromTelegram(ctx context.Context, file File, localPath 
 		return uploader.DownloadFromPeer(ctx, peer, messageID, localPath)
 	}
 	return s.uploader.DownloadFromSavedMessages(ctx, messageID, localPath)
+}
+
+// safeRestorePath returns the on-disk location to use when restoring a file
+// from Telegram. Files marked as sync_source must NEVER be restored over the
+// user's real folder — restore those into the cache directory instead.
+func (s *Service) safeRestorePath(file File) string {
+	if file.CacheOrigin == CacheOriginSync {
+		return filepath.Join(s.dataDir, "uploads", file.ID+"-"+filepath.Base(file.Name))
+	}
+	if file.LocalPath != "" {
+		return file.LocalPath
+	}
+	return filepath.Join(s.dataDir, "uploads", file.ID+"-"+filepath.Base(file.Name))
+}
+
+// IsLocalPathServable checks that the given on-disk path lives inside the
+// agent data directory (uploads/thumbs/etc.) or in a registered sync root.
+// Anything else is rejected to prevent path-traversal abuse via DB-injected
+// LocalPath values.
+func (s *Service) IsLocalPathServable(path string) bool {
+	if path == "" {
+		return false
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	if base, err := filepath.Abs(s.dataDir); err == nil {
+		if rel, err := filepath.Rel(base, abs); err == nil && rel == "." {
+			return true
+		} else if err == nil && !strings.HasPrefix(rel, "..") && !strings.HasPrefix(rel, string(filepath.Separator)) {
+			return true
+		}
+	}
+	roots, err := s.ListSyncRoots(context.Background())
+	if err == nil {
+		for _, root := range roots {
+			rootAbs, err := filepath.Abs(root.LocalPath)
+			if err != nil {
+				continue
+			}
+			rel, err := filepath.Rel(rootAbs, abs)
+			if err != nil {
+				continue
+			}
+			if rel == "." || (!strings.HasPrefix(rel, "..") && !strings.HasPrefix(rel, string(filepath.Separator))) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (s *Service) latestTelegramVersion(ctx context.Context, fileID string) (StoragePeer, int, error) {

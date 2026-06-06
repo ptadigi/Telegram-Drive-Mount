@@ -1028,6 +1028,11 @@ func (s *Server) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.drive.IsLocalPathServable(file.LocalPath) {
+		writeError(w, http.StatusForbidden, errBadRequest("file local nằm ngoài vùng dữ liệu cho phép"))
+		return
+	}
+
 	w.Header().Set("Content-Type", file.MimeType)
 	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
 	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+urlQueryEscape(file.Name))
@@ -1043,6 +1048,10 @@ func (s *Server) handleFileThumbnail(w http.ResponseWriter, r *http.Request) {
 	thumb, err := s.drive.GetThumbnail(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	if !s.drive.IsLocalPathServable(thumb.Path) {
+		writeError(w, http.StatusForbidden, errBadRequest("thumbnail nằm ngoài vùng dữ liệu cho phép"))
 		return
 	}
 	w.Header().Set("Content-Type", thumb.MimeType)

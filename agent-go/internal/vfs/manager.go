@@ -31,12 +31,13 @@ type Mounter interface {
 
 // Manager orchestrates a Mounter with thread-safe state.
 type Manager struct {
-	mu      sync.Mutex
-	mounter Mounter
-	drive   *drive.Service
-	dataDir string
-	status  Status
-	cancel  context.CancelFunc
+	mu       sync.Mutex
+	mounter  Mounter
+	drive    *drive.Service
+	dataDir  string
+	status   Status
+	cancel   context.CancelFunc
+	mounting bool
 }
 
 // NewManager builds a manager for the active build (fuse-enabled or stub).
@@ -75,6 +76,11 @@ func (m *Manager) Mount(ctx context.Context, mountPoint string) (Status, error) 
 		m.mu.Unlock()
 		return m.status, errors.New("mount engine không có sẵn trong bản build này")
 	}
+	if m.mounting {
+		current := m.status
+		m.mu.Unlock()
+		return current, errors.New("đang trong quá trình mount, vui lòng chờ")
+	}
 	if m.mounter.IsMounted() {
 		current := m.status
 		m.mu.Unlock()
@@ -86,6 +92,7 @@ func (m *Manager) Mount(ctx context.Context, mountPoint string) (Status, error) 
 	}
 	runCtx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
+	m.mounting = true
 	m.status.MountPoint = resolved
 	m.status.Mounted = false
 	m.status.Error = ""
@@ -103,6 +110,7 @@ func (m *Manager) Mount(ctx context.Context, mountPoint string) (Status, error) 
 			m.mu.Lock()
 			m.status.Mounted = true
 			m.status.MountPoint = m.mounter.MountPoint()
+			m.mounting = false
 			snap := m.status
 			m.mu.Unlock()
 			return snap, nil
@@ -110,6 +118,7 @@ func (m *Manager) Mount(ctx context.Context, mountPoint string) (Status, error) 
 		select {
 		case err := <-resultCh:
 			m.mu.Lock()
+			m.mounting = false
 			if err != nil {
 				m.status.Error = err.Error()
 				m.status.Mounted = false
@@ -123,11 +132,17 @@ func (m *Manager) Mount(ctx context.Context, mountPoint string) (Status, error) 
 			m.mu.Unlock()
 			return snap, err
 		case <-deadline:
-			snap := m.Status()
+			m.mu.Lock()
+			m.mounting = false
+			snap := m.status
+			m.mu.Unlock()
 			return snap, nil
 		case <-ctx.Done():
 			cancel()
-			snap := m.Status()
+			m.mu.Lock()
+			m.mounting = false
+			snap := m.status
+			m.mu.Unlock()
 			return snap, ctx.Err()
 		case <-time.After(250 * time.Millisecond):
 		}

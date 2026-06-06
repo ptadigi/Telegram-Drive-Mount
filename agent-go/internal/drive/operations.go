@@ -24,8 +24,11 @@ func (s *Service) RenameFile(ctx context.Context, input RenameInput) (File, erro
 	if strings.ContainsAny(name, `/\\`) {
 		return File{}, fmt.Errorf("tên file không được chứa dấu / hoặc \\")
 	}
+	if _, err := s.getFile(ctx, input.ID); err != nil {
+		return File{}, err
+	}
 	now := time.Now().Unix()
-	if _, err := s.db.ExecContext(ctx, `UPDATE files SET name = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, name, now, input.ID); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE files SET name = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL AND COALESCE(user_id, '') = COALESCE(?, '')`, name, now, input.ID, UserFromContext(ctx)); err != nil {
 		return File{}, fmt.Errorf("đổi tên file: %w", err)
 	}
 	file, err := s.getFile(ctx, input.ID)
@@ -44,12 +47,15 @@ func (s *Service) RenameFolder(ctx context.Context, input RenameInput) (Folder, 
 	if strings.ContainsAny(name, `/\\`) {
 		return Folder{}, fmt.Errorf("tên thư mục không được chứa dấu / hoặc \\")
 	}
+	if err := s.ensureFolderExists(ctx, input.ID); err != nil {
+		return Folder{}, err
+	}
 	now := time.Now().Unix()
-	if _, err := s.db.ExecContext(ctx, `UPDATE folders SET name = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, name, now, input.ID); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE folders SET name = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL AND COALESCE(user_id, '') = COALESCE(?, '')`, name, now, input.ID, UserFromContext(ctx)); err != nil {
 		return Folder{}, fmt.Errorf("đổi tên thư mục: %w", err)
 	}
 	var folder Folder
-	err := s.db.QueryRowContext(ctx, `SELECT id, COALESCE(parent_id, ''), name, created_at, updated_at FROM folders WHERE id = ?`, input.ID).Scan(&folder.ID, &folder.ParentID, &folder.Name, &folder.CreatedAt, &folder.UpdatedAt)
+	err := s.db.QueryRowContext(ctx, `SELECT id, COALESCE(parent_id, ''), name, created_at, updated_at FROM folders WHERE id = ? AND COALESCE(user_id, '') = COALESCE(?, '')`, input.ID, UserFromContext(ctx)).Scan(&folder.ID, &folder.ParentID, &folder.Name, &folder.CreatedAt, &folder.UpdatedAt)
 	if err != nil {
 		return Folder{}, err
 	}
@@ -61,8 +67,11 @@ func (s *Service) TrashFile(ctx context.Context, id string) error {
 	if id == "" {
 		return fmt.Errorf("thiếu id file")
 	}
+	if _, err := s.getFile(ctx, id); err != nil {
+		return err
+	}
 	now := time.Now().Unix()
-	if _, err := s.db.ExecContext(ctx, `UPDATE files SET deleted_at = ?, updated_at = ? WHERE id = ?`, now, now, id); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE files SET deleted_at = ?, updated_at = ? WHERE id = ? AND COALESCE(user_id, '') = COALESCE(?, '')`, now, now, id, UserFromContext(ctx)); err != nil {
 		return fmt.Errorf("đưa file vào thùng rác: %w", err)
 	}
 	s.events.Publish("file.trashed", map[string]any{"id": id, "deleted_at": now})
@@ -73,16 +82,19 @@ func (s *Service) TrashFolder(ctx context.Context, id string) error {
 	if id == "" {
 		return fmt.Errorf("thiếu id thư mục")
 	}
+	if err := s.ensureFolderExists(ctx, id); err != nil {
+		return err
+	}
 	now := time.Now().Unix()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `UPDATE folders SET deleted_at = ?, updated_at = ? WHERE id = ?`, now, now, id); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE folders SET deleted_at = ?, updated_at = ? WHERE id = ? AND COALESCE(user_id, '') = COALESCE(?, '')`, now, now, id, UserFromContext(ctx)); err != nil {
 		return fmt.Errorf("đưa thư mục vào thùng rác: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE files SET deleted_at = ?, updated_at = ? WHERE folder_id = ? AND deleted_at IS NULL`, now, now, id); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE files SET deleted_at = ?, updated_at = ? WHERE folder_id = ? AND deleted_at IS NULL AND COALESCE(user_id, '') = COALESCE(?, '')`, now, now, id, UserFromContext(ctx)); err != nil {
 		return fmt.Errorf("đưa file con vào thùng rác: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -97,7 +109,7 @@ func (s *Service) RestoreFile(ctx context.Context, id string) error {
 		return fmt.Errorf("thiếu id file")
 	}
 	now := time.Now().Unix()
-	if _, err := s.db.ExecContext(ctx, `UPDATE files SET deleted_at = NULL, updated_at = ? WHERE id = ?`, now, id); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE files SET deleted_at = NULL, updated_at = ? WHERE id = ? AND COALESCE(user_id, '') = COALESCE(?, '')`, now, id, UserFromContext(ctx)); err != nil {
 		return fmt.Errorf("khôi phục file: %w", err)
 	}
 	s.events.Publish("file.restored", map[string]any{"id": id})
@@ -109,7 +121,7 @@ func (s *Service) RestoreFolder(ctx context.Context, id string) error {
 		return fmt.Errorf("thiếu id thư mục")
 	}
 	now := time.Now().Unix()
-	if _, err := s.db.ExecContext(ctx, `UPDATE folders SET deleted_at = NULL, updated_at = ? WHERE id = ?`, now, id); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE folders SET deleted_at = NULL, updated_at = ? WHERE id = ? AND COALESCE(user_id, '') = COALESCE(?, '')`, now, id, UserFromContext(ctx)); err != nil {
 		return fmt.Errorf("khôi phục thư mục: %w", err)
 	}
 	s.events.Publish("folder.restored", map[string]any{"id": id})

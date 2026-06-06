@@ -90,13 +90,16 @@ func (s *Service) MoveFile(ctx context.Context, input MoveInput) (File, error) {
 	if input.ID == "" {
 		return File{}, fmt.Errorf("thiếu id file")
 	}
+	if _, err := s.getFile(ctx, input.ID); err != nil {
+		return File{}, err
+	}
 	if input.NewParentID != "" {
 		if err := s.ensureFolderExists(ctx, input.NewParentID); err != nil {
 			return File{}, err
 		}
 	}
 	now := time.Now().Unix()
-	if _, err := s.db.ExecContext(ctx, `UPDATE files SET folder_id = NULLIF(?, ''), updated_at = ? WHERE id = ?`, input.NewParentID, now, input.ID); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE files SET folder_id = NULLIF(?, ''), updated_at = ? WHERE id = ? AND COALESCE(user_id, '') = COALESCE(?, '')`, input.NewParentID, now, input.ID, UserFromContext(ctx)); err != nil {
 		return File{}, fmt.Errorf("di chuyển file: %w", err)
 	}
 	file, err := s.getFile(ctx, input.ID)
@@ -114,28 +117,59 @@ func (s *Service) MoveFolder(ctx context.Context, input MoveInput) (Folder, erro
 	if input.NewParentID == input.ID {
 		return Folder{}, fmt.Errorf("không thể di chuyển thư mục vào chính nó")
 	}
+	if err := s.ensureFolderExists(ctx, input.ID); err != nil {
+		return Folder{}, err
+	}
 	if input.NewParentID != "" {
 		if err := s.ensureFolderExists(ctx, input.NewParentID); err != nil {
 			return Folder{}, err
 		}
+		if err := s.assertNotDescendant(ctx, input.ID, input.NewParentID); err != nil {
+			return Folder{}, err
+		}
 	}
 	now := time.Now().Unix()
-	if _, err := s.db.ExecContext(ctx, `UPDATE folders SET parent_id = NULLIF(?, ''), updated_at = ? WHERE id = ?`, input.NewParentID, now, input.ID); err != nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE folders SET parent_id = NULLIF(?, ''), updated_at = ? WHERE id = ? AND COALESCE(user_id, '') = COALESCE(?, '')`, input.NewParentID, now, input.ID, UserFromContext(ctx)); err != nil {
 		return Folder{}, fmt.Errorf("di chuyển thư mục: %w", err)
 	}
 	var folder Folder
-	if err := s.db.QueryRowContext(ctx, `SELECT id, COALESCE(parent_id, ''), name, created_at, updated_at FROM folders WHERE id = ?`, input.ID).Scan(&folder.ID, &folder.ParentID, &folder.Name, &folder.CreatedAt, &folder.UpdatedAt); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT id, COALESCE(parent_id, ''), name, created_at, updated_at FROM folders WHERE id = ? AND COALESCE(user_id, '') = COALESCE(?, '')`, input.ID, UserFromContext(ctx)).Scan(&folder.ID, &folder.ParentID, &folder.Name, &folder.CreatedAt, &folder.UpdatedAt); err != nil {
 		return Folder{}, err
 	}
 	s.events.Publish("folder.updated", folder)
 	return folder, nil
 }
 
+func (s *Service) assertNotDescendant(ctx context.Context, ancestorID, candidateID string) error {
+	current := candidateID
+	for i := 0; i < 200 && current != ""; i++ {
+		if current == ancestorID {
+			return fmt.Errorf("không thể di chuyển thư mục vào chính cây con của nó")
+		}
+		var parent sql.NullString
+		err := s.db.QueryRowContext(ctx, `SELECT parent_id FROM folders WHERE id = ? AND COALESCE(user_id, '') = COALESCE(?, '')`, current, UserFromContext(ctx)).Scan(&parent)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil
+			}
+			return err
+		}
+		if !parent.Valid || parent.String == "" {
+			return nil
+		}
+		current = parent.String
+	}
+	return fmt.Errorf("phát hiện vòng lặp thư mục")
+}
+
 func (s *Service) StarFile(ctx context.Context, id string, starred bool) error {
 	if id == "" {
 		return fmt.Errorf("thiếu id file")
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE files SET starred = ?, updated_at = ? WHERE id = ?`, boolToInt(starred), time.Now().Unix(), id); err != nil {
+	if _, err := s.getFile(ctx, id); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE files SET starred = ?, updated_at = ? WHERE id = ? AND COALESCE(user_id, '') = COALESCE(?, '')`, boolToInt(starred), time.Now().Unix(), id, UserFromContext(ctx)); err != nil {
 		return fmt.Errorf("đánh dấu file: %w", err)
 	}
 	s.events.Publish("file.starred", map[string]any{"id": id, "starred": starred})
@@ -146,7 +180,10 @@ func (s *Service) StarFolder(ctx context.Context, id string, starred bool) error
 	if id == "" {
 		return fmt.Errorf("thiếu id thư mục")
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE folders SET starred = ?, updated_at = ? WHERE id = ?`, boolToInt(starred), time.Now().Unix(), id); err != nil {
+	if err := s.ensureFolderExists(ctx, id); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE folders SET starred = ?, updated_at = ? WHERE id = ? AND COALESCE(user_id, '') = COALESCE(?, '')`, boolToInt(starred), time.Now().Unix(), id, UserFromContext(ctx)); err != nil {
 		return fmt.Errorf("đánh dấu thư mục: %w", err)
 	}
 	s.events.Publish("folder.starred", map[string]any{"id": id, "starred": starred})
@@ -193,6 +230,20 @@ func (s *Service) PermanentDeleteFile(ctx context.Context, id string) error {
 	if id == "" {
 		return fmt.Errorf("thiếu id file")
 	}
+	if _, err := s.fileOwner(ctx, id); err != nil {
+		// allow delete of trashed files: query trash version
+	}
+	var owner sql.NullString
+	if err := s.db.QueryRowContext(ctx, `SELECT user_id FROM files WHERE id = ?`, id).Scan(&owner); err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("không tìm thấy file")
+		}
+		return err
+	}
+	requester := UserFromContext(ctx)
+	if requester != "" && owner.Valid && owner.String != "" && owner.String != requester {
+		return fmt.Errorf("không có quyền với file này")
+	}
 	var localPath, thumbnailPath sql.NullString
 	_ = s.db.QueryRowContext(ctx, `SELECT COALESCE(local_path, ''), COALESCE(thumbnail_path, '') FROM files WHERE id = ?`, id).Scan(&localPath, &thumbnailPath)
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM files WHERE id = ?`, id); err != nil {
@@ -211,6 +262,17 @@ func (s *Service) PermanentDeleteFile(ctx context.Context, id string) error {
 func (s *Service) PermanentDeleteFolder(ctx context.Context, id string) error {
 	if id == "" {
 		return fmt.Errorf("thiếu id thư mục")
+	}
+	var owner sql.NullString
+	if err := s.db.QueryRowContext(ctx, `SELECT user_id FROM folders WHERE id = ?`, id).Scan(&owner); err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("không tìm thấy thư mục")
+		}
+		return err
+	}
+	requester := UserFromContext(ctx)
+	if requester != "" && owner.Valid && owner.String != "" && owner.String != requester {
+		return fmt.Errorf("không có quyền với thư mục này")
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT id FROM files WHERE folder_id = ?`, id)
 	if err != nil {
