@@ -22,3 +22,8 @@ CompiledApps/
 *.log
 Error.html
 **/LatestError.html
+
+# Local Telegram credentials & runtime artifacts
+agent-go/config.local.json
+agent-go/agent-dev.log
+web-pwa/vite-dev.log
