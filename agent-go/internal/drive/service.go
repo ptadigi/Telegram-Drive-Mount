@@ -836,6 +836,13 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 		if !s.uploadGateAllow(ctx, item.ID) {
 			continue
 		}
+		if item.LocalPath == "" || !fileExists(item.LocalPath) {
+			_ = s.markSyncState(ctx, item.ID, "local_missing")
+			_ = s.updateTransfer(ctx, item.ID, "failed", 100, 0, item.Size, "file local không còn trên đĩa")
+			s.clearRetry(item.ID)
+			result.Failed++
+			continue
+		}
 		if err := s.markSyncState(ctx, item.ID, "telegram_uploading"); err != nil {
 			result.Failed++
 			continue
@@ -1056,6 +1063,17 @@ func (s *Service) markSyncState(ctx context.Context, fileID string, state string
 	return err
 }
 
+func fileExists(path string) bool {
+	if path == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return !info.IsDir()
+}
+
 func (s *Service) recordTelegramVersion(ctx context.Context, file File, uploaded UploadedObject) error {
 	now := time.Now().Unix()
 	versionID := newID()
@@ -1064,10 +1082,18 @@ func (s *Service) recordTelegramVersion(ctx context.Context, file File, uploaded
 		return fmt.Errorf("mở transaction metadata: %w", err)
 	}
 	defer tx.Rollback()
+	var nextVersion int
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(version_number), 0) + 1 FROM file_versions WHERE file_id = ?`, file.ID).Scan(&nextVersion); err != nil {
+		return fmt.Errorf("đọc version_number: %w", err)
+	}
+	var hashHex string
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(hash, '') FROM files WHERE id = ?`, file.ID).Scan(&hashHex); err != nil {
+		hashHex = ""
+	}
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO file_versions (id, file_id, version_number, size, hash, telegram_channel_id, telegram_message_id, telegram_file_id, telegram_access_hash, created_at)
-		VALUES (?, ?, 1, ?, '', NULLIF(?, 0), ?, ?, ?, ?)
-	`, versionID, file.ID, file.Size, uploaded.ChannelID, uploaded.MessageID, uploaded.FileID, uploaded.AccessHash, now)
+		VALUES (?, ?, ?, ?, ?, NULLIF(?, 0), ?, ?, ?, ?)
+	`, versionID, file.ID, nextVersion, file.Size, hashHex, uploaded.ChannelID, uploaded.MessageID, uploaded.FileID, uploaded.AccessHash, now)
 	if err != nil {
 		return fmt.Errorf("ghi version Telegram: %w", err)
 	}
