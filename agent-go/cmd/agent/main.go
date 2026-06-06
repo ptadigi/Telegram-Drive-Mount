@@ -154,10 +154,10 @@ func main() {
 
 	fmt.Println()
 	log.Println("shutting down telegram-drive-agent...")
-	mountManager.Shutdown()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("graceful shutdown failed: %v", err)
+		log.Printf("graceful HTTP shutdown failed: %v", err)
 	}
+	mountManager.Shutdown()
 	log.Println("telegram-drive-agent stopped")
 }
 

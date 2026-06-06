@@ -9,9 +9,9 @@ import (
 )
 
 func moveToTrash(path string) error {
-	escaped := strings.ReplaceAll(path, `"`, `\"`)
-	script := fmt.Sprintf(`tell application "Finder" to delete POSIX file "%s"`, escaped)
-	cmd := exec.Command("osascript", "-e", script)
+	cmd := exec.Command("osascript", "-e", `on run argv
+		tell application "Finder" to delete POSIX file (item 1 of argv)
+	end run`, "--", path)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("osascript trash: %w (%s)", err, strings.TrimSpace(string(out)))
 	}

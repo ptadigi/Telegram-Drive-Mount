@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -195,7 +196,21 @@ func (f *FileSystem) OpenFile(ctx context.Context, name string, flag int, perm o
 }
 
 func (f *FileSystem) newWriteFile(ctx context.Context, parentID, name string) webdav.File {
-	return &writeFile{ctx: ctx, svc: f.svc, parentID: parentID, name: name, info: &entryInfo{name: name, mode: 0o644, modTime: time.Now()}}
+	tempPath := filepath.Join(os.TempDir(), "td-webdav-"+strings.ReplaceAll(name, string(filepath.Separator), "_")+"-"+randomTempSuffix())
+	tempFile, err := os.CreateTemp(filepath.Dir(tempPath), filepath.Base(tempPath)+"-")
+	if err != nil {
+		// Fallback: keep buffer-in-RAM behavior so Close still works for tiny files.
+		return &writeFile{ctx: detachContext(ctx), svc: f.svc, parentID: parentID, name: name, info: &entryInfo{name: name, mode: 0o644, modTime: time.Now()}}
+	}
+	return &writeFile{ctx: detachContext(ctx), svc: f.svc, parentID: parentID, name: name, info: &entryInfo{name: name, mode: 0o644, modTime: time.Now()}, file: tempFile, path: tempFile.Name()}
+}
+
+func detachContext(ctx context.Context) context.Context {
+	return context.WithoutCancel(ctx)
+}
+
+func randomTempSuffix() string {
+	return fmt.Sprintf("%d", time.Now().UnixNano())
 }
 
 func (f *FileSystem) openFolder(ctx context.Context, folderID, name string) (webdav.File, error) {
@@ -352,6 +367,9 @@ type writeFile struct {
 	buf      []byte
 	closed   bool
 	info     *entryInfo
+	file     *os.File
+	path     string
+	written  int64
 }
 
 func (w *writeFile) Close() error {
@@ -359,6 +377,29 @@ func (w *writeFile) Close() error {
 		return nil
 	}
 	w.closed = true
+	if w.file != nil {
+		if err := w.file.Sync(); err != nil {
+			w.file.Close()
+			os.Remove(w.path)
+			return err
+		}
+		if _, err := w.file.Seek(0, io.SeekStart); err != nil {
+			w.file.Close()
+			os.Remove(w.path)
+			return err
+		}
+		_, err := w.svc.SaveStreamFile(w.ctx, w.file, w.name, "", w.parentID, "")
+		closeErr := w.file.Close()
+		removeErr := os.Remove(w.path)
+		if err != nil {
+			return err
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		_ = removeErr
+		return nil
+	}
 	reader := &bytesReader{data: w.buf}
 	_, err := w.svc.SaveStreamFile(w.ctx, reader, w.name, "", w.parentID, "")
 	return err
@@ -369,11 +410,20 @@ func (w *writeFile) Readdir(count int) ([]os.FileInfo, error) {
 	return nil, errors.New("không phải thư mục")
 }
 func (w *writeFile) Seek(offset int64, whence int) (int64, error) {
+	if w.file != nil {
+		return w.file.Seek(offset, whence)
+	}
 	return int64(len(w.buf)), nil
 }
 func (w *writeFile) Stat() (os.FileInfo, error) { return w.info, nil }
 
 func (w *writeFile) Write(p []byte) (int, error) {
+	if w.file != nil {
+		n, err := w.file.Write(p)
+		w.written += int64(n)
+		w.info.size = w.written
+		return n, err
+	}
 	w.buf = append(w.buf, p...)
 	w.info.size = int64(len(w.buf))
 	return len(p), nil

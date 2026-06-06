@@ -223,17 +223,26 @@ func (d *driveFS) Release(path string, fh uint64) int {
 	if h == nil {
 		return 0
 	}
-	defer os.Remove(h.tempPath)
-	defer h.file.Close()
 	if !h.dirty {
+		_ = h.file.Close()
+		_ = os.Remove(h.tempPath)
 		return 0
 	}
 	if _, err := h.file.Seek(0, io.SeekStart); err != nil {
+		_ = h.file.Close()
+		// keep temp file for inspection
 		return -fuse.EIO
 	}
 	if _, err := d.svc.SaveStreamFile(context.Background(), h.file, h.name, "", h.parentID, ""); err != nil {
+		// Save failed: keep temp file in fuse-tmp/ for retry/manual recovery,
+		// rename to <name>.<id>.unsaved so user can find it.
+		_ = h.file.Close()
+		failPath := h.tempPath + ".unsaved"
+		_ = os.Rename(h.tempPath, failPath)
 		return -fuse.EIO
 	}
+	_ = h.file.Close()
+	_ = os.Remove(h.tempPath)
 	return 0
 }
 
