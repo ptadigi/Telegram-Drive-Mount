@@ -109,18 +109,25 @@ type driveFS struct {
 	mu       sync.Mutex
 	handles  map[uint64]*writeHandle
 	nextHand uint64
+	pending  map[string]*writeHandle // key: lowercased mount path "/foo/bar.txt"
 }
 
 type writeHandle struct {
 	parentID string
+	parent   string
 	name     string
 	tempPath string
 	file     *os.File
 	dirty    bool
+	size     int64
 }
 
 func newDriveFS(svc *drive.Service, dataDir string) *driveFS {
-	return &driveFS{svc: svc, dataDir: dataDir, handles: map[uint64]*writeHandle{}}
+	return &driveFS{svc: svc, dataDir: dataDir, handles: map[uint64]*writeHandle{}, pending: map[string]*writeHandle{}}
+}
+
+func pendingKey(p string) string {
+	return strings.ToLower(strings.ReplaceAll(p, "\\", "/"))
 }
 
 func (d *driveFS) tempDir() string {
@@ -131,6 +138,20 @@ func (d *driveFS) tempDir() string {
 
 func (d *driveFS) Open(path string, flags int) (int, uint64) {
 	return 0, 0
+}
+
+func (d *driveFS) Statfs(path string, stat *fuse.Statfs_t) int {
+	const blockSize = 4096
+	const totalBytes = 1 << 50 // 1 PiB virtual capacity
+	stat.Bsize = blockSize
+	stat.Frsize = blockSize
+	stat.Blocks = totalBytes / blockSize
+	stat.Bfree = stat.Blocks / 2
+	stat.Bavail = stat.Bfree
+	stat.Files = 1 << 20
+	stat.Ffree = stat.Files / 2
+	stat.Namemax = 255
+	return 0
 }
 
 func (d *driveFS) Create(path string, flags int, mode uint32) (int, uint64) {
@@ -150,7 +171,9 @@ func (d *driveFS) Create(path string, flags int, mode uint32) (int, uint64) {
 	d.mu.Lock()
 	d.nextHand++
 	hid := d.nextHand
-	d.handles[hid] = &writeHandle{parentID: parentID, name: leaf, tempPath: tempPath, file: f, dirty: true}
+	h := &writeHandle{parentID: parentID, parent: parent, name: leaf, tempPath: tempPath, file: f, dirty: true}
+	d.handles[hid] = h
+	d.pending[pendingKey(path)] = h
 	d.mu.Unlock()
 	return 0, hid
 }
@@ -165,6 +188,9 @@ func (d *driveFS) Write(path string, buff []byte, ofst int64, fh uint64) int {
 	if _, err := h.file.WriteAt(buff, ofst); err != nil {
 		return -fuse.EIO
 	}
+	if end := ofst + int64(len(buff)); end > h.size {
+		h.size = end
+	}
 	h.dirty = true
 	return len(buff)
 }
@@ -177,6 +203,8 @@ func (d *driveFS) Truncate(path string, size int64, fh uint64) int {
 		if err := h.file.Truncate(size); err != nil {
 			return -fuse.EIO
 		}
+		h.size = size
+		h.dirty = true
 	}
 	return 0
 }
@@ -185,6 +213,7 @@ func (d *driveFS) Release(path string, fh uint64) int {
 	d.mu.Lock()
 	h := d.handles[fh]
 	delete(d.handles, fh)
+	delete(d.pending, pendingKey(path))
 	d.mu.Unlock()
 	if h == nil {
 		return 0
@@ -286,9 +315,17 @@ func randomTempName(name string) string {
 
 func (d *driveFS) Getattr(path string, stat *fuse.Stat_t, _ uint64) int {
 	if path == "/" || strings.TrimPrefix(path, "/") == "" {
-		stat.Mode = fuse.S_IFDIR | 0o755
+		stat.Mode = fuse.S_IFDIR | 0o777
 		return 0
 	}
+	d.mu.Lock()
+	if h, ok := d.pending[pendingKey(path)]; ok {
+		d.mu.Unlock()
+		stat.Mode = fuse.S_IFREG | 0o666
+		stat.Size = h.size
+		return 0
+	}
+	d.mu.Unlock()
 	parent, leaf := splitPath(path)
 	folderID, err := d.resolveFolder(context.Background(), parent)
 	if err != nil {
@@ -300,13 +337,13 @@ func (d *driveFS) Getattr(path string, stat *fuse.Stat_t, _ uint64) int {
 	}
 	for _, folder := range contents.Folders {
 		if folder.Name == leaf {
-			stat.Mode = fuse.S_IFDIR | 0o755
+			stat.Mode = fuse.S_IFDIR | 0o777
 			return 0
 		}
 	}
 	for _, file := range contents.Files {
 		if file.Name == leaf {
-			stat.Mode = fuse.S_IFREG | 0o644
+			stat.Mode = fuse.S_IFREG | 0o666
 			stat.Size = file.Size
 			return 0
 		}
@@ -326,17 +363,31 @@ func (d *driveFS) Readdir(path string, fill func(name string, stat *fuse.Stat_t,
 	fill(".", nil, 0)
 	fill("..", nil, 0)
 	for _, folder := range contents.Folders {
-		stat := fuse.Stat_t{Mode: fuse.S_IFDIR | 0o755}
+		stat := fuse.Stat_t{Mode: fuse.S_IFDIR | 0o777}
 		if !fill(folder.Name, &stat, 0) {
-			break
+			return 0
 		}
 	}
 	for _, file := range contents.Files {
-		stat := fuse.Stat_t{Mode: fuse.S_IFREG | 0o644, Size: file.Size}
+		stat := fuse.Stat_t{Mode: fuse.S_IFREG | 0o666, Size: file.Size}
 		if !fill(file.Name, &stat, 0) {
-			break
+			return 0
 		}
 	}
+	d.mu.Lock()
+	prefix := pendingKey(strings.TrimSuffix(path, "/")) + "/"
+	for key, h := range d.pending {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		rest := strings.TrimPrefix(key, prefix)
+		if strings.Contains(rest, "/") {
+			continue
+		}
+		stat := fuse.Stat_t{Mode: fuse.S_IFREG | 0o666, Size: h.size}
+		fill(h.name, &stat, 0)
+	}
+	d.mu.Unlock()
 	return 0
 }
 
