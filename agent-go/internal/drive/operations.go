@@ -85,17 +85,23 @@ func (s *Service) TrashFolder(ctx context.Context, id string) error {
 	if err := s.ensureFolderExists(ctx, id); err != nil {
 		return err
 	}
+	folderIDs, err := s.collectFolderTreeIDs(ctx, id)
+	if err != nil {
+		return err
+	}
 	now := time.Now().Unix()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `UPDATE folders SET deleted_at = ?, updated_at = ? WHERE id = ? AND COALESCE(user_id, '') = COALESCE(?, '')`, now, now, id, UserFromContext(ctx)); err != nil {
-		return fmt.Errorf("đưa thư mục vào thùng rác: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE files SET deleted_at = ?, updated_at = ? WHERE folder_id = ? AND deleted_at IS NULL AND COALESCE(user_id, '') = COALESCE(?, '')`, now, now, id, UserFromContext(ctx)); err != nil {
-		return fmt.Errorf("đưa file con vào thùng rác: %w", err)
+	for _, fid := range folderIDs {
+		if _, err := tx.ExecContext(ctx, `UPDATE folders SET deleted_at = ?, updated_at = ? WHERE id = ? AND COALESCE(user_id, '') = COALESCE(?, '')`, now, now, fid, UserFromContext(ctx)); err != nil {
+			return fmt.Errorf("đưa thư mục con vào thùng rác: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE files SET deleted_at = ?, updated_at = ? WHERE folder_id = ? AND deleted_at IS NULL AND COALESCE(user_id, '') = COALESCE(?, '')`, now, now, fid, UserFromContext(ctx)); err != nil {
+			return fmt.Errorf("đưa file con vào thùng rác: %w", err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return err

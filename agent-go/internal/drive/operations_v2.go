@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -230,9 +229,6 @@ func (s *Service) PermanentDeleteFile(ctx context.Context, id string) error {
 	if id == "" {
 		return fmt.Errorf("thiếu id file")
 	}
-	if _, err := s.fileOwner(ctx, id); err != nil {
-		// allow delete of trashed files: query trash version
-	}
 	var owner sql.NullString
 	if err := s.db.QueryRowContext(ctx, `SELECT user_id FROM files WHERE id = ?`, id).Scan(&owner); err != nil {
 		if err == sql.ErrNoRows {
@@ -246,13 +242,33 @@ func (s *Service) PermanentDeleteFile(ctx context.Context, id string) error {
 	}
 	var localPath, thumbnailPath sql.NullString
 	_ = s.db.QueryRowContext(ctx, `SELECT COALESCE(local_path, ''), COALESCE(thumbnail_path, '') FROM files WHERE id = ?`, id).Scan(&localPath, &thumbnailPath)
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM files WHERE id = ?`, id); err != nil {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, table := range []string{"shares", "file_versions", "transfers", "sync_entries"} {
+		col := "file_id"
+		if table == "shares" {
+			col = "target_id"
+		}
+		if table == "sync_entries" {
+			col = "remote_file_id"
+		}
+		if _, err := tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM %s WHERE %s = ?`, table, col), id); err != nil {
+			return fmt.Errorf("dọn %s: %w", table, err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM files WHERE id = ?`, id); err != nil {
 		return fmt.Errorf("xóa file: %w", err)
 	}
-	if localPath.Valid && localPath.String != "" {
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	if localPath.Valid && localPath.String != "" && s.IsLocalPathServable(localPath.String) {
 		_ = os.Remove(localPath.String)
 	}
-	if thumbnailPath.Valid && thumbnailPath.String != "" {
+	if thumbnailPath.Valid && thumbnailPath.String != "" && s.IsLocalPathServable(thumbnailPath.String) {
 		_ = os.Remove(thumbnailPath.String)
 	}
 	s.events.Publish("file.deleted", map[string]any{"id": id})
@@ -274,28 +290,76 @@ func (s *Service) PermanentDeleteFolder(ctx context.Context, id string) error {
 	if requester != "" && owner.Valid && owner.String != "" && owner.String != requester {
 		return fmt.Errorf("không có quyền với thư mục này")
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM files WHERE folder_id = ?`, id)
+	folderIDs, err := s.collectFolderTreeIDs(ctx, id)
 	if err != nil {
 		return err
 	}
-	var fileIDs []string
-	for rows.Next() {
-		var fileID string
-		if err := rows.Scan(&fileID); err != nil {
-			rows.Close()
+	fileIDs := make([]string, 0)
+	for _, fid := range folderIDs {
+		ids, err := s.fileIDsInFolder(ctx, fid)
+		if err != nil {
 			return err
 		}
-		fileIDs = append(fileIDs, fileID)
+		fileIDs = append(fileIDs, ids...)
 	}
-	rows.Close()
-	for _, fileID := range fileIDs {
-		_ = s.PermanentDeleteFile(ctx, fileID)
+	for _, fid := range fileIDs {
+		if err := s.PermanentDeleteFile(ctx, fid); err != nil {
+			return err
+		}
 	}
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM folders WHERE id = ?`, id); err != nil {
-		return err
+	for i := len(folderIDs) - 1; i >= 0; i-- {
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM folders WHERE id = ?`, folderIDs[i]); err != nil {
+			return err
+		}
 	}
 	s.events.Publish("folder.deleted", map[string]any{"id": id})
 	return nil
+}
+
+func (s *Service) collectFolderTreeIDs(ctx context.Context, root string) ([]string, error) {
+	out := []string{root}
+	queue := []string{root}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		rows, err := s.db.QueryContext(ctx, `SELECT id FROM folders WHERE COALESCE(parent_id,'') = ?`, current)
+		if err != nil {
+			return nil, err
+		}
+		var children []string
+		for rows.Next() {
+			var cid string
+			if err := rows.Scan(&cid); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			children = append(children, cid)
+		}
+		rows.Close()
+		out = append(out, children...)
+		queue = append(queue, children...)
+		if len(out) > 50000 {
+			return nil, fmt.Errorf("cây thư mục quá lớn")
+		}
+	}
+	return out, nil
+}
+
+func (s *Service) fileIDsInFolder(ctx context.Context, folderID string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM files WHERE COALESCE(folder_id,'') = ?`, folderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 func (s *Service) ZipFolder(ctx context.Context, folderID string, w http.ResponseWriter) error {
@@ -318,7 +382,11 @@ func (s *Service) ZipBundle(ctx context.Context, fileIDs []string, folderIDs []s
 		if err != nil {
 			continue
 		}
-		header, err := zipWriter.Create(file.Name)
+		entry := sanitizeArchivePath("", file.Name)
+		if entry == "" {
+			continue
+		}
+		header, err := zipWriter.Create(entry)
 		if err != nil {
 			return err
 		}
@@ -337,7 +405,11 @@ func (s *Service) ZipBundle(ctx context.Context, fileIDs []string, folderIDs []s
 		if err := s.db.QueryRowContext(ctx, `SELECT name FROM folders WHERE id = ?`, id).Scan(&name); err != nil {
 			continue
 		}
-		if err := s.writeFolderToZip(ctx, id, name, zipWriter); err != nil {
+		safeName := sanitizeArchivePath("", name)
+		if safeName == "" {
+			continue
+		}
+		if err := s.writeFolderToZip(ctx, id, safeName, zipWriter); err != nil {
 			return err
 		}
 	}
@@ -358,7 +430,11 @@ func (s *Service) writeFolderToZip(ctx context.Context, folderID string, prefix 
 		if err != nil {
 			continue
 		}
-		header, err := zipWriter.Create(filepath.ToSlash(filepath.Join(prefix, file.Name)))
+		entry := sanitizeArchivePath(prefix, file.Name)
+		if entry == "" {
+			continue
+		}
+		header, err := zipWriter.Create(entry)
 		if err != nil {
 			return err
 		}
@@ -373,10 +449,36 @@ func (s *Service) writeFolderToZip(ctx context.Context, folderID string, prefix 
 		}
 	}
 	for _, folder := range folders {
-		nested := filepath.Join(prefix, folder.Name)
+		nested := sanitizeArchivePath(prefix, folder.Name)
+		if nested == "" {
+			continue
+		}
 		if err := s.writeFolderToZip(ctx, folder.ID, nested, zipWriter); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func sanitizeArchivePath(prefix, name string) string {
+	cleaned := strings.ReplaceAll(name, "\\", "/")
+	cleaned = strings.TrimPrefix(cleaned, "/")
+	for strings.Contains(cleaned, "//") {
+		cleaned = strings.ReplaceAll(cleaned, "//", "/")
+	}
+	if cleaned == "" || cleaned == "." || cleaned == ".." {
+		return ""
+	}
+	for _, segment := range strings.Split(cleaned, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return ""
+		}
+		if strings.ContainsRune(segment, 0) {
+			return ""
+		}
+	}
+	if prefix == "" {
+		return cleaned
+	}
+	return strings.TrimSuffix(prefix, "/") + "/" + cleaned
 }

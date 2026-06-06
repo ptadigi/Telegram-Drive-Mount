@@ -47,6 +47,8 @@ func (s *Service) HasAnyUser(ctx context.Context) (bool, error) {
 	return count > 0, nil
 }
 
+const bcryptCost = 12
+
 func (s *Service) RegisterFirstAdmin(ctx context.Context, email, password, displayName, userAgent string) (User, string, time.Time, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -67,7 +69,7 @@ func (s *Service) RegisterFirstAdmin(ctx context.Context, email, password, displ
 	if len(password) < 6 {
 		return User{}, "", time.Time{}, fmt.Errorf("mật khẩu tối thiểu 6 ký tự")
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
 		return User{}, "", time.Time{}, err
 	}
@@ -105,7 +107,7 @@ func (s *Service) Create(ctx context.Context, email, password, displayName, role
 	if role == "" {
 		role = "admin"
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
 		return User{}, err
 	}
