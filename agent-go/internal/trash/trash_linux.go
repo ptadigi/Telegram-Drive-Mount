@@ -14,7 +14,7 @@ import (
 
 func moveToTrash(path string) error {
 	if _, err := exec.LookPath("gio"); err == nil {
-		cmd := exec.Command("gio", "trash", path)
+		cmd := exec.Command("gio", "trash", "--", path)
 		if out, err := cmd.CombinedOutput(); err == nil {
 			return nil
 		} else {

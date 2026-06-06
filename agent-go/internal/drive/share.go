@@ -258,13 +258,30 @@ func (s *Service) ResolveShare(ctx context.Context, slug string, password string
 	}
 	resolved := ResolvedShare{Share: share}
 	if share.TargetKind == "file" {
-		file, err := s.getFile(ctx, share.TargetID)
+		ownerID, err := s.fileOwner(ctx, share.TargetID)
+		if err != nil {
+			return ResolvedShare{}, err
+		}
+		shareCtx := WithUser(ctx, ownerID)
+		file, err := s.getFile(shareCtx, share.TargetID)
 		if err != nil {
 			return ResolvedShare{}, err
 		}
 		resolved.File = &file
 	}
 	return resolved, nil
+}
+
+func (s *Service) fileOwner(ctx context.Context, fileID string) (string, error) {
+	var owner sql.NullString
+	err := s.db.QueryRowContext(ctx, `SELECT user_id FROM files WHERE id = ? AND deleted_at IS NULL`, fileID).Scan(&owner)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("không tìm thấy file")
+		}
+		return "", err
+	}
+	return owner.String, nil
 }
 
 func (s *Service) RecordShareAccess(ctx context.Context, id string) {
@@ -305,16 +322,36 @@ func (s *Service) DownloadableForShare(ctx context.Context, share Share) (Downlo
 	if share.TargetKind != "file" {
 		return DownloadableFile{}, fmt.Errorf("link chia sẻ này không phải file đơn lẻ")
 	}
-	return s.GetDownloadableFile(ctx, share.TargetID)
+	owner, err := s.fileOwner(ctx, share.TargetID)
+	if err != nil {
+		return DownloadableFile{}, err
+	}
+	return s.GetDownloadableFile(WithUser(ctx, owner), share.TargetID)
 }
 
 func (s *Service) StreamFolderShareZip(ctx context.Context, share Share, w http.ResponseWriter) error {
 	if share.TargetKind != "folder" {
 		return fmt.Errorf("link chia sẻ không phải thư mục")
 	}
+	owner, err := s.folderOwner(ctx, share.TargetID)
+	if err != nil {
+		return err
+	}
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''share.zip")
-	return s.ZipFolder(ctx, share.TargetID, w)
+	return s.ZipFolder(WithUser(ctx, owner), share.TargetID, w)
+}
+
+func (s *Service) folderOwner(ctx context.Context, folderID string) (string, error) {
+	var owner sql.NullString
+	err := s.db.QueryRowContext(ctx, `SELECT user_id FROM folders WHERE id = ? AND deleted_at IS NULL`, folderID).Scan(&owner)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("không tìm thấy thư mục")
+		}
+		return "", err
+	}
+	return owner.String, nil
 }
 
 func generateSlug() (string, error) {

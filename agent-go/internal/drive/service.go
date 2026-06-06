@@ -128,19 +128,27 @@ type pendingFile struct {
 }
 
 type Service struct {
-	db           *sql.DB
-	dataDir      string
-	uploader     TelegramUploader
-	events       *EventBus
-	tunnelURL    string
-	tunnelActive bool
-	tunnelMu     sync.RWMutex
-	cachePolicy  CachePolicy
-	cacheMu      sync.RWMutex
+	db            *sql.DB
+	dataDir       string
+	uploader      TelegramUploader
+	events        *EventBus
+	tunnelURL     string
+	tunnelActive  bool
+	tunnelMu      sync.RWMutex
+	cachePolicy   CachePolicy
+	cacheMu       sync.RWMutex
+	syncWatchMu   sync.Mutex
+	syncWatchers  map[string]syncWatcherEntry
+	channelOnce   sync.Mutex
+}
+
+type syncWatcherEntry struct {
+	cancel    context.CancelFunc
+	updatedAt int64
 }
 
 func NewService(db *sql.DB, dataDir string, uploader TelegramUploader) *Service {
-	return &Service{db: db, dataDir: dataDir, uploader: uploader, events: NewEventBus(), cachePolicy: CachePolicy{Mode: "smart", MaxBytes: 5 * 1024 * 1024 * 1024}}
+	return &Service{db: db, dataDir: dataDir, uploader: uploader, events: NewEventBus(), cachePolicy: CachePolicy{Mode: "smart", MaxBytes: 5 * 1024 * 1024 * 1024}, syncWatchers: map[string]syncWatcherEntry{}}
 }
 
 func (s *Service) Events() *EventBus {
@@ -195,6 +203,12 @@ func (s *Service) ensureStorageChannel(ctx context.Context) (StorageSettings, er
 	if err == nil && current.PeerKind == "channel" && current.ChannelID != 0 {
 		return current, nil
 	}
+	s.channelOnce.Lock()
+	defer s.channelOnce.Unlock()
+	current, err = s.GetStorageSettings(ctx)
+	if err == nil && current.PeerKind == "channel" && current.ChannelID != 0 {
+		return current, nil
+	}
 	creator, ok := s.uploader.(ChannelCreator)
 	if !ok {
 		return current, errors.New("Telegram uploader không hỗ trợ tạo channel")
@@ -212,7 +226,6 @@ func (s *Service) ensureStorageChannel(ctx context.Context) (StorageSettings, er
 	}); ok {
 		if verr := verifier.VerifyChannel(ctx, created.ChannelID, created.AccessHash); verr != nil {
 			s.WriteAudit(ctx, UserFromContext(ctx), "storage.channel_verify_failed", "channel", fmt.Sprintf("%d", created.ChannelID), map[string]any{"error": verr.Error()})
-			// Channel created but cannot resolve yet — fall back to self until next attempt.
 			fallback, _ := s.UpdateStorageSettings(ctx, UpdateStorageInput{PeerKind: "self"})
 			return fallback, fmt.Errorf("không xác minh được channel mới: %w", verr)
 		}
@@ -528,10 +541,10 @@ func (s *Service) findFileByHash(ctx context.Context, hash string) (File, error)
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, COALESCE(folder_id, ''), name, COALESCE(extension, ''), COALESCE(kind, 'other'), size, COALESCE(mime_type, ''), sync_state, COALESCE(local_path, ''), COALESCE(thumbnail_path, ''), COALESCE(preview_status, 'pending'), created_at, updated_at
 		FROM files
-		WHERE hash = ? AND deleted_at IS NULL
+		WHERE hash = ? AND deleted_at IS NULL AND size > 0 AND COALESCE(user_id, '') = COALESCE(?, '')
 		ORDER BY updated_at DESC
 		LIMIT 1
-	`, hash)
+	`, hash, UserFromContext(ctx))
 	var file File
 	if err := row.Scan(&file.ID, &file.FolderID, &file.Name, &file.Extension, &file.Kind, &file.Size, &file.MimeType, &file.SyncState, &file.LocalPath, &file.ThumbnailPath, &file.PreviewStatus, &file.CreatedAt, &file.UpdatedAt); err != nil {
 		return File{}, err

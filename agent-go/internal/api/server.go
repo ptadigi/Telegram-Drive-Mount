@@ -138,6 +138,7 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 			s.attachUser(r, next, w)
 			return
 		}
+		// Basic Auth (when configured) is checked first; it gates the entire API.
 		if cfg.Mode == "basic" && cfg.Password != "" {
 			user := cfg.Username
 			if user == "" {
@@ -149,6 +150,21 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
+		}
+		// Beyond Basic Auth, every /v1/* endpoint requires a valid app session.
+		if strings.HasPrefix(r.URL.Path, "/v1/") || strings.HasPrefix(r.URL.Path, "/webdav") {
+			if s.users == nil {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			user, err := s.users.ResolveSession(r.Context(), users.TokenFromRequest(r))
+			if err != nil {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			ctx := drive.WithUser(r.Context(), user.ID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
 		}
 		s.attachUser(r, next, w)
 	})
@@ -186,7 +202,12 @@ func isPublicPath(path string) bool {
 	if strings.HasPrefix(path, "/share/") {
 		return true
 	}
-	if path == "/v1/users/login" || path == "/v1/users/register" || path == "/v1/users/me" || path == "/v1/users/logout" {
+	switch path {
+	case "/v1/users/login", "/v1/users/register", "/v1/users/me", "/v1/users/logout":
+		return true
+	case "/v1/auth/status", "/v1/auth/start", "/v1/auth/code", "/v1/auth/password", "/v1/auth/reset", "/v1/auth/config":
+		return true
+	case "/v1/auth/qr/start", "/v1/auth/qr/status", "/v1/auth/qr/password", "/v1/auth/qr/cancel":
 		return true
 	}
 	return false

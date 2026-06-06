@@ -162,30 +162,91 @@ func (s *Service) ScanSyncRoot(ctx context.Context, id string) error {
 }
 
 func (s *Service) SyncRootWatcher(ctx context.Context) {
-	known := map[string]int64{}
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			s.cancelAllSyncWatchers()
 			return
 		case <-ticker.C:
 			roots, err := s.ListSyncRoots(ctx)
 			if err != nil {
 				continue
 			}
+			active := map[string]struct{}{}
 			for _, root := range roots {
 				if !root.Enabled {
+					s.cancelSyncWatcher(root.ID)
 					continue
 				}
-				if known[root.ID] == root.UpdatedAt {
+				active[root.ID] = struct{}{}
+				if !s.startSyncWatcher(ctx, root) {
 					continue
 				}
-				known[root.ID] = root.UpdatedAt
-				go s.watchSingleRoot(ctx, root)
+			}
+			for id := range s.copySyncWatcherIDs() {
+				if _, ok := active[id]; !ok {
+					s.cancelSyncWatcher(id)
+				}
 			}
 		}
 	}
+}
+
+func (s *Service) startSyncWatcher(parent context.Context, root SyncRoot) bool {
+	s.syncWatchMu.Lock()
+	if s.syncWatchers == nil {
+		s.syncWatchers = map[string]syncWatcherEntry{}
+	}
+	if entry, ok := s.syncWatchers[root.ID]; ok {
+		if entry.updatedAt == root.UpdatedAt {
+			s.syncWatchMu.Unlock()
+			return false
+		}
+		entry.cancel()
+		delete(s.syncWatchers, root.ID)
+	}
+	ctx, cancel := context.WithCancel(parent)
+	s.syncWatchers[root.ID] = syncWatcherEntry{cancel: cancel, updatedAt: root.UpdatedAt}
+	s.syncWatchMu.Unlock()
+	go func() {
+		s.watchSingleRoot(ctx, root)
+		s.syncWatchMu.Lock()
+		if entry, ok := s.syncWatchers[root.ID]; ok && entry.updatedAt == root.UpdatedAt {
+			delete(s.syncWatchers, root.ID)
+		}
+		s.syncWatchMu.Unlock()
+	}()
+	return true
+}
+
+func (s *Service) cancelSyncWatcher(rootID string) {
+	s.syncWatchMu.Lock()
+	if entry, ok := s.syncWatchers[rootID]; ok {
+		entry.cancel()
+		delete(s.syncWatchers, rootID)
+	}
+	s.syncWatchMu.Unlock()
+}
+
+func (s *Service) cancelAllSyncWatchers() {
+	s.syncWatchMu.Lock()
+	for id, entry := range s.syncWatchers {
+		entry.cancel()
+		delete(s.syncWatchers, id)
+	}
+	s.syncWatchMu.Unlock()
+}
+
+func (s *Service) copySyncWatcherIDs() map[string]struct{} {
+	s.syncWatchMu.Lock()
+	defer s.syncWatchMu.Unlock()
+	out := make(map[string]struct{}, len(s.syncWatchers))
+	for id := range s.syncWatchers {
+		out[id] = struct{}{}
+	}
+	return out
 }
 
 func (s *Service) watchSingleRoot(ctx context.Context, root SyncRoot) {
