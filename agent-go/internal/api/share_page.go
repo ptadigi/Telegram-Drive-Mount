@@ -1,12 +1,20 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
-	"html"
 )
 
 func renderSharePageHTML(slug string) string {
-	safeSlug := html.EscapeString(slug)
+	// JSON-encode the slug for safe embedding in a JS string literal.
+	// We deliberately do NOT html.EscapeString here because that would
+	// encode characters like & or ' as HTML entities and break the JS
+	// runtime usage of the slug (e.g. when fetching /share/<slug>).
+	encoded, err := json.Marshal(slug)
+	if err != nil {
+		encoded = []byte(`""`)
+	}
+	jsSlug := string(encoded)
 	return fmt.Sprintf(`<!doctype html>
 <html lang="vi">
 <head>
@@ -36,7 +44,7 @@ func renderSharePageHTML(slug string) string {
 </main>
 <footer>Powered by Ổ Đĩa Cloud Ảo · Telegram làm kho lưu trữ ẩn</footer>
 <script>
-const slug = %q;
+const slug = %s;
 const status = document.getElementById('status');
 let currentPassword = "";
 
@@ -116,5 +124,5 @@ async function attemptUnlock(password) {
 })();
 </script>
 </body>
-</html>`, safeSlug)
+</html>`, jsSlug)
 }

@@ -284,9 +284,24 @@ func (s *Service) fileOwner(ctx context.Context, fileID string) (string, error) 
 	return owner.String, nil
 }
 
-func (s *Service) RecordShareAccess(ctx context.Context, id string) {
+func (s *Service) RecordShareAccess(ctx context.Context, id string) error {
 	now := time.Now().Unix()
-	_, _ = s.db.ExecContext(ctx, `UPDATE shares SET access_count = access_count + 1, last_accessed_at = ?, updated_at = ? WHERE id = ?`, now, now, id)
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE shares
+		SET access_count = access_count + 1, last_accessed_at = ?, updated_at = ?
+		WHERE id = ? AND revoked = 0 AND (expires_at = 0 OR expires_at > ?) AND (max_downloads = 0 OR access_count < max_downloads)
+	`, now, now, id, now)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("link chia sẻ đã đạt giới hạn lượt tải hoặc đã hết hạn")
+	}
+	return nil
 }
 
 func (s *Service) getShareBySlug(ctx context.Context, slug string) (Share, error) {

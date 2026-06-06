@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/downloader"
@@ -22,23 +23,38 @@ var ErrUnauthorized = errors.New("Telegram chưa được kết nối hoặc ses
 
 type Service struct {
 	cfg config.Config
+
+	// clientMu serializes every Telegram client.Run lifecycle inside this
+	// process so two goroutines never race on the on-disk session file
+	// or fight over reconnects. Long-running ops still complete; new ops
+	// just queue behind them.
+	clientMu sync.Mutex
 }
 
 func NewService(cfg config.Config) *Service {
 	return &Service{cfg: cfg}
 }
 
-func (s *Service) UploadToSavedMessages(ctx context.Context, localPath string, originalName string) (drive.UploadedObject, error) {
+// runClient serializes Telegram calls and creates the gotd client with the
+// session storage path. The session file is shared, so concurrent runs would
+// corrupt it; the mutex makes the call site explicit and avoids surprises.
+func (s *Service) runClient(ctx context.Context, fn func(runCtx context.Context, client *telegram.Client) error) error {
 	if s.cfg.Telegram.APIID == 0 || s.cfg.Telegram.APIHash == "" {
-		return drive.UploadedObject{}, errors.New("chưa cấu hình API Telegram cho Go Agent")
+		return errors.New("chưa cấu hình API Telegram cho Go Agent")
 	}
-
+	s.clientMu.Lock()
+	defer s.clientMu.Unlock()
 	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
 		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
 	})
+	return client.Run(ctx, func(runCtx context.Context) error {
+		return fn(runCtx, client)
+	})
+}
 
+func (s *Service) UploadToSavedMessages(ctx context.Context, localPath string, originalName string) (drive.UploadedObject, error) {
 	var uploaded drive.UploadedObject
-	err := client.Run(ctx, func(runCtx context.Context) error {
+	err := s.runClient(ctx, func(runCtx context.Context, client *telegram.Client) error {
 		status, err := client.Auth().Status(runCtx)
 		if err != nil {
 			return fmt.Errorf("kiểm tra session Telegram: %w", err)
@@ -46,7 +62,6 @@ func (s *Service) UploadToSavedMessages(ctx context.Context, localPath string, o
 		if !status.Authorized {
 			return ErrUnauthorized
 		}
-
 		inputFile, err := message.NewSender(client.API()).Self().Upload(message.FromPath(localPath)).AsInputFile(runCtx)
 		if err != nil {
 			return fmt.Errorf("upload file lên Telegram Saved Messages: %w", err)
@@ -55,7 +70,6 @@ func (s *Service) UploadToSavedMessages(ctx context.Context, localPath string, o
 		if err != nil {
 			return fmt.Errorf("gửi file lên Telegram Saved Messages: %w", err)
 		}
-
 		uploaded.MessageID = msg.ID
 		uploaded.FileID = fmt.Sprintf("saved:%d", msg.ID)
 		return nil
@@ -63,7 +77,6 @@ func (s *Service) UploadToSavedMessages(ctx context.Context, localPath string, o
 	if err != nil {
 		return drive.UploadedObject{}, err
 	}
-
 	return uploaded, nil
 }
 
@@ -76,19 +89,13 @@ func telegramFilename(originalName string) string {
 }
 
 func (s *Service) DownloadFromSavedMessages(ctx context.Context, messageID int, targetPath string) error {
-	if s.cfg.Telegram.APIID == 0 || s.cfg.Telegram.APIHash == "" {
-		return errors.New("chưa cấu hình API Telegram cho Go Agent")
-	}
 	if messageID <= 0 {
 		return errors.New("thiếu Telegram message id")
 	}
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 		return fmt.Errorf("tạo thư mục cache: %w", err)
 	}
-	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
-		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
-	})
-	return client.Run(ctx, func(runCtx context.Context) error {
+	return s.runClient(ctx, func(runCtx context.Context, client *telegram.Client) error {
 		status, err := client.Auth().Status(runCtx)
 		if err != nil {
 			return fmt.Errorf("kiểm tra session Telegram: %w", err)
@@ -124,17 +131,11 @@ func (s *Service) DownloadFromSavedMessages(ctx context.Context, messageID int, 
 type StreamResult = drive.StreamResult
 
 func (s *Service) StreamFromSavedMessages(ctx context.Context, messageID int, offset int64, length int64, w io.Writer) (drive.StreamResult, error) {
-	if s.cfg.Telegram.APIID == 0 || s.cfg.Telegram.APIHash == "" {
-		return drive.StreamResult{}, errors.New("chưa cấu hình API Telegram cho Go Agent")
-	}
 	if messageID <= 0 {
 		return drive.StreamResult{}, errors.New("thiếu Telegram message id")
 	}
-	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
-		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
-	})
 	var result StreamResult
-	err := client.Run(ctx, func(runCtx context.Context) error {
+	err := s.runClient(ctx, func(runCtx context.Context, client *telegram.Client) error {
 		status, err := client.Auth().Status(runCtx)
 		if err != nil {
 			return fmt.Errorf("kiểm tra session Telegram: %w", err)
@@ -245,14 +246,8 @@ func (s *Service) UploadToPeer(ctx context.Context, peer drive.StoragePeer, loca
 	if peer.Kind != "channel" || peer.ChannelID == 0 {
 		return s.UploadToSavedMessages(ctx, localPath, originalName)
 	}
-	if s.cfg.Telegram.APIID == 0 || s.cfg.Telegram.APIHash == "" {
-		return drive.UploadedObject{}, errors.New("chưa cấu hình API Telegram cho Go Agent")
-	}
-	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
-		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
-	})
 	var uploaded drive.UploadedObject
-	err := client.Run(ctx, func(runCtx context.Context) error {
+	err := s.runClient(ctx, func(runCtx context.Context, client *telegram.Client) error {
 		status, err := client.Auth().Status(runCtx)
 		if err != nil {
 			return fmt.Errorf("kiểm tra session Telegram: %w", err)
@@ -288,10 +283,14 @@ func (s *Service) DownloadFromPeer(ctx context.Context, peer drive.StoragePeer, 
 	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
 		return fmt.Errorf("tạo thư mục cache: %w", err)
 	}
-	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
-		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
-	})
-	return client.Run(ctx, func(runCtx context.Context) error {
+	return s.runClient(ctx, func(runCtx context.Context, client *telegram.Client) error {
+		status, err := client.Auth().Status(runCtx)
+		if err != nil {
+			return fmt.Errorf("kiểm tra session Telegram: %w", err)
+		}
+		if !status.Authorized {
+			return ErrUnauthorized
+		}
 		api := client.API()
 		channel := &tg.InputChannel{ChannelID: peer.ChannelID, AccessHash: peer.AccessHash}
 		messages, err := api.ChannelsGetMessages(runCtx, &tg.ChannelsGetMessagesRequest{Channel: channel, ID: []tg.InputMessageClass{&tg.InputMessageID{ID: messageID}}})
@@ -314,11 +313,15 @@ func (s *Service) StreamFromPeer(ctx context.Context, peer drive.StoragePeer, me
 	if peer.Kind != "channel" || peer.ChannelID == 0 {
 		return s.StreamFromSavedMessages(ctx, messageID, offset, length, w)
 	}
-	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
-		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
-	})
 	var result drive.StreamResult
-	err := client.Run(ctx, func(runCtx context.Context) error {
+	err := s.runClient(ctx, func(runCtx context.Context, client *telegram.Client) error {
+		status, err := client.Auth().Status(runCtx)
+		if err != nil {
+			return fmt.Errorf("kiểm tra session Telegram: %w", err)
+		}
+		if !status.Authorized {
+			return ErrUnauthorized
+		}
 		api := client.API()
 		channel := &tg.InputChannel{ChannelID: peer.ChannelID, AccessHash: peer.AccessHash}
 		messages, err := api.ChannelsGetMessages(runCtx, &tg.ChannelsGetMessagesRequest{Channel: channel, ID: []tg.InputMessageClass{&tg.InputMessageID{ID: messageID}}})
@@ -364,17 +367,11 @@ func documentFromChannelMessages(resp tg.MessagesMessagesClass, messageID int) *
 type CreatedChannel = drive.CreatedChannel
 
 func (s *Service) CreateStorageChannel(ctx context.Context, title string) (drive.CreatedChannel, error) {
-	if s.cfg.Telegram.APIID == 0 || s.cfg.Telegram.APIHash == "" {
-		return drive.CreatedChannel{}, errors.New("chưa cấu hình API Telegram cho Go Agent")
-	}
 	if title == "" {
 		title = "Ổ Đĩa Cloud Ảo"
 	}
-	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
-		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
-	})
 	var created drive.CreatedChannel
-	err := client.Run(ctx, func(runCtx context.Context) error {
+	err := s.runClient(ctx, func(runCtx context.Context, client *telegram.Client) error {
 		status, err := client.Auth().Status(runCtx)
 		if err != nil {
 			return fmt.Errorf("kiểm tra session Telegram: %w", err)
@@ -408,16 +405,10 @@ func (s *Service) CreateStorageChannel(ctx context.Context, title string) (drive
 // VerifyChannel calls Telegram to ensure the given channel id+access_hash actually resolves.
 // This filters out cases where a freshly-created channel is not yet visible to MTProto.
 func (s *Service) VerifyChannel(ctx context.Context, channelID int64, accessHash int64) error {
-	if s.cfg.Telegram.APIID == 0 || s.cfg.Telegram.APIHash == "" {
-		return errors.New("chưa cấu hình API Telegram cho Go Agent")
-	}
 	if channelID == 0 {
 		return errors.New("channel_id rỗng")
 	}
-	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
-		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
-	})
-	return client.Run(ctx, func(runCtx context.Context) error {
+	return s.runClient(ctx, func(runCtx context.Context, client *telegram.Client) error {
 		api := client.API()
 		_, err := api.ChannelsGetFullChannel(runCtx, &tg.InputChannel{ChannelID: channelID, AccessHash: accessHash})
 		if err != nil {
