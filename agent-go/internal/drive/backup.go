@@ -3,7 +3,6 @@ package drive
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -20,18 +19,10 @@ func (s *Service) BackupMetadata(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("không tìm thấy metadata.db: %w", err)
 	}
 	target := filepath.Join(dir, fmt.Sprintf("metadata-%s.db", time.Now().UTC().Format("20060102-150405")))
-	src, err := os.Open(source)
-	if err != nil {
-		return "", err
-	}
-	defer src.Close()
-	dst, err := os.Create(target)
-	if err != nil {
-		return "", err
-	}
-	defer dst.Close()
-	if _, err := io.Copy(dst, src); err != nil {
-		return "", err
+	// SQLite-safe online backup: VACUUM INTO honors WAL and produces a
+	// consistent copy without holding a long lock.
+	if _, err := s.db.ExecContext(ctx, `VACUUM INTO ?`, target); err != nil {
+		return "", fmt.Errorf("vacuum into backup: %w", err)
 	}
 	if err := pruneBackups(dir, 14); err != nil {
 		return target, err
