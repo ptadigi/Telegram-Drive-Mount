@@ -27,6 +27,9 @@ type Service struct {
 	phone    string
 	codeHash string
 	codeType string
+
+	qrMu sync.Mutex
+	qr   *qrSession
 }
 
 type Status struct {

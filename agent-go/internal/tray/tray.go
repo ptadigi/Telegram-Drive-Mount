@@ -12,13 +12,15 @@ import (
 )
 
 type Hooks struct {
-	BaseURL   string
-	DataDir   string
-	ExecPath  string
-	OnPause   func()
-	OnResume  func()
-	OnAddRoot func(path string) error
-	OnQuit    func()
+	BaseURL    string
+	DataDir    string
+	ExecPath   string
+	OnPause    func()
+	OnResume   func()
+	OnAddRoot  func(path string) error
+	OnMount    func() (string, error)
+	OnUnmount  func() error
+	OnQuit     func()
 }
 
 func Run(ctx context.Context, hooks Hooks) {
@@ -33,6 +35,10 @@ func Run(ctx context.Context, hooks Hooks) {
 		pause := systray.AddMenuItem("Tạm dừng đồng bộ", "Tạm dừng worker đồng bộ Telegram")
 		resume := systray.AddMenuItem("Tiếp tục đồng bộ", "Bật lại worker đồng bộ Telegram")
 		resume.Hide()
+		systray.AddSeparator()
+		mountItem := systray.AddMenuItem("Mount ổ ảo", "Mount ổ Telegram Drive")
+		unmountItem := systray.AddMenuItem("Unmount ổ ảo", "Tháo ổ Telegram Drive")
+		unmountItem.Hide()
 		systray.AddSeparator()
 		autostart := systray.AddMenuItemCheckbox("Tự khởi động cùng máy", "Kích hoạt khi đăng nhập OS", false)
 		systray.AddSeparator()
@@ -66,6 +72,20 @@ func Run(ctx context.Context, hooks Hooks) {
 					}
 					resume.Hide()
 					pause.Show()
+				case <-mountItem.ClickedCh:
+					if hooks.OnMount != nil {
+						if _, err := hooks.OnMount(); err == nil {
+							mountItem.Hide()
+							unmountItem.Show()
+						}
+					}
+				case <-unmountItem.ClickedCh:
+					if hooks.OnUnmount != nil {
+						if err := hooks.OnUnmount(); err == nil {
+							unmountItem.Hide()
+							mountItem.Show()
+						}
+					}
 				case <-autostart.ClickedCh:
 					if autostart.Checked() {
 						_ = DisableAutostart()

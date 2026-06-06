@@ -44,6 +44,17 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const currentFolderId = folderStack.length > 0 ? folderStack[folderStack.length - 1].id : "";
 
+  useEffect(() => {
+    function onQuickAction(event: Event) {
+      const action = (event as CustomEvent<{ action?: string }>).detail?.action;
+      if (action === "file") fileInputRef.current?.click();
+      if (action === "folder") folderInputRef.current?.click();
+      if (action === "newfolder") createNewFolder();
+    }
+    window.addEventListener("drive:quick-action", onQuickAction);
+    return () => window.removeEventListener("drive:quick-action", onQuickAction);
+  }, [currentFolderId]);
+
   const refresh = useCallback(async (folderId = currentFolderId) => {
     setLoading(true);
     setError(null);

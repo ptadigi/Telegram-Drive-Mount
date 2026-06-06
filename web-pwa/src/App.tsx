@@ -1,7 +1,7 @@
 import { Cloud, Database, FolderOpen, HardDrive, Home, Link2, Search, Settings, Share2, Star, Trash2, UploadCloud } from "lucide-react";
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AgentConfig, AgentInfo, AppUser, AuthStatus, createFolder, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo, appLogout } from "./api/agent";
+import { AgentConfig, AgentInfo, AppUser, AuthStatus, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo, appLogout } from "./api/agent";
 import { ActivityView } from "./components/ActivityView";
 import { AuthGate } from "./components/AuthGate";
 import { DriveBrowser } from "./components/DriveBrowser";
@@ -44,6 +44,7 @@ function DriveApp({ currentUser, onLogout }: { currentUser: AppUser; onLogout: (
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [view, setView] = useState<ViewKey>("drive");
   const [newMenu, setNewMenu] = useState(false);
+  const [pendingQuickAction, setPendingQuickAction] = useState<"file" | "folder" | "newfolder" | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const newMenuRef = useRef<HTMLDivElement | null>(null);
   const queue = useUploadQueue();
@@ -80,13 +81,25 @@ function DriveApp({ currentUser, onLogout }: { currentUser: AppUser; onLogout: (
     { key: "trash", label: t("drive.trash"), icon: <Trash2 size={18} /> },
   ]) as { key: ViewKey; label: string; icon: ReactNode }[], [t]);
 
+  useEffect(() => {
+    if (!pendingQuickAction || view !== "drive") return;
+    const timer = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("drive:quick-action", { detail: { action: pendingQuickAction } }));
+      setPendingQuickAction(null);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [pendingQuickAction, view]);
+
   function trigger(action: "file" | "folder" | "newfolder" | "share") {
     setNewMenu(false);
-    if (action === "file") document.getElementById("hidden-file-input")?.click();
-    if (action === "folder") document.getElementById("hidden-folder-input")?.click();
-    if (action === "newfolder") {
-      const name = window.prompt(t("files.folderNamePrompt"));
-      if (name) createFolder(name).catch(() => undefined);
+    if (action === "file" || action === "folder" || action === "newfolder") {
+      if (view !== "drive") {
+        setPendingQuickAction(action);
+        setView("drive");
+        return;
+      }
+      window.dispatchEvent(new CustomEvent("drive:quick-action", { detail: { action } }));
+      return;
     }
     if (action === "share") window.alert(t("drive.shareSoon"));
   }

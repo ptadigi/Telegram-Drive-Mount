@@ -62,16 +62,16 @@ Mục tiêu: cache miss trên VPS không còn phải tải full file rồi mới
   - Xử lý sự kiện `rename`, `delete` (soft delete metadata).
   - Bỏ qua file trùng mtime đã import.
 
-### M1.5 — Storage channel chuyên dụng
+### M1.5 — Storage channel chuyên dụng ✅
 
 Mục tiêu: chuyển từ Telegram Saved Messages sang storage channel/chat riêng.
 
-- Tự tạo private channel khi user đăng nhập lần đầu nếu cần.
-- Lưu đủ `telegram_channel_id`, `access_hash`, `file_reference` vào `file_versions`.
-- Đổi download/stream sang `ChannelsGetMessages` cho file thuộc channel.
-- UI Settings cho user chọn/đổi storage channel.
+- ✅ Tự tạo private channel khi sync lần đầu nếu chưa cấu hình (`Ổ Đĩa Cloud Ảo`).
+- ✅ Lưu đủ `telegram_channel_id`, `access_hash`, `file_reference` vào `file_versions`.
+- ✅ Đổi download/stream sang `ChannelsGetMessages` cho file thuộc channel.
+- ✅ UI Settings cho user chọn/đổi storage channel.
 
-### M2 — Tray app + autostart + native folder picker
+### M2 — Tray app + autostart + native folder picker ✅
 
 Mục tiêu: người dùng cài 1 lần, app luôn sẵn sàng, không phải `go run`.
 
@@ -85,20 +85,16 @@ Mục tiêu: người dùng cài 1 lần, app luôn sẵn sàng, không phải `
   - Linux: `~/.config/autostart`.
 - Notification khi sync xong/lỗi.
 
-### M3 — Mount ổ ảo
+### M3 — Mount ổ ảo ✅
 
 Mục tiêu: người dùng thấy ổ đĩa thật trên máy, mở file = mở từ ổ ảo.
 
-- Windows: WinFsp.
-- macOS: macFUSE / FUSE-T.
-- Linux: FUSE.
-- Đọc:
-  - Folder list từ metadata.
-  - Mở file → nếu cache có thì đọc local, không có thì stream Telegram.
-- Ghi:
-  - Tạo file mới trong ổ ảo → đẩy queue upload.
-  - Sửa file → version mới.
-- Quyền: read-only trước, sau đó mới read-write.
+- ✅ Windows: WinFsp qua cgofuse (`go build -tags fuse`).
+- ✅ macOS: macFUSE / FUSE-T qua cgofuse.
+- ✅ Linux: FUSE qua cgofuse.
+- ✅ Đọc folder list từ metadata + stream Telegram khi cache miss.
+- ✅ Recycle Bin OS khi evict cache local.
+- Ghi qua mount: stub đọc trước, ghi qua mount sẽ hoàn thiện ở M3.5.
 
 ## Mốc tiếp theo (sau M1-M3)
 

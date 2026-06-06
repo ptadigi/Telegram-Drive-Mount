@@ -15,6 +15,7 @@ import (
 	"telegram-drive-agent/internal/drive"
 	"telegram-drive-agent/internal/tunnel"
 	"telegram-drive-agent/internal/users"
+	"telegram-drive-agent/internal/vfs"
 )
 
 type Server struct {
@@ -25,12 +26,13 @@ type Server struct {
 	drive     *drive.Service
 	tunnel    *tunnel.Service
 	users     *users.Service
+	mounts    *vfs.Manager
 	shareRate *rateLimiter
 	authMu    sync.RWMutex
 	authCfg   config.AuthConfig
 }
 
-func NewServer(version string, cfg config.Config, authService *agentauth.Service, driveService *drive.Service, tunnelService *tunnel.Service, userService *users.Service) *Server {
+func NewServer(version string, cfg config.Config, authService *agentauth.Service, driveService *drive.Service, tunnelService *tunnel.Service, userService *users.Service, mountManager *vfs.Manager) *Server {
 	return &Server{
 		startedAt: time.Now(),
 		version:   version,
@@ -39,6 +41,7 @@ func NewServer(version string, cfg config.Config, authService *agentauth.Service
 		drive:     driveService,
 		tunnel:    tunnelService,
 		users:     userService,
+		mounts:    mountManager,
 		shareRate: newRateLimiter(20, time.Minute),
 		authCfg:   cfg.Auth,
 	}
@@ -116,6 +119,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/auth/start", s.handleAuthStart)
 	mux.HandleFunc("POST /v1/auth/code", s.handleAuthCode)
 	mux.HandleFunc("POST /v1/auth/password", s.handleAuthPassword)
+	mux.HandleFunc("POST /v1/auth/qr/start", s.handleAuthQRStart)
+	mux.HandleFunc("GET /v1/auth/qr/status", s.handleAuthQRStatus)
+	mux.HandleFunc("POST /v1/auth/qr/password", s.handleAuthQRPassword)
+	mux.HandleFunc("POST /v1/auth/qr/cancel", s.handleAuthQRCancel)
+	mux.HandleFunc("GET /v1/mount", s.handleMountStatus)
+	mux.HandleFunc("POST /v1/mount", s.handleMountStart)
+	mux.HandleFunc("DELETE /v1/mount", s.handleMountStop)
 	return withJSON(s.withAuth(withCORS(mux)))
 }
 
@@ -1128,6 +1138,76 @@ func (s *Server) handleAuthPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleAuthQRStart(w http.ResponseWriter, r *http.Request) {
+	status, err := s.auth.StartQR(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (s *Server) handleAuthQRStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.auth.GetQRStatus())
+}
+
+func (s *Server) handleAuthQRPassword(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Password string `json:"password"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if err := s.auth.SubmitQRPassword(input.Password); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.auth.GetQRStatus())
+}
+
+func (s *Server) handleAuthQRCancel(w http.ResponseWriter, r *http.Request) {
+	s.auth.CancelQR()
+	writeJSON(w, http.StatusOK, s.auth.GetQRStatus())
+}
+
+func (s *Server) handleMountStatus(w http.ResponseWriter, r *http.Request) {
+	if s.mounts == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "backend": "none"})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.mounts.Status())
+}
+
+func (s *Server) handleMountStart(w http.ResponseWriter, r *http.Request) {
+	if s.mounts == nil {
+		writeError(w, http.StatusBadRequest, errBadRequest("mount engine không có sẵn trong bản build này"))
+		return
+	}
+	var input struct {
+		MountPoint string `json:"mount_point"`
+	}
+	_ = decodeJSON(w, r, &input)
+	status, err := s.mounts.Mount(r.Context(), input.MountPoint)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (s *Server) handleMountStop(w http.ResponseWriter, r *http.Request) {
+	if s.mounts == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"available": false, "backend": "none"})
+		return
+	}
+	status, err := s.mounts.Unmount()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
 }
 
 func withJSON(next http.Handler) http.Handler {

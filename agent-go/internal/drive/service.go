@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -34,12 +35,19 @@ type File struct {
 	MimeType      string `json:"mime_type,omitempty"`
 	SyncState     string `json:"sync_state"`
 	LocalPath     string `json:"-"`
+	CacheOrigin   string `json:"cache_origin,omitempty"`
 	ThumbnailPath string `json:"thumbnail_path,omitempty"`
 	PreviewStatus string `json:"preview_status"`
 	Starred       bool   `json:"starred,omitempty"`
 	CreatedAt     int64  `json:"created_at"`
 	UpdatedAt     int64  `json:"updated_at"`
 }
+
+const (
+	CacheOriginUpload   = "upload_cache"
+	CacheOriginSync     = "sync_source"
+	CacheOriginRestored = "restored_cache"
+)
 
 type Folder struct {
 	ID        string `json:"id"`
@@ -182,6 +190,110 @@ func (s *Service) ListFiles(ctx context.Context) ([]File, error) {
 	return contents.Files, nil
 }
 
+func (s *Service) ensureStorageChannel(ctx context.Context) (StorageSettings, error) {
+	current, err := s.GetStorageSettings(ctx)
+	if err == nil && current.PeerKind == "channel" && current.ChannelID != 0 {
+		return current, nil
+	}
+	creator, ok := s.uploader.(ChannelCreator)
+	if !ok {
+		return current, errors.New("Telegram uploader không hỗ trợ tạo channel")
+	}
+	created, err := creator.CreateStorageChannel(ctx, "Ổ Đĩa Cloud Ảo")
+	if err != nil {
+		return current, err
+	}
+	settings, err := s.UpdateStorageSettings(ctx, UpdateStorageInput{PeerKind: "channel", ChannelID: created.ChannelID, AccessHash: created.AccessHash, Title: created.Title})
+	if err != nil {
+		return current, err
+	}
+	s.WriteAudit(ctx, UserFromContext(ctx), "storage.channel_auto_created", "channel", fmt.Sprintf("%d", created.ChannelID), map[string]any{"title": created.Title})
+	return settings, nil
+}
+
+func (s *Service) ResolveFolderByPath(ctx context.Context, p string) (string, error) {
+	clean := strings.Trim(strings.ReplaceAll(p, `\`, "/"), "/")
+	if clean == "" {
+		return "", nil
+	}
+	parts := strings.Split(clean, "/")
+	current := ""
+	for _, part := range parts {
+		contents, err := s.ListFolderContents(ctx, current)
+		if err != nil {
+			return "", err
+		}
+		match := ""
+		for _, folder := range contents.Folders {
+			if folder.Name == part {
+				match = folder.ID
+				break
+			}
+		}
+		if match == "" {
+			return "", fmt.Errorf("không tìm thấy thư mục %q", part)
+		}
+		current = match
+	}
+	return current, nil
+}
+
+func (s *Service) ResolveFileByPath(ctx context.Context, p string) (File, error) {
+	clean := strings.Trim(strings.ReplaceAll(p, `\`, "/"), "/")
+	if clean == "" {
+		return File{}, fmt.Errorf("đường dẫn trống")
+	}
+	idx := strings.LastIndex(clean, "/")
+	parent := ""
+	leaf := clean
+	if idx >= 0 {
+		parent = clean[:idx]
+		leaf = clean[idx+1:]
+	}
+	folderID, err := s.ResolveFolderByPath(ctx, parent)
+	if err != nil {
+		return File{}, err
+	}
+	contents, err := s.ListFolderContents(ctx, folderID)
+	if err != nil {
+		return File{}, err
+	}
+	for _, file := range contents.Files {
+		if file.Name == leaf {
+			return file, nil
+		}
+	}
+	return File{}, fmt.Errorf("không tìm thấy file %q", leaf)
+}
+
+func (s *Service) ResolveFolderEntryByPath(ctx context.Context, p string) (Folder, error) {
+	clean := strings.Trim(strings.ReplaceAll(p, `\`, "/"), "/")
+	if clean == "" {
+		return Folder{}, fmt.Errorf("đường dẫn trống")
+	}
+	idx := strings.LastIndex(clean, "/")
+	parent := ""
+	leaf := clean
+	if idx >= 0 {
+		parent = clean[:idx]
+		leaf = clean[idx+1:]
+	}
+	folderID, err := s.ResolveFolderByPath(ctx, parent)
+	if err != nil {
+		return Folder{}, err
+	}
+	contents, err := s.ListFolderContents(ctx, folderID)
+	if err != nil {
+		return Folder{}, err
+	}
+	for _, folder := range contents.Folders {
+		if folder.Name == leaf {
+			return folder, nil
+		}
+	}
+	return Folder{}, fmt.Errorf("không tìm thấy thư mục %q", leaf)
+}
+
 func (s *Service) ListFolderContents(ctx context.Context, folderID string) (FolderContents, error) {
 	folders, err := s.listFolders(ctx, folderID)
 	if err != nil {
@@ -230,12 +342,80 @@ func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHe
 }
 
 func (s *Service) SaveLocalFile(ctx context.Context, sourcePath string, folderID string, relativePath string) (File, error) {
+	return s.importSyncSourceFile(ctx, sourcePath, folderID, relativePath)
+}
+
+func (s *Service) importSyncSourceFile(ctx context.Context, sourcePath string, folderID string, relativePath string) (File, error) {
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		return File{}, fmt.Errorf("đọc file sync: %w", err)
+	}
+	if info.IsDir() {
+		return File{}, fmt.Errorf("đường dẫn là thư mục: %s", sourcePath)
+	}
+	if folderID != "" {
+		if err := s.ensureFolderExists(ctx, folderID); err != nil {
+			return File{}, err
+		}
+	}
+	folderID, err = s.ensureRelativeFolderPath(ctx, folderID, relativePath)
+	if err != nil {
+		return File{}, err
+	}
 	source, err := os.Open(sourcePath)
 	if err != nil {
-		return File{}, fmt.Errorf("mở file local: %w", err)
+		return File{}, fmt.Errorf("mở file sync: %w", err)
 	}
 	defer source.Close()
-	return s.saveFileFromReader(ctx, source, filepath.Base(sourcePath), "", folderID, relativePath, false)
+	hasher := sha256.New()
+	buffer := make([]byte, 512)
+	read, readErr := source.Read(buffer)
+	if readErr != nil && readErr != io.EOF {
+		return File{}, fmt.Errorf("đọc file sync: %w", readErr)
+	}
+	mimeType := detectMimeType(filepath.Base(sourcePath), "", buffer[:read])
+	if _, err := hasher.Write(buffer[:read]); err != nil {
+		return File{}, fmt.Errorf("hash file sync: %w", err)
+	}
+	if _, err := io.Copy(hasher, source); err != nil {
+		return File{}, fmt.Errorf("hash file sync: %w", err)
+	}
+	hashHex := hex.EncodeToString(hasher.Sum(nil))
+	size := info.Size()
+	if existing, err := s.findFileByHash(ctx, hashHex); err == nil && existing.ID != "" {
+		return existing, nil
+	}
+	id := newID()
+	safeName := filepath.Base(sourcePath)
+	now := time.Now().Unix()
+	ext := strings.ToLower(filepath.Ext(safeName))
+	kind := classifyKind(mimeType, ext)
+	syncState := "pending_telegram_upload"
+	thumbnailPath, previewStatus := s.preparePreview(id, sourcePath, kind)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return File{}, fmt.Errorf("mở transaction sync: %w", err)
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO files (id, folder_id, name, extension, kind, size, mime_type, hash, current_version_id, sync_state, local_path, thumbnail_path, preview_status, cache_origin, user_id, created_at, updated_at)
+		VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?)
+	`, id, folderID, safeName, ext, kind, size, mimeType, hashHex, syncState, sourcePath, thumbnailPath, previewStatus, CacheOriginSync, UserFromContext(ctx), now, now)
+	if err != nil {
+		return File{}, fmt.Errorf("ghi metadata sync: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO transfers (id, file_id, kind, phase, percent, bytes_done, bytes_total, created_at, updated_at)
+		VALUES (?, ?, 'telegram_sync', 'queued', 0, 0, ?, ?, ?)
+	`, newID(), id, size, now, now); err != nil {
+		return File{}, fmt.Errorf("ghi queue sync: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return File{}, fmt.Errorf("lưu metadata sync: %w", err)
+	}
+	file := File{ID: id, FolderID: folderID, Name: safeName, Extension: ext, Kind: kind, Size: size, MimeType: mimeType, SyncState: syncState, LocalPath: sourcePath, CacheOrigin: CacheOriginSync, ThumbnailPath: thumbnailPath, PreviewStatus: previewStatus, CreatedAt: now, UpdatedAt: now}
+	s.events.Publish("file.created", file)
+	return file, nil
 }
 
 func (s *Service) saveFileFromReader(ctx context.Context, source io.Reader, filename string, headerMime string, folderID string, relativePath string, copyToCache bool) (File, error) {
@@ -299,9 +479,9 @@ func (s *Service) saveFileFromReader(ctx context.Context, source io.Reader, file
 	}
 	defer tx.Rollback()
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO files (id, folder_id, name, extension, kind, size, mime_type, hash, current_version_id, sync_state, local_path, thumbnail_path, preview_status, user_id, created_at, updated_at)
-		VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, NULLIF(?, ''), ?, ?)
-	`, id, folderID, safeName, ext, kind, size, mimeType, hashHex, syncState, targetPath, thumbnailPath, previewStatus, UserFromContext(ctx), now, now)
+		INSERT INTO files (id, folder_id, name, extension, kind, size, mime_type, hash, current_version_id, sync_state, local_path, thumbnail_path, preview_status, cache_origin, user_id, created_at, updated_at)
+		VALUES (?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?)
+	`, id, folderID, safeName, ext, kind, size, mimeType, hashHex, syncState, targetPath, thumbnailPath, previewStatus, CacheOriginUpload, UserFromContext(ctx), now, now)
 	if err != nil {
 		return File{}, fmt.Errorf("ghi metadata file: %w", err)
 	}
@@ -315,7 +495,7 @@ func (s *Service) saveFileFromReader(ctx context.Context, source io.Reader, file
 		return File{}, fmt.Errorf("lưu metadata upload: %w", err)
 	}
 
-	file := File{ID: id, FolderID: folderID, Name: safeName, Extension: ext, Kind: kind, Size: size, MimeType: mimeType, SyncState: syncState, LocalPath: targetPath, ThumbnailPath: thumbnailPath, PreviewStatus: previewStatus, CreatedAt: now, UpdatedAt: now}
+	file := File{ID: id, FolderID: folderID, Name: safeName, Extension: ext, Kind: kind, Size: size, MimeType: mimeType, SyncState: syncState, LocalPath: targetPath, CacheOrigin: CacheOriginUpload, ThumbnailPath: thumbnailPath, PreviewStatus: previewStatus, CreatedAt: now, UpdatedAt: now}
 	s.events.Publish("file.created", file)
 	return file, nil
 }
@@ -354,8 +534,9 @@ func (s *Service) GetDownloadableFile(ctx context.Context, id string) (Downloada
 	if err := s.restoreFromTelegram(ctx, file, localPath); err != nil {
 		return DownloadableFile{}, fmt.Errorf("không có cache cục bộ và không tải được từ Telegram: %w", err)
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE files SET local_path = ?, last_accessed_at = ?, updated_at = ? WHERE id = ?`, localPath, time.Now().Unix(), time.Now().Unix(), file.ID); err == nil {
+	if _, err := s.db.ExecContext(ctx, `UPDATE files SET local_path = ?, cache_origin = ?, last_accessed_at = ?, updated_at = ? WHERE id = ?`, localPath, CacheOriginRestored, time.Now().Unix(), time.Now().Unix(), file.ID); err == nil {
 		file.LocalPath = localPath
+		file.CacheOrigin = CacheOriginRestored
 	}
 	return DownloadableFile{File: file, LocalPath: localPath}, nil
 }
@@ -548,6 +729,11 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 	}
 
 	settings, _ := s.GetStorageSettings(ctx)
+	if settings.PeerKind != "channel" || settings.ChannelID == 0 {
+		if ensured, ensureErr := s.ensureStorageChannel(ctx); ensureErr == nil {
+			settings = ensured
+		}
+	}
 	peer := StoragePeer{Kind: settings.PeerKind, ChannelID: settings.ChannelID, AccessHash: settings.AccessHash}
 	if peer.Kind == "" {
 		peer.Kind = "self"
@@ -558,6 +744,9 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 
 	result := SyncResult{}
 	for _, item := range pending {
+		if !s.uploadGateAllow(ctx, item.ID) {
+			continue
+		}
 		if err := s.markSyncState(ctx, item.ID, "telegram_uploading"); err != nil {
 			result.Failed++
 			continue
@@ -573,6 +762,7 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 		if uploadErr != nil {
 			_ = s.markSyncState(ctx, item.ID, "telegram_upload_failed")
 			_ = s.updateTransfer(ctx, item.ID, "failed", 100, 0, item.Size, uploadErr.Error())
+			s.scheduleRetry(item.ID, uploadErr)
 			result.Failed++
 			continue
 		}
@@ -580,10 +770,13 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 		if err := s.recordTelegramVersion(ctx, item.File, uploaded); err != nil {
 			_ = s.markSyncState(ctx, item.ID, "telegram_upload_failed")
 			_ = s.updateTransfer(ctx, item.ID, "failed", 100, item.Size, item.Size, err.Error())
+			s.scheduleRetry(item.ID, err)
 			result.Failed++
 			continue
 		}
+		s.clearRetry(item.ID)
 		_ = s.updateTransfer(ctx, item.ID, "completed", 100, item.Size, item.Size, "")
+		s.maybeEvictAfterSync(ctx, item.ID)
 		result.Uploaded++
 	}
 	result.Message = fmt.Sprintf("Đã đồng bộ %d file lên Telegram, lỗi %d file", result.Uploaded, result.Failed)

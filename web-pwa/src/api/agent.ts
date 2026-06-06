@@ -56,6 +56,22 @@ export function saveTelegramConfig(apiId: number, apiHash: string) { return putJ
 export function startTelegramLogin(phone: string) { return sendJSON<{ next_step: string; phone: string; code_type: string; timeout_sec: number }>("/v1/auth/start", { phone }); }
 export function submitTelegramCode(code: string) { return sendJSON<{ success: boolean; next_step?: string }>("/v1/auth/code", { code }); }
 export function submitTelegramPassword(password: string) { return sendJSON<{ success: boolean; next_step?: string }>("/v1/auth/password", { password }); }
+export type TelegramQRStatus = { state: "idle" | "pending" | "awaiting_password" | "authorized" | "expired" | "error"; token_url?: string; expires_at?: number; error?: string; };
+export function startTelegramQR() { return sendJSON<TelegramQRStatus>("/v1/auth/qr/start", {}); }
+export function getTelegramQRStatus(signal?: AbortSignal) { return getJSON<TelegramQRStatus>("/v1/auth/qr/status", signal); }
+export function submitTelegramQRPassword(password: string) { return sendJSON<TelegramQRStatus>("/v1/auth/qr/password", { password }); }
+export function cancelTelegramQR() { return sendJSON<TelegramQRStatus>("/v1/auth/qr/cancel", {}); }
+export type MountStatus = { available: boolean; mounted: boolean; mount_point?: string; drive_letter?: string; backend: string; error?: string; started_at?: number; };
+export function getMountStatus(signal?: AbortSignal) { return getJSON<MountStatus>("/v1/mount", signal); }
+export function startMount(mountPoint?: string) { return sendJSON<MountStatus>("/v1/mount", { mount_point: mountPoint || "" }); }
+export async function stopMount() {
+  const response = await fetch(`${AGENT_BASE_URL}/v1/mount`, { method: "DELETE" });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: `Lỗi ${response.status}` }));
+    throw new Error(data.error || `Lỗi ${response.status}`);
+  }
+  return response.json() as Promise<MountStatus>;
+}
 
 export function listFiles(signal?: AbortSignal) { return getJSON<{ files: DriveFile[] }>("/v1/files", signal); }
 export function listDriveContents(folderId = "", signal?: AbortSignal) { return getJSON<DriveContents>(`/v1/drive/contents?folder_id=${encodeURIComponent(folderId)}`, signal); }

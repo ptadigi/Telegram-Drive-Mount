@@ -22,6 +22,7 @@ import (
 	"telegram-drive-agent/internal/tray"
 	"telegram-drive-agent/internal/tunnel"
 	"telegram-drive-agent/internal/users"
+	"telegram-drive-agent/internal/vfs"
 )
 
 const version = "0.1.0-dev"
@@ -73,7 +74,8 @@ func main() {
 	driveService.SetCachePolicy(cfg.Cache.Mode, cfg.Cache.MaxBytes)
 	tunnelSvc := tunnel.New(driveTunnelListener{drive: driveService})
 	userService := users.New(metadataDB)
-	apiServer := api.NewServer(version, cfg, authService, driveService, tunnelSvc, userService)
+	mountManager := vfs.NewManager(driveService, cfg.DataDir)
+	apiServer := api.NewServer(version, cfg, authService, driveService, tunnelSvc, userService, mountManager)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -131,6 +133,14 @@ func main() {
 				}
 				return err
 			},
+			OnMount: func() (string, error) {
+				status, err := mountManager.Mount(ctx, "")
+				return status.MountPoint, err
+			},
+			OnUnmount: func() error {
+				_, err := mountManager.Unmount()
+				return err
+			},
 			OnQuit: func() {
 				stop()
 			},
@@ -144,6 +154,7 @@ func main() {
 
 	fmt.Println()
 	log.Println("shutting down telegram-drive-agent...")
+	mountManager.Shutdown()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("graceful shutdown failed: %v", err)
 	}

@@ -102,9 +102,14 @@ Trong PWA mở `Cài đặt`:
 
 ## Mốc tiếp theo
 
-- Tray app desktop + auto start.
-- Mount ổ đĩa ảo (WinFsp/macFUSE).
-- Storage channel/chat Telegram chuyên dụng thay Saved Messages.
-- Stream video range từ Telegram.
+- ✅ Tray app desktop + auto start (đã có).
+- ✅ Storage channel/chat Telegram chuyên dụng (auto-tạo).
+- ✅ QR login Telegram.
+- ✅ Mount ổ ảo native (WinFsp/FUSE) qua build `-tags fuse`.
+- ✅ Recycle Bin OS khi evict cache.
+- Sync hai chiều và conflict resolver.
+- Stream video range tối ưu.
+- Office viewer cho docx/xlsx/pptx khi có domain public.
+- Installer Windows MSIX/Inno Setup.
 
 Đóng góp và issue luôn được hoan nghênh.

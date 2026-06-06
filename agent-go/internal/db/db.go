@@ -225,6 +225,7 @@ func migrate(db *sql.DB) error {
 		"starred":          "INTEGER NOT NULL DEFAULT 0",
 		"last_accessed_at": "INTEGER NOT NULL DEFAULT 0",
 		"user_id":          "TEXT",
+		"cache_origin":     "TEXT NOT NULL DEFAULT 'upload_cache'",
 	}); err != nil {
 		return err
 	}
