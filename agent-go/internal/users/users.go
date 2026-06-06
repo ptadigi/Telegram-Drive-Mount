@@ -47,6 +47,53 @@ func (s *Service) HasAnyUser(ctx context.Context) (bool, error) {
 	return count > 0, nil
 }
 
+func (s *Service) RegisterFirstAdmin(ctx context.Context, email, password, displayName, userAgent string) (User, string, time.Time, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return User{}, "", time.Time{}, err
+	}
+	defer tx.Rollback()
+	var count int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+		return User{}, "", time.Time{}, err
+	}
+	if count > 0 {
+		return User{}, "", time.Time{}, fmt.Errorf("đã có tài khoản đăng ký, vui lòng đăng nhập")
+	}
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return User{}, "", time.Time{}, fmt.Errorf("email trống")
+	}
+	if len(password) < 6 {
+		return User{}, "", time.Time{}, fmt.Errorf("mật khẩu tối thiểu 6 ký tự")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return User{}, "", time.Time{}, err
+	}
+	now := time.Now().Unix()
+	id := newID()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO users (id, email, password_hash, display_name, role, created_at, updated_at) VALUES (?, ?, ?, NULLIF(?, ''), ?, ?, ?)`, id, email, string(hash), displayName, "admin", now, now); err != nil {
+		if strings.Contains(err.Error(), "UNIQUE") {
+			return User{}, "", time.Time{}, ErrEmailExists
+		}
+		return User{}, "", time.Time{}, err
+	}
+	token, err := newToken()
+	if err != nil {
+		return User{}, "", time.Time{}, err
+	}
+	created := time.Now()
+	expires := created.Add(sessionTTL)
+	if _, err := tx.ExecContext(ctx, `INSERT INTO user_sessions (token, user_id, created_at, expires_at, user_agent) VALUES (?, ?, ?, ?, NULLIF(?, ''))`, token, id, created.Unix(), expires.Unix(), userAgent); err != nil {
+		return User{}, "", time.Time{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return User{}, "", time.Time{}, err
+	}
+	return User{ID: id, Email: email, DisplayName: displayName, Role: "admin", CreatedAt: now}, token, expires, nil
+}
+
 func (s *Service) Create(ctx context.Context, email, password, displayName, role string) (User, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
@@ -128,7 +175,7 @@ func (s *Service) DeleteSession(ctx context.Context, token string) error {
 	return err
 }
 
-func WriteSessionCookie(w http.ResponseWriter, token string, expires time.Time) {
+func WriteSessionCookie(w http.ResponseWriter, r *http.Request, token string, expires time.Time) {
 	cookie := &http.Cookie{
 		Name:     sessionCookie,
 		Value:    token,
@@ -136,12 +183,34 @@ func WriteSessionCookie(w http.ResponseWriter, token string, expires time.Time) 
 		Expires:  expires,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   isSecureRequest(r),
 	}
 	http.SetCookie(w, cookie)
 }
 
-func ClearSessionCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true})
+func ClearSessionCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookie,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   isSecureRequest(r),
+	})
+}
+
+func isSecureRequest(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if r.TLS != nil {
+		return true
+	}
+	if proto := r.Header.Get("X-Forwarded-Proto"); strings.EqualFold(proto, "https") {
+		return true
+	}
+	return false
 }
 
 func TokenFromRequest(r *http.Request) string {

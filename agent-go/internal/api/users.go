@@ -11,15 +11,6 @@ func (s *Server) handleUserRegister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, errBadRequest("user service chưa sẵn sàng"))
 		return
 	}
-	has, err := s.users.HasAnyUser(r.Context())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if has {
-		writeError(w, http.StatusForbidden, errBadRequest("đã có tài khoản đăng ký, vui lòng đăng nhập"))
-		return
-	}
 	var input struct {
 		Email       string `json:"email"`
 		Password    string `json:"password"`
@@ -28,7 +19,7 @@ func (s *Server) handleUserRegister(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	user, err := s.users.Create(r.Context(), input.Email, input.Password, input.DisplayName, "admin")
+	user, token, expires, err := s.users.RegisterFirstAdmin(r.Context(), input.Email, input.Password, input.DisplayName, r.Header.Get("User-Agent"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -36,12 +27,7 @@ func (s *Server) handleUserRegister(w http.ResponseWriter, r *http.Request) {
 	if err := s.drive.AdoptOrphanedData(r.Context(), user.ID); err != nil {
 		s.drive.WriteAudit(r.Context(), user.ID, "user.adopt_failed", "user", user.ID, map[string]any{"error": err.Error()})
 	}
-	token, expires, err := s.users.CreateSession(r.Context(), user.ID, r.Header.Get("User-Agent"))
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	users.WriteSessionCookie(w, token, expires)
+	users.WriteSessionCookie(w, r, token, expires)
 	writeJSON(w, http.StatusOK, map[string]any{"user": user})
 }
 
@@ -67,7 +53,7 @@ func (s *Server) handleUserLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	users.WriteSessionCookie(w, token, expires)
+	users.WriteSessionCookie(w, r, token, expires)
 	writeJSON(w, http.StatusOK, map[string]any{"user": user})
 }
 
@@ -75,7 +61,7 @@ func (s *Server) handleUserLogout(w http.ResponseWriter, r *http.Request) {
 	if s.users != nil {
 		_ = s.users.DeleteSession(r.Context(), users.TokenFromRequest(r))
 	}
-	users.ClearSessionCookie(w)
+	users.ClearSessionCookie(w, r)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 

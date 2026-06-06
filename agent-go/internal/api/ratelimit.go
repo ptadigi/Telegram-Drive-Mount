@@ -1,7 +1,9 @@
 package api
 
 import (
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -38,12 +40,37 @@ func (l *rateLimiter) allow(key string) bool {
 	return true
 }
 
+// clientIP returns the request's source IP. X-Forwarded-For is only honored
+// when the immediate peer is loopback (development setup behind localhost
+// reverse proxy); otherwise it is ignored to prevent rate-limit bypass via
+// arbitrary header injection.
 func clientIP(r *http.Request) string {
-	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
-		return ip
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
 	}
-	if ip := r.RemoteAddr; ip != "" {
-		return ip
+	if isTrustedProxyIP(host) {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			ip := strings.TrimSpace(parts[0])
+			if ip != "" {
+				return ip
+			}
+		}
+	}
+	if host != "" {
+		return host
 	}
 	return "unknown"
+}
+
+func isTrustedProxyIP(host string) bool {
+	if host == "" {
+		return false
+	}
+	parsed := net.ParseIP(host)
+	if parsed == nil {
+		return false
+	}
+	return parsed.IsLoopback()
 }
