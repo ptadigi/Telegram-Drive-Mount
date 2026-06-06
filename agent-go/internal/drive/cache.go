@@ -218,8 +218,21 @@ func (s *Service) CacheWorker(ctx context.Context, interval time.Duration) {
 			return
 		case <-ticker.C:
 			_, _ = s.CleanupCache(ctx)
+			_ = s.cleanupOldTransfers(ctx)
 		}
 	}
+}
+
+func (s *Service) cleanupOldTransfers(ctx context.Context) error {
+	// Remove transfers whose file no longer exists (orphaned).
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM transfers WHERE file_id NOT IN (SELECT id FROM files)`); err != nil {
+		return err
+	}
+	// Trim completed transfers older than 24h to keep UI snappy.
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM transfers WHERE phase = 'completed' AND updated_at < strftime('%s','now') - 86400`); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Service) RecordFileAccess(ctx context.Context, fileID string) {

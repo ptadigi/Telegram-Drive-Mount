@@ -66,11 +66,16 @@ func (m *fuseMounter) Mount(ctx context.Context, mountPoint string) error {
 		m.host.Unmount()
 		m.mounted.Store(false)
 	}()
+	// Optimistic flag: mark as mounted before the blocking call so that callers
+	// observing status quickly after Mount() see mounted=true. cgofuse's Mount
+	// blocks for the lifetime of the filesystem, so we cannot rely on the
+	// return value to flip the flag.
+	m.mounted.Store(true)
 	if !m.host.Mount(mountPoint, options) {
 		m.mounted.Store(false)
 		return errors.New("không mount được ổ ảo, kiểm tra WinFsp/FUSE")
 	}
-	m.mounted.Store(true)
+	m.mounted.Store(false)
 	return nil
 }
 

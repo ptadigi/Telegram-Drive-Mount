@@ -207,6 +207,16 @@ func (s *Service) ensureStorageChannel(ctx context.Context) (StorageSettings, er
 	if err != nil {
 		return current, err
 	}
+	if verifier, ok := s.uploader.(interface {
+		VerifyChannel(ctx context.Context, channelID int64, accessHash int64) error
+	}); ok {
+		if verr := verifier.VerifyChannel(ctx, created.ChannelID, created.AccessHash); verr != nil {
+			s.WriteAudit(ctx, UserFromContext(ctx), "storage.channel_verify_failed", "channel", fmt.Sprintf("%d", created.ChannelID), map[string]any{"error": verr.Error()})
+			// Channel created but cannot resolve yet — fall back to self until next attempt.
+			fallback, _ := s.UpdateStorageSettings(ctx, UpdateStorageInput{PeerKind: "self"})
+			return fallback, fmt.Errorf("không xác minh được channel mới: %w", verr)
+		}
+	}
 	s.WriteAudit(ctx, UserFromContext(ctx), "storage.channel_auto_created", "channel", fmt.Sprintf("%d", created.ChannelID), map[string]any{"title": created.Title})
 	return settings, nil
 }
@@ -391,6 +401,9 @@ func (s *Service) importSyncSourceFile(ctx context.Context, sourcePath string, f
 	ext := strings.ToLower(filepath.Ext(safeName))
 	kind := classifyKind(mimeType, ext)
 	syncState := "pending_telegram_upload"
+	if size == 0 {
+		syncState = "metadata_only"
+	}
 	thumbnailPath, previewStatus := s.preparePreview(id, sourcePath, kind)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -404,11 +417,13 @@ func (s *Service) importSyncSourceFile(ctx context.Context, sourcePath string, f
 	if err != nil {
 		return File{}, fmt.Errorf("ghi metadata sync: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO transfers (id, file_id, kind, phase, percent, bytes_done, bytes_total, created_at, updated_at)
-		VALUES (?, ?, 'telegram_sync', 'queued', 0, 0, ?, ?, ?)
-	`, newID(), id, size, now, now); err != nil {
-		return File{}, fmt.Errorf("ghi queue sync: %w", err)
+	if size > 0 {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO transfers (id, file_id, kind, phase, percent, bytes_done, bytes_total, created_at, updated_at)
+			VALUES (?, ?, 'telegram_sync', 'queued', 0, 0, ?, ?, ?)
+		`, newID(), id, size, now, now); err != nil {
+			return File{}, fmt.Errorf("ghi queue sync: %w", err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return File{}, fmt.Errorf("lưu metadata sync: %w", err)
@@ -472,6 +487,10 @@ func (s *Service) saveFileFromReader(ctx context.Context, source io.Reader, file
 	ext := strings.ToLower(filepath.Ext(safeName))
 	kind := classifyKind(mimeType, ext)
 	syncState := "pending_telegram_upload"
+	if size == 0 {
+		// Telegram refuses empty payload; keep metadata only.
+		syncState = "metadata_only"
+	}
 	thumbnailPath, previewStatus := s.preparePreview(id, targetPath, kind)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -485,11 +504,13 @@ func (s *Service) saveFileFromReader(ctx context.Context, source io.Reader, file
 	if err != nil {
 		return File{}, fmt.Errorf("ghi metadata file: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO transfers (id, file_id, kind, phase, percent, bytes_done, bytes_total, created_at, updated_at)
-		VALUES (?, ?, 'telegram_sync', 'queued', 0, 0, ?, ?, ?)
-	`, newID(), id, size, now, now); err != nil {
-		return File{}, fmt.Errorf("ghi queue đồng bộ: %w", err)
+	if size > 0 {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO transfers (id, file_id, kind, phase, percent, bytes_done, bytes_total, created_at, updated_at)
+			VALUES (?, ?, 'telegram_sync', 'queued', 0, 0, ?, ?, ?)
+		`, newID(), id, size, now, now); err != nil {
+			return File{}, fmt.Errorf("ghi queue đồng bộ: %w", err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return File{}, fmt.Errorf("lưu metadata upload: %w", err)
@@ -941,7 +962,7 @@ func (s *Service) pendingTelegramUploads(ctx context.Context) ([]pendingFile, er
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, COALESCE(folder_id, ''), name, COALESCE(extension, ''), COALESCE(kind, 'other'), size, COALESCE(mime_type, ''), sync_state, COALESCE(local_path, ''), COALESCE(thumbnail_path, ''), COALESCE(preview_status, 'pending'), created_at, updated_at
 		FROM files
-		WHERE deleted_at IS NULL AND sync_state IN ('pending_telegram_upload', 'telegram_upload_failed')
+		WHERE deleted_at IS NULL AND size > 0 AND sync_state IN ('pending_telegram_upload', 'telegram_upload_failed')
 		ORDER BY updated_at ASC
 	`)
 	if err != nil {

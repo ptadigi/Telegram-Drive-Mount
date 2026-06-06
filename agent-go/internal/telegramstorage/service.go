@@ -405,6 +405,28 @@ func (s *Service) CreateStorageChannel(ctx context.Context, title string) (drive
 	return created, nil
 }
 
+// VerifyChannel calls Telegram to ensure the given channel id+access_hash actually resolves.
+// This filters out cases where a freshly-created channel is not yet visible to MTProto.
+func (s *Service) VerifyChannel(ctx context.Context, channelID int64, accessHash int64) error {
+	if s.cfg.Telegram.APIID == 0 || s.cfg.Telegram.APIHash == "" {
+		return errors.New("chưa cấu hình API Telegram cho Go Agent")
+	}
+	if channelID == 0 {
+		return errors.New("channel_id rỗng")
+	}
+	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
+		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
+	})
+	return client.Run(ctx, func(runCtx context.Context) error {
+		api := client.API()
+		_, err := api.ChannelsGetFullChannel(runCtx, &tg.InputChannel{ChannelID: channelID, AccessHash: accessHash})
+		if err != nil {
+			return fmt.Errorf("xác minh channel: %w", err)
+		}
+		return nil
+	})
+}
+
 func findChannelFromUpdates(value tg.UpdatesClass) *tg.Channel {
 	updates, ok := value.(*tg.Updates)
 	if !ok {

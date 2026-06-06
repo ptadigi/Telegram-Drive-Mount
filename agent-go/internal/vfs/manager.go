@@ -56,8 +56,14 @@ func (m *Manager) Status() Status {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.mounter != nil {
-		m.status.Mounted = m.mounter.IsMounted()
-		m.status.MountPoint = m.mounter.MountPoint()
+		mounted := m.mounter.IsMounted()
+		m.status.Mounted = mounted
+		if mounted {
+			if mp := m.mounter.MountPoint(); mp != "" {
+				m.status.MountPoint = mp
+			}
+			m.status.Error = ""
+		}
 	}
 	return m.status
 }
@@ -106,8 +112,13 @@ func (m *Manager) Mount(ctx context.Context, mountPoint string) (Status, error) 
 			m.mu.Lock()
 			if err != nil {
 				m.status.Error = err.Error()
+				m.status.Mounted = false
+			} else {
+				m.status.Mounted = m.mounter.IsMounted()
+				if m.status.Mounted {
+					m.status.MountPoint = m.mounter.MountPoint()
+				}
 			}
-			m.status.Mounted = false
 			snap := m.status
 			m.mu.Unlock()
 			return snap, err
