@@ -35,3 +35,5 @@ agent-go/agent-dev.log.err
 # auth-debug cookies from local smoke tests
 cookies.txt
 agent-go/cookies.txt
+agent-go/agent.exe
+agent-go/td-agent.exe
