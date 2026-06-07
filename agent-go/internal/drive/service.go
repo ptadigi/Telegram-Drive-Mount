@@ -141,6 +141,7 @@ type Service struct {
 	syncWatchers  map[string]syncWatcherEntry
 	channelOnce   sync.Mutex
 	streamCoalesce *chunkCoalesce
+	chunks        *chunkCache
 }
 
 type syncWatcherEntry struct {
@@ -149,7 +150,7 @@ type syncWatcherEntry struct {
 }
 
 func NewService(db *sql.DB, dataDir string, uploader TelegramUploader) *Service {
-	return &Service{db: db, dataDir: dataDir, uploader: uploader, events: NewEventBus(), cachePolicy: CachePolicy{Mode: "smart", MaxBytes: 5 * 1024 * 1024 * 1024}, syncWatchers: map[string]syncWatcherEntry{}, streamCoalesce: newChunkCoalesce()}
+	return &Service{db: db, dataDir: dataDir, uploader: uploader, events: NewEventBus(), cachePolicy: CachePolicy{Mode: "smart", MaxBytes: 5 * 1024 * 1024 * 1024}, syncWatchers: map[string]syncWatcherEntry{}, streamCoalesce: newChunkCoalesce(), chunks: newChunkCache(dataDir, 5*1024*1024*1024)}
 }
 
 func (s *Service) Events() *EventBus {
@@ -737,22 +738,49 @@ func (s *Service) StreamFromTelegram(ctx context.Context, fileID string, offset,
 		return StreamResult{}, fmt.Errorf("file chưa được đồng bộ Telegram")
 	}
 	key := fmt.Sprintf("%s:%d:%d", fileID, offset, length)
-	return s.streamCoalesce.Do(ctx, key, w, func(out io.Writer) (StreamResult, error) {
-		if peerUploader, ok := s.uploader.(interface {
-			StreamFromPeer(ctx context.Context, peer StoragePeer, messageID int, offset int64, length int64, w io.Writer) (StreamResult, error)
-		}); ok {
+	// Serve from on-disk chunk cache when the exact range was fetched before.
+	if length > 0 {
+		ck := chunkKey(fileID, offset, length)
+		if cached := s.chunks.Get(ck); cached != nil {
+			if _, err := w.Write(cached); err != nil {
+				return StreamResult{}, err
+			}
 			s.RecordFileAccess(ctx, fileID)
-			return peerUploader.StreamFromPeer(ctx, peer, messageID, offset, length, out)
+			return StreamResult{Size: int64(len(cached))}, nil
 		}
-		uploader, ok := s.uploader.(interface {
-			StreamFromSavedMessages(ctx context.Context, messageID int, offset int64, length int64, w io.Writer) (StreamResult, error)
+		buf := &chunkBuf{}
+		res, err := s.streamCoalesce.Do(ctx, key, buf, func(out io.Writer) (StreamResult, error) {
+			return s.streamFromTelegramRaw(ctx, fileID, peer, messageID, offset, length, out)
 		})
-		if !ok {
-			return StreamResult{}, fmt.Errorf("uploader không hỗ trợ stream")
+		if err != nil {
+			return StreamResult{}, err
 		}
-		s.RecordFileAccess(ctx, fileID)
-		return uploader.StreamFromSavedMessages(ctx, messageID, offset, length, out)
+		s.chunks.Put(ck, buf.bytes)
+		if _, err := w.Write(buf.bytes); err != nil {
+			return StreamResult{}, err
+		}
+		return res, nil
+	}
+	return s.streamCoalesce.Do(ctx, key, w, func(out io.Writer) (StreamResult, error) {
+		return s.streamFromTelegramRaw(ctx, fileID, peer, messageID, offset, length, out)
 	})
+}
+
+func (s *Service) streamFromTelegramRaw(ctx context.Context, fileID string, peer StoragePeer, messageID int, offset, length int64, out io.Writer) (StreamResult, error) {
+	if peerUploader, ok := s.uploader.(interface {
+		StreamFromPeer(ctx context.Context, peer StoragePeer, messageID int, offset int64, length int64, w io.Writer) (StreamResult, error)
+	}); ok {
+		s.RecordFileAccess(ctx, fileID)
+		return peerUploader.StreamFromPeer(ctx, peer, messageID, offset, length, out)
+	}
+	uploader, ok := s.uploader.(interface {
+		StreamFromSavedMessages(ctx context.Context, messageID int, offset int64, length int64, w io.Writer) (StreamResult, error)
+	})
+	if !ok {
+		return StreamResult{}, fmt.Errorf("uploader không hỗ trợ stream")
+	}
+	s.RecordFileAccess(ctx, fileID)
+	return uploader.StreamFromSavedMessages(ctx, messageID, offset, length, out)
 }
 
 func (s *Service) SaveStreamFile(ctx context.Context, data io.Reader, filename string, mimeHint string, folderID string, relativePath string) (File, error) {
