@@ -31,3 +31,7 @@ web-pwa/vite-dev.log
 # Build output
 td-agent.exe
 agent-go/agent-dev.log.err
+
+# auth-debug cookies from local smoke tests
+cookies.txt
+agent-go/cookies.txt

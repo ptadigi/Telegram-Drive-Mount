@@ -2,14 +2,58 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0b66ef" />
+
+    <title>Telegram Drive · Personal cloud drive backed by Telegram</title>
+    <meta name="description" content="Telegram Drive là cloud drive cá nhân mã nguồn mở: dùng Telegram làm tầng lưu trữ, có Go Agent local, mount ổ ảo qua WinFsp/FUSE, đồng bộ thư mục và chia sẻ link an toàn. Free forever, self-hosted." />
+    <meta name="keywords" content="telegram drive, telegram cloud storage, telegram backup, ổ đĩa cloud telegram, cloud drive cá nhân, self hosted cloud, fuse winfsp telegram, virtual drive, telegram storage, telegram unlimited storage" />
+    <meta name="author" content="Phạm Thành" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://github.com/ptadigi/Telegram-Drive-Mount" />
+
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-    <title>Ổ Đĩa Cloud Ảo</title>
+    <link rel="apple-touch-icon" href="/icon.svg" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Telegram Drive — Personal cloud drive backed by Telegram" />
+    <meta property="og:description" content="Free, open-source personal cloud drive that uses your Telegram account as the storage layer. Native mount on Windows/macOS/Linux, desktop sync, share links, QR login." />
+    <meta property="og:image" content="/icon.svg" />
+    <meta property="og:locale" content="vi_VN" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:url" content="https://github.com/ptadigi/Telegram-Drive-Mount" />
+    <meta property="og:site_name" content="Telegram Drive" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Telegram Drive — Personal cloud drive backed by Telegram" />
+    <meta name="twitter:description" content="Free, open-source. Use Telegram as your private cloud storage. Native mount, sync, share, QR login." />
+    <meta name="twitter:image" content="/icon.svg" />
+
+    <link rel="alternate" hreflang="vi" href="https://github.com/ptadigi/Telegram-Drive-Mount" />
+    <link rel="alternate" hreflang="en" href="https://github.com/ptadigi/Telegram-Drive-Mount" />
+    <link rel="alternate" hreflang="x-default" href="https://github.com/ptadigi/Telegram-Drive-Mount" />
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Telegram Drive",
+      "description": "Personal cloud drive backed by Telegram. Self-hosted, free, open-source.",
+      "applicationCategory": "Productivity",
+      "operatingSystem": "Windows, macOS, Linux",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "license": "https://opensource.org/license/mit",
+      "url": "https://github.com/ptadigi/Telegram-Drive-Mount"
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <p>Telegram Drive cần JavaScript. Vui lòng bật JavaScript trong trình duyệt.</p>
+      <p>Telegram Drive needs JavaScript. Please enable JavaScript in your browser.</p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

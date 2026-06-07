@@ -1,15 +1,38 @@
 {
-  "name": "Ổ Đĩa Cloud Ảo",
-  "short_name": "Ổ Cloud",
-  "description": "Cloud drive cá nhân dùng Telegram làm tầng lưu trữ ẩn phía sau.",
+  "name": "Telegram Drive — Ổ Đĩa Cloud Ảo",
+  "short_name": "Telegram Drive",
+  "description": "Cloud drive cá nhân mã nguồn mở dùng Telegram làm tầng lưu trữ. Mount ổ ảo, đồng bộ thư mục, chia sẻ link an toàn. Self-hosted personal cloud drive backed by Telegram.",
   "start_url": "/",
+  "id": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "any",
   "background_color": "#f6faff",
   "theme_color": "#0b66ef",
   "lang": "vi",
-  "categories": ["productivity", "utilities"],
+  "dir": "ltr",
+  "categories": ["productivity", "utilities", "storage"],
+  "shortcuts": [
+    {
+      "name": "Mở Drive",
+      "short_name": "Drive",
+      "description": "Mở danh sách file cá nhân",
+      "url": "/?view=drive"
+    },
+    {
+      "name": "Tải lên",
+      "short_name": "Upload",
+      "description": "Tải file lên Telegram qua Go Agent",
+      "url": "/?view=drive&action=upload"
+    },
+    {
+      "name": "Cài đặt",
+      "short_name": "Settings",
+      "description": "Quản lý storage, mount, chia sẻ",
+      "url": "/?view=settings"
+    }
+  ],
   "icons": [
     {
       "src": "/icon.svg",

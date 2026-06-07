@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /share/
+Disallow: /webdav/
+Disallow: /v1/
+
+Sitemap: https://github.com/ptadigi/Telegram-Drive-Mount/sitemap.xml
