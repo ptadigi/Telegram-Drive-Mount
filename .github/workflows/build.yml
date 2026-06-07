@@ -8,7 +8,7 @@ on:
 
 jobs:
   agent:
-    name: Build Go Agent
+    name: Build Go Agent (default)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -38,51 +38,9 @@ jobs:
           go build -trimpath -ldflags "-s -w" -o ../dist/td-agent-${{ matrix.target }}${{ matrix.ext }} ./cmd/agent
       - name: go test
         working-directory: agent-go
-        run: go test ./...
-      - uses: actions/upload-artifact@v4
-        with:
-          name: td-agent-${{ matrix.target }}
-          path: dist/td-agent-${{ matrix.target }}${{ matrix.ext }}
-
-  agent-fuse:
-    name: Build Go Agent (mount)
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: linux-amd64-fuse
-            ext: ""
-            install: |
-              sudo apt-get update
-              sudo apt-get install -y libfuse-dev pkg-config
-          - os: windows-latest
-            target: windows-amd64-fuse
-            ext: ".exe"
-            install: |
-              choco install -y winfsp
-          - os: macos-latest
-            target: darwin-arm64-fuse
-            ext: ""
-            install: |
-              brew tap macos-fuse-t/cask
-              brew install --cask fuse-t || true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.23"
-          cache: true
-          cache-dependency-path: agent-go/go.sum
-      - name: install fuse deps
-        run: ${{ matrix.install }}
-      - name: go build (fuse)
-        working-directory: agent-go
         env:
-          CGO_ENABLED: "1"
-        run: |
-          go build -tags fuse -trimpath -ldflags "-s -w" -o ../dist/td-agent-${{ matrix.target }}${{ matrix.ext }} ./cmd/agent
+          CGO_ENABLED: "0"
+        run: go test ./...
       - uses: actions/upload-artifact@v4
         with:
           name: td-agent-${{ matrix.target }}
@@ -111,7 +69,7 @@ jobs:
 
   release:
     name: Release
-    needs: [agent, agent-fuse, pwa]
+    needs: [agent, pwa]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -127,7 +85,4 @@ jobs:
             artifacts/td-agent-linux-amd64/*
             artifacts/td-agent-windows-amd64/*
             artifacts/td-agent-darwin-arm64/*
-            artifacts/td-agent-linux-amd64-fuse/*
-            artifacts/td-agent-windows-amd64-fuse/*
-            artifacts/td-agent-darwin-arm64-fuse/*
             artifacts/web-pwa-dist/**
