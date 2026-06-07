@@ -6,13 +6,11 @@ import (
 	"context"
 	"errors"
 	"runtime"
-
-	"telegram-drive-agent/internal/drive"
 )
 
 type stubMounter struct{}
 
-func newPlatformMounter(_ *drive.Service, _ string) Mounter { return nil }
+func newPlatformMounter(_ Backend, _ string) Mounter { return nil }
 
 func (stubMounter) Backend() string                                { return "none" }
 func (stubMounter) Mount(_ context.Context, _ string) error        { return errors.New("mount engine không build kèm (cần build với -tags fuse)") }

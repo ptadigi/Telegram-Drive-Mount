@@ -134,5 +134,20 @@
     "label": "Language",
     "vi": "Tiếng Việt",
     "en": "English"
+  },
+  "devices": {
+    "title": "Paired devices",
+    "description": "Every machine running td-agent --pair shows up here. Pairing codes are valid for 5 minutes.",
+    "generateCode": "Generate pairing code",
+    "refresh": "Refresh",
+    "codeHint": "Code valid for {{seconds}}s. Type it into td-agent --pair on the new machine.",
+    "codeExpired": "Code expired, please generate a new one.",
+    "empty": "No paired device yet.",
+    "lastSeen": "Last seen: {{time}}",
+    "never": "never",
+    "unknownPlatform": "Unknown OS",
+    "revoke": "Revoke",
+    "revoked": "Revoked",
+    "revokeConfirm": "Revoke this device? Its client token will be disabled immediately."
   }
 }

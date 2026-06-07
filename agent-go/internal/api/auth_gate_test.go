@@ -12,7 +12,7 @@ import (
 // TestAuthGateBlocksByDefault ensures every /v1/* endpoint requires a session
 // when no Basic Auth is configured (open mode).
 func TestAuthGateBlocksByDefault(t *testing.T) {
-	srv := NewServer("test", config.Config{Auth: config.AuthConfig{Mode: "open"}}, nil, nil, nil, nil, nil)
+	srv := NewServer("test", config.Config{Auth: config.AuthConfig{Mode: "open"}}, nil, nil, nil, nil, nil, nil)
 	handler := srv.Handler()
 	guarded := []string{
 		"/v1/mount",
@@ -39,7 +39,7 @@ func TestAuthGateBlocksByDefault(t *testing.T) {
 // TestPublicPathsBypassAuth ensures /health and /.td-check are accessible
 // without a session even when no auth/user service is configured.
 func TestPublicPathsBypassAuth(t *testing.T) {
-	srv := NewServer("test", config.Config{Auth: config.AuthConfig{Mode: "open"}}, nil, nil, nil, nil, nil)
+	srv := NewServer("test", config.Config{Auth: config.AuthConfig{Mode: "open"}}, nil, nil, nil, nil, nil, nil)
 	handler := srv.Handler()
 	allowed := []string{
 		"/health",
@@ -58,7 +58,7 @@ func TestPublicPathsBypassAuth(t *testing.T) {
 // TestBasicAuthChallenged verifies that when Basic Auth is configured,
 // missing credentials yield 401 with WWW-Authenticate.
 func TestBasicAuthChallenged(t *testing.T) {
-	srv := NewServer("test", config.Config{Auth: config.AuthConfig{Mode: "basic", Username: "admin", Password: "secret"}}, nil, nil, nil, nil, nil)
+	srv := NewServer("test", config.Config{Auth: config.AuthConfig{Mode: "basic", Username: "admin", Password: "secret"}}, nil, nil, nil, nil, nil, nil)
 	handler := srv.Handler()
 	req := httptest.NewRequest(http.MethodGet, "/v1/mount", nil)
 	w := httptest.NewRecorder()
@@ -70,3 +70,4 @@ func TestBasicAuthChallenged(t *testing.T) {
 		t.Fatalf("expected WWW-Authenticate Basic header, got %q", challenge)
 	}
 }
+

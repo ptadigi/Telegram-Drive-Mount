@@ -12,6 +12,7 @@ import (
 
 	agentauth "telegram-drive-agent/internal/auth"
 	"telegram-drive-agent/internal/config"
+	"telegram-drive-agent/internal/devices"
 	"telegram-drive-agent/internal/drive"
 	"telegram-drive-agent/internal/tunnel"
 	"telegram-drive-agent/internal/users"
@@ -26,13 +27,14 @@ type Server struct {
 	drive     *drive.Service
 	tunnel    *tunnel.Service
 	users     *users.Service
+	devices   *devices.Service
 	mounts    *vfs.Manager
 	shareRate *rateLimiter
 	authMu    sync.RWMutex
 	authCfg   config.AuthConfig
 }
 
-func NewServer(version string, cfg config.Config, authService *agentauth.Service, driveService *drive.Service, tunnelService *tunnel.Service, userService *users.Service, mountManager *vfs.Manager) *Server {
+func NewServer(version string, cfg config.Config, authService *agentauth.Service, driveService *drive.Service, tunnelService *tunnel.Service, userService *users.Service, mountManager *vfs.Manager, deviceService *devices.Service) *Server {
 	return &Server{
 		startedAt: time.Now(),
 		version:   version,
@@ -41,6 +43,7 @@ func NewServer(version string, cfg config.Config, authService *agentauth.Service
 		drive:     driveService,
 		tunnel:    tunnelService,
 		users:     userService,
+		devices:   deviceService,
 		mounts:    mountManager,
 		shareRate: newRateLimiter(20, time.Minute),
 		authCfg:   cfg.Auth,
@@ -126,6 +129,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/mount", s.handleMountStatus)
 	mux.HandleFunc("POST /v1/mount", s.handleMountStart)
 	mux.HandleFunc("DELETE /v1/mount", s.handleMountStop)
+	mux.HandleFunc("POST /v1/devices/pair/start", s.handleDevicePairStart)
+	mux.HandleFunc("POST /v1/devices/pair/exchange", s.handleDevicePairExchange)
+	mux.HandleFunc("GET /v1/devices", s.handleDeviceList)
+	mux.HandleFunc("DELETE /v1/devices", s.handleDeviceRevoke)
 	return withJSON(s.withAuth(withCORS(mux)))
 }
 
@@ -153,6 +160,14 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 		}
 		// Beyond Basic Auth, every /v1/* endpoint requires a valid app session.
 		if strings.HasPrefix(r.URL.Path, "/v1/") || strings.HasPrefix(r.URL.Path, "/webdav") {
+			// Device token (Authorization: Device <token>) is accepted as
+			// equivalent to a logged-in user session; this is how the
+			// remote td-agent client authenticates after pairing.
+			if userID, _ := s.resolveDeviceUser(r); userID != "" {
+				ctx := drive.WithUser(r.Context(), userID)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
 			if s.users == nil {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
@@ -208,6 +223,8 @@ func isPublicPath(path string) bool {
 	case "/v1/auth/status", "/v1/auth/start", "/v1/auth/code", "/v1/auth/password", "/v1/auth/reset", "/v1/auth/config":
 		return true
 	case "/v1/auth/qr/start", "/v1/auth/qr/status", "/v1/auth/qr/password", "/v1/auth/qr/cancel":
+		return true
+	case "/v1/devices/pair/exchange":
 		return true
 	}
 	return false

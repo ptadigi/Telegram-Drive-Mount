@@ -33,17 +33,36 @@ type Mounter interface {
 type Manager struct {
 	mu       sync.Mutex
 	mounter  Mounter
-	drive    *drive.Service
+	backend  Backend
 	dataDir  string
 	status   Status
 	cancel   context.CancelFunc
 	mounting bool
 }
 
+type syncWatcherEntry struct {
+	cancel    context.CancelFunc
+	updatedAt int64
+}
+
 // NewManager builds a manager for the active build (fuse-enabled or stub).
 func NewManager(svc *drive.Service, dataDir string) *Manager {
-	m := &Manager{drive: svc, dataDir: dataDir}
-	m.mounter = newPlatformMounter(svc, dataDir)
+	backend := newLocalBackend(svc)
+	m := &Manager{backend: backend, dataDir: dataDir}
+	m.mounter = newPlatformMounter(backend, dataDir)
+	if m.mounter == nil {
+		m.status = Status{Available: false, Backend: "none"}
+	} else {
+		m.status = Status{Available: true, Backend: m.mounter.Backend()}
+	}
+	return m
+}
+
+// NewManagerWithBackend lets callers (e.g. td-agent --remote) supply a
+// custom Backend implementation that talks to a remote VPS over HTTPS.
+func NewManagerWithBackend(backend Backend, dataDir string) *Manager {
+	m := &Manager{backend: backend, dataDir: dataDir}
+	m.mounter = newPlatformMounter(backend, dataDir)
 	if m.mounter == nil {
 		m.status = Status{Available: false, Backend: "none"}
 	} else {

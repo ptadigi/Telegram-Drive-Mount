@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { AgentConfig, AgentInfo, AppUser, AuthStatus, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo, appLogout } from "./api/agent";
 import { ActivityView } from "./components/ActivityView";
 import { AuthGate } from "./components/AuthGate";
+import { DevicesView } from "./components/DevicesView";
 import { DriveBrowser } from "./components/DriveBrowser";
 import { HomeView } from "./components/HomeView";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
@@ -18,7 +19,7 @@ import { UploadDock } from "./components/UploadDock";
 import { useUploadQueue } from "./state/uploads";
 
 type AgentState = "checking" | "online" | "offline";
-type ViewKey = "home" | "drive" | "computers" | "shared" | "starred" | "trash" | "settings" | "search" | "activity";
+type ViewKey = "home" | "drive" | "computers" | "shared" | "starred" | "trash" | "settings" | "search" | "activity" | "devices";
 
 export function App() {
   const sharedPath = window.location.pathname.match(/^\/share\/(.+)$/);
@@ -125,6 +126,7 @@ function DriveApp({ currentUser, onLogout }: { currentUser: AppUser; onLogout: (
             </button>
           ))}
           <a className="drive-nav__item drive-nav__item--ghost" onClick={() => setView("activity")}><Link2 size={18} /> Hoạt động</a>
+          <a className="drive-nav__item drive-nav__item--ghost" onClick={() => setView("devices")}><HardDrive size={18} /> {t("devices.title")}</a>
         </nav>
         <div className="storage-card">
           <HardDrive size={18} />
@@ -155,6 +157,7 @@ function DriveApp({ currentUser, onLogout }: { currentUser: AppUser; onLogout: (
         {view === "trash" && <TrashView />}
         {view === "settings" && <SettingsView />}
         {view === "activity" && <ActivityView />}
+        {view === "devices" && <DevicesView />}
 
         <section className="agent-drawer">
           <Database size={18} />

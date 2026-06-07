@@ -8,11 +8,13 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
 	gotdauth "github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/tg"
 
 	"telegram-drive-agent/internal/config"
+	"telegram-drive-agent/internal/secret"
 )
 
 var (
@@ -223,9 +225,25 @@ func (s *Service) clearLoginState() {
 }
 
 func newClient(cfg config.Config) *telegram.Client {
+	storage, err := newSessionStorage(cfg.Telegram.SessionPath)
+	if err != nil {
+		// fall back to plain file storage so login flow still works in dev
+		storage = &telegram.FileSessionStorage{Path: cfg.Telegram.SessionPath}
+	}
 	return telegram.NewClient(cfg.Telegram.APIID, cfg.Telegram.APIHash, telegram.Options{
-		SessionStorage: &telegram.FileSessionStorage{Path: cfg.Telegram.SessionPath},
+		SessionStorage: storage,
 	})
+}
+
+func newSessionStorage(path string) (session.Storage, error) {
+	key, err := secret.LoadKey()
+	if err != nil {
+		return nil, err
+	}
+	if key == nil {
+		return &telegram.FileSessionStorage{Path: path}, nil
+	}
+	return &secret.EncryptedSessionStorage{Path: path, Key: key}, nil
 }
 
 func isPasswordRequired(err error) bool {
