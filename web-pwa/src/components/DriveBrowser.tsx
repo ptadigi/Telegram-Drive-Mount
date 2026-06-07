@@ -70,7 +70,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   useEffect(() => { refresh(""); }, []);
 
   useEffect(() => {
-    const stream = new EventSource(eventsUrl());
+    const stream = new EventSource(eventsUrl(), { withCredentials: true });
     stream.addEventListener("file.created", () => refresh(currentFolderId));
     stream.addEventListener("transfer.updated", () => refresh(currentFolderId));
     return () => stream.close();
@@ -143,13 +143,13 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     const fileCount = selectedIds.files.size;
     const folderCount = selectedIds.folders.size;
     if (fileCount === 0 && folderCount === 0) return;
-    const ok = await confirm({ title: "Xóa nhiều mục", message: `Đưa ${fileCount} file và ${folderCount} thư mục vào thùng rác?`, tone: "error" });
+    const ok = await confirm({ title: "XÃ³a nhiá»u má»¥c", message: `ÄÆ°a ${fileCount} file vÃ  ${folderCount} thÆ° má»¥c vÃ o thÃ¹ng rÃ¡c?`, tone: "error" });
     if (!ok) return;
     try {
       for (const id of selectedIds.files) await trashFile(id);
       for (const id of selectedIds.folders) await trashFolder(id);
       clearSelection();
-      toast(`Đã xóa ${fileCount + folderCount} mục`, "success");
+      toast(`ÄÃ£ xÃ³a ${fileCount + folderCount} má»¥c`, "success");
       refresh();
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), "error");
@@ -161,7 +161,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
       for (const id of selectedIds.files) await starFile(id, value);
       for (const id of selectedIds.folders) await starFolder(id, value);
       clearSelection();
-      toast(value ? "Đã đánh dấu sao" : "Đã bỏ đánh dấu sao", "success");
+      toast(value ? "ÄÃ£ Ä‘Ã¡nh dáº¥u sao" : "ÄÃ£ bá» Ä‘Ã¡nh dáº¥u sao", "success");
       refresh();
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), "error");
@@ -185,7 +185,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
       }
       return;
     }
-    toast("Hiện chỉ hỗ trợ di chuyển từng mục, hãy chọn 1 mục", "info");
+    toast("Hiá»‡n chá»‰ há»— trá»£ di chuyá»ƒn tá»«ng má»¥c, hÃ£y chá»n 1 má»¥c", "info");
   }
 
   function handleDragOver(event: DragEvent<HTMLDivElement>) {
@@ -228,7 +228,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     try {
       if (dragItem.kind === "file") await moveFile(dragItem.id, folderId);
       else await moveFolder(dragItem.id, folderId);
-      toast(`Đã chuyển ${dragItem.name}`, "success");
+      toast(`ÄÃ£ chuyá»ƒn ${dragItem.name}`, "success");
       refresh();
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), "error");
@@ -249,7 +249,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     try {
       if (dragItem.kind === "file") await moveFile(dragItem.id, "");
       else await moveFolder(dragItem.id, "");
-      toast(`Đã chuyển ${dragItem.name} ra root`, "success");
+      toast(`ÄÃ£ chuyá»ƒn ${dragItem.name} ra root`, "success");
       refresh();
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), "error");
@@ -292,10 +292,10 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
       y: event.clientY,
       items: [
         { key: "rename", label: t("files.rename"), icon: <Pencil size={14} />, onSelect: () => promptRenameFolder(folder) },
-        { key: "move", label: "Di chuyển đến", icon: <FolderInput size={14} />, onSelect: () => setMoveTarget({ kind: "folder", id: folder.id, name: folder.name }) },
+        { key: "move", label: "Di chuyá»ƒn Ä‘áº¿n", icon: <FolderInput size={14} />, onSelect: () => setMoveTarget({ kind: "folder", id: folder.id, name: folder.name }) },
         { key: "share", label: t("files.share"), icon: <Link2 size={14} />, onSelect: () => setShareTarget({ kind: "folder", id: folder.id, name: folder.name }) },
-        { key: "star", label: folder.starred ? "Bỏ đánh dấu sao" : "Đánh dấu sao", icon: <Star size={14} />, onSelect: () => toggleStarFolder(folder) },
-        { key: "zip", label: "Tải xuống dạng ZIP", icon: <Download size={14} />, onSelect: () => window.location.assign(zipFolderUrl(folder.id)) },
+        { key: "star", label: folder.starred ? "Bá» Ä‘Ã¡nh dáº¥u sao" : "ÄÃ¡nh dáº¥u sao", icon: <Star size={14} />, onSelect: () => toggleStarFolder(folder) },
+        { key: "zip", label: "Táº£i xuá»‘ng dáº¡ng ZIP", icon: <Download size={14} />, onSelect: () => window.location.assign(zipFolderUrl(folder.id)) },
         { key: "trash", label: t("files.trash"), icon: <Trash2 size={14} />, danger: true, onSelect: () => promptTrashFolder(folder) },
       ],
     });
@@ -310,11 +310,11 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
       y: event.clientY,
       items: [
         { key: "details", label: t("files.viewDetails"), icon: <Info size={14} />, onSelect: () => setSelection({ kind: "file", data: file }) },
-        { key: "view", label: "Mở xem trực tiếp", icon: <FileText size={14} />, onSelect: () => setViewerFile(file) },
+        { key: "view", label: "Má»Ÿ xem trá»±c tiáº¿p", icon: <FileText size={14} />, onSelect: () => setViewerFile(file) },
         { key: "share", label: t("files.share"), icon: <Link2 size={14} />, onSelect: () => setShareTarget({ kind: "file", id: file.id, name: file.name }) },
-        { key: "star", label: file.starred ? "Bỏ đánh dấu sao" : "Đánh dấu sao", icon: <Star size={14} />, onSelect: () => toggleStarFile(file) },
+        { key: "star", label: file.starred ? "Bá» Ä‘Ã¡nh dáº¥u sao" : "ÄÃ¡nh dáº¥u sao", icon: <Star size={14} />, onSelect: () => toggleStarFile(file) },
         { key: "rename", label: t("files.rename"), icon: <Pencil size={14} />, onSelect: () => promptRenameFile(file) },
-        { key: "move", label: "Di chuyển đến", icon: <FolderInput size={14} />, onSelect: () => setMoveTarget({ kind: "file", id: file.id, name: file.name }) },
+        { key: "move", label: "Di chuyá»ƒn Ä‘áº¿n", icon: <FolderInput size={14} />, onSelect: () => setMoveTarget({ kind: "file", id: file.id, name: file.name }) },
         { key: "download", label: t("files.download"), icon: <Download size={14} />, onSelect: () => window.location.assign(downloadFileUrl(file.id)) },
         { key: "trash", label: t("files.trash"), icon: <Trash2 size={14} />, danger: true, onSelect: () => promptTrashFile(file) },
       ],
@@ -323,33 +323,33 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
 
   function promptRenameFolder(folder: DriveFolder) {
     const name = window.prompt(t("files.renamePrompt"), folder.name);
-    if (name && name !== folder.name) renameFolder(folder.id, name).then(() => { refresh(); toast(`Đã đổi tên thành ${name}`, "success"); }).catch((err) => toast(err instanceof Error ? err.message : String(err), "error"));
+    if (name && name !== folder.name) renameFolder(folder.id, name).then(() => { refresh(); toast(`ÄÃ£ Ä‘á»•i tÃªn thÃ nh ${name}`, "success"); }).catch((err) => toast(err instanceof Error ? err.message : String(err), "error"));
   }
 
   function promptRenameFile(file: DriveFile) {
     const name = window.prompt(t("files.renamePrompt"), file.name);
-    if (name && name !== file.name) renameFile(file.id, name).then(() => { refresh(); toast(`Đã đổi tên thành ${name}`, "success"); }).catch((err) => toast(err instanceof Error ? err.message : String(err), "error"));
+    if (name && name !== file.name) renameFile(file.id, name).then(() => { refresh(); toast(`ÄÃ£ Ä‘á»•i tÃªn thÃ nh ${name}`, "success"); }).catch((err) => toast(err instanceof Error ? err.message : String(err), "error"));
   }
 
   async function promptTrashFolder(folder: DriveFolder) {
-    const ok = await confirm({ title: "Xóa thư mục", message: `Đưa ${folder.name} vào thùng rác?`, tone: "error" });
+    const ok = await confirm({ title: "XÃ³a thÆ° má»¥c", message: `ÄÆ°a ${folder.name} vÃ o thÃ¹ng rÃ¡c?`, tone: "error" });
     if (!ok) return;
     try {
       await trashFolder(folder.id);
       await refresh();
-      toast("Đã đưa thư mục vào thùng rác", "success");
+      toast("ÄÃ£ Ä‘Æ°a thÆ° má»¥c vÃ o thÃ¹ng rÃ¡c", "success");
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), "error");
     }
   }
 
   async function promptTrashFile(file: DriveFile) {
-    const ok = await confirm({ title: "Xóa file", message: `Đưa ${file.name} vào thùng rác?`, tone: "error" });
+    const ok = await confirm({ title: "XÃ³a file", message: `ÄÆ°a ${file.name} vÃ o thÃ¹ng rÃ¡c?`, tone: "error" });
     if (!ok) return;
     try {
       await trashFile(file.id);
       await refresh();
-      toast("Đã đưa file vào thùng rác", "success");
+      toast("ÄÃ£ Ä‘Æ°a file vÃ o thÃ¹ng rÃ¡c", "success");
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), "error");
     }
@@ -359,7 +359,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     try {
       const next = !file.starred;
       await starFile(file.id, next);
-      toast(next ? "Đã đánh dấu sao" : "Đã bỏ đánh dấu sao", "success");
+      toast(next ? "ÄÃ£ Ä‘Ã¡nh dáº¥u sao" : "ÄÃ£ bá» Ä‘Ã¡nh dáº¥u sao", "success");
       refresh();
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), "error");
@@ -370,7 +370,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     try {
       const next = !folder.starred;
       await starFolder(folder.id, next);
-      toast(next ? "Đã đánh dấu sao" : "Đã bỏ đánh dấu sao", "success");
+      toast(next ? "ÄÃ£ Ä‘Ã¡nh dáº¥u sao" : "ÄÃ£ bá» Ä‘Ã¡nh dáº¥u sao", "success");
       refresh();
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), "error");
@@ -400,21 +400,21 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
         </div>
         <div className="drive-browser__actions">
           <select className="select-control" value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
-            <option value="updated_at">Mới nhất</option>
-            <option value="name">Tên A-Z</option>
-            <option value="size">Dung lượng</option>
+            <option value="updated_at">Má»›i nháº¥t</option>
+            <option value="name">TÃªn A-Z</option>
+            <option value="size">Dung lÆ°á»£ng</option>
           </select>
           <select className="select-control" value={kindFilter} onChange={(event) => setKindFilter(event.target.value as KindFilter)}>
-            <option value="all">Tất cả loại</option>
-            <option value="image">Hình ảnh</option>
+            <option value="all">Táº¥t cáº£ loáº¡i</option>
+            <option value="image">HÃ¬nh áº£nh</option>
             <option value="video">Video</option>
-            <option value="audio">Âm thanh</option>
-            <option value="document">Tài liệu</option>
-            <option value="archive">File nén</option>
-            <option value="other">Khác</option>
+            <option value="audio">Ã‚m thanh</option>
+            <option value="document">TÃ i liá»‡u</option>
+            <option value="archive">File nÃ©n</option>
+            <option value="other">KhÃ¡c</option>
           </select>
-          <button className={`icon-button ${viewMode === "grid" ? "icon-button--active" : ""}`} onClick={() => setViewMode("grid")} aria-label="Lưới"><LayoutGrid size={16} /></button>
-          <button className={`icon-button ${viewMode === "list" ? "icon-button--active" : ""}`} onClick={() => setViewMode("list")} aria-label="Danh sách"><List size={16} /></button>
+          <button className={`icon-button ${viewMode === "grid" ? "icon-button--active" : ""}`} onClick={() => setViewMode("grid")} aria-label="LÆ°á»›i"><LayoutGrid size={16} /></button>
+          <button className={`icon-button ${viewMode === "list" ? "icon-button--active" : ""}`} onClick={() => setViewMode("list")} aria-label="Danh sÃ¡ch"><List size={16} /></button>
           <button className="button button--primary" onClick={() => fileInputRef.current?.click()}>{t("files.upload")}</button>
           <button className="button button--secondary" onClick={() => folderInputRef.current?.click()}>{t("files.uploadFolder")}</button>
           <button className="button button--secondary" onClick={createNewFolder}>{t("files.createFolder")}</button>
@@ -425,22 +425,22 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
       </div>
       {selectedIds.files.size + selectedIds.folders.size > 0 && (
         <div className="bulk-bar">
-          <span>Đã chọn {selectedIds.files.size + selectedIds.folders.size} mục</span>
+          <span>ÄÃ£ chá»n {selectedIds.files.size + selectedIds.folders.size} má»¥c</span>
           <div className="bulk-bar__actions">
-            <button className="button button--ghost" onClick={() => bulkStar(true)}>★ Sao</button>
-            <button className="button button--ghost" onClick={() => bulkStar(false)}>Bỏ sao</button>
-            <button className="button button--ghost" onClick={bulkMove}>Di chuyển</button>
+            <button className="button button--ghost" onClick={() => bulkStar(true)}>â˜… Sao</button>
+            <button className="button button--ghost" onClick={() => bulkStar(false)}>Bá» sao</button>
+            <button className="button button--ghost" onClick={bulkMove}>Di chuyá»ƒn</button>
             <button className="button button--ghost" onClick={async () => {
               try {
                 await downloadBundle([...selectedIds.files], [...selectedIds.folders]);
                 clearSelection();
-                toast("Đã chuẩn bị file ZIP", "success");
+                toast("ÄÃ£ chuáº©n bá»‹ file ZIP", "success");
               } catch (err) {
                 toast(err instanceof Error ? err.message : String(err), "error");
               }
-            }}>Tải ZIP</button>
-            <button className="button button--danger" onClick={bulkTrash}>Xóa vào thùng rác</button>
-            <button className="button button--ghost" onClick={clearSelection}>Hủy</button>
+            }}>Táº£i ZIP</button>
+            <button className="button button--danger" onClick={bulkTrash}>XÃ³a vÃ o thÃ¹ng rÃ¡c</button>
+            <button className="button button--ghost" onClick={clearSelection}>Há»§y</button>
           </div>
         </div>
       )}
@@ -502,7 +502,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
               </div>
               <div className="drive-card__name">
                 <strong>{file.name}{file.starred && <Star size={12} className="star-mark" />}</strong>
-                <span>{kindLabel(file.kind)} · {formatBytes(file.size)}</span>
+                <span>{kindLabel(file.kind)} Â· {formatBytes(file.size)}</span>
               </div>
               <div className="drive-card__footer">
                 <span className={`badge badge--${syncBadge(file.sync_state)}`} title={syncLabel(file.sync_state)}>
@@ -599,12 +599,12 @@ function kindIcon(kind: DriveFile["kind"]) {
 }
 
 function kindLabel(kind: string) {
-  const labels: Record<string, string> = { image: "Hình ảnh", video: "Video", audio: "Âm thanh", document: "Tài liệu", archive: "Nén", other: "File" };
+  const labels: Record<string, string> = { image: "HÃ¬nh áº£nh", video: "Video", audio: "Ã‚m thanh", document: "TÃ i liá»‡u", archive: "NÃ©n", other: "File" };
   return labels[kind] || "File";
 }
 
 function syncLabel(state: string) {
-  const labels: Record<string, string> = { pending_telegram_upload: "Chờ đồng bộ", telegram_uploading: "Đang đồng bộ", telegram_synced: "Đã đồng bộ", telegram_upload_failed: "Lỗi đồng bộ", metadata_only: "Metadata" };
+  const labels: Record<string, string> = { pending_telegram_upload: "Chá» Ä‘á»“ng bá»™", telegram_uploading: "Äang Ä‘á»“ng bá»™", telegram_synced: "ÄÃ£ Ä‘á»“ng bá»™", telegram_upload_failed: "Lá»—i Ä‘á»“ng bá»™", metadata_only: "Metadata" };
   return labels[state] || state;
 }
 
