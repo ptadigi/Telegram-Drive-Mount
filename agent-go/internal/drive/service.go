@@ -140,6 +140,7 @@ type Service struct {
 	syncWatchMu   sync.Mutex
 	syncWatchers  map[string]syncWatcherEntry
 	channelOnce   sync.Mutex
+	streamCoalesce *chunkCoalesce
 }
 
 type syncWatcherEntry struct {
@@ -148,7 +149,7 @@ type syncWatcherEntry struct {
 }
 
 func NewService(db *sql.DB, dataDir string, uploader TelegramUploader) *Service {
-	return &Service{db: db, dataDir: dataDir, uploader: uploader, events: NewEventBus(), cachePolicy: CachePolicy{Mode: "smart", MaxBytes: 5 * 1024 * 1024 * 1024}, syncWatchers: map[string]syncWatcherEntry{}}
+	return &Service{db: db, dataDir: dataDir, uploader: uploader, events: NewEventBus(), cachePolicy: CachePolicy{Mode: "smart", MaxBytes: 5 * 1024 * 1024 * 1024}, syncWatchers: map[string]syncWatcherEntry{}, streamCoalesce: newChunkCoalesce()}
 }
 
 func (s *Service) Events() *EventBus {
@@ -735,20 +736,23 @@ func (s *Service) StreamFromTelegram(ctx context.Context, fileID string, offset,
 	if messageID == 0 {
 		return StreamResult{}, fmt.Errorf("file chưa được đồng bộ Telegram")
 	}
-	if peerUploader, ok := s.uploader.(interface {
-		StreamFromPeer(ctx context.Context, peer StoragePeer, messageID int, offset int64, length int64, w io.Writer) (StreamResult, error)
-	}); ok {
+	key := fmt.Sprintf("%s:%d:%d", fileID, offset, length)
+	return s.streamCoalesce.Do(ctx, key, w, func(out io.Writer) (StreamResult, error) {
+		if peerUploader, ok := s.uploader.(interface {
+			StreamFromPeer(ctx context.Context, peer StoragePeer, messageID int, offset int64, length int64, w io.Writer) (StreamResult, error)
+		}); ok {
+			s.RecordFileAccess(ctx, fileID)
+			return peerUploader.StreamFromPeer(ctx, peer, messageID, offset, length, out)
+		}
+		uploader, ok := s.uploader.(interface {
+			StreamFromSavedMessages(ctx context.Context, messageID int, offset int64, length int64, w io.Writer) (StreamResult, error)
+		})
+		if !ok {
+			return StreamResult{}, fmt.Errorf("uploader không hỗ trợ stream")
+		}
 		s.RecordFileAccess(ctx, fileID)
-		return peerUploader.StreamFromPeer(ctx, peer, messageID, offset, length, w)
-	}
-	uploader, ok := s.uploader.(interface {
-		StreamFromSavedMessages(ctx context.Context, messageID int, offset int64, length int64, w io.Writer) (StreamResult, error)
+		return uploader.StreamFromSavedMessages(ctx, messageID, offset, length, out)
 	})
-	if !ok {
-		return StreamResult{}, fmt.Errorf("uploader không hỗ trợ stream")
-	}
-	s.RecordFileAccess(ctx, fileID)
-	return uploader.StreamFromSavedMessages(ctx, messageID, offset, length, w)
 }
 
 func (s *Service) SaveStreamFile(ctx context.Context, data io.Reader, filename string, mimeHint string, folderID string, relativePath string) (File, error) {
