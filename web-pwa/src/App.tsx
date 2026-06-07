@@ -6,6 +6,7 @@ import { ActivityView } from "./components/ActivityView";
 import { AuthGate } from "./components/AuthGate";
 import { DriveBrowser } from "./components/DriveBrowser";
 import { HomeView } from "./components/HomeView";
+import { LanguageSwitcher } from "./components/LanguageSwitcher";
 import { SearchView } from "./components/SearchView";
 import { SettingsView } from "./components/SettingsView";
 import { SharePage } from "./components/SharePage";
@@ -135,6 +136,7 @@ function DriveApp({ currentUser, onLogout }: { currentUser: AppUser; onLogout: (
         <header className="drive-topbar">
           <div className="search-box"><Search size={18} /><input value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); if (event.target.value) setView("search"); }} placeholder={t("drive.search")} /></div>
           <div className="status-pills">
+            <LanguageSwitcher />
             <StatusPill state={agentState} text={agentState === "online" ? t("status.agentOnline") : agentState === "offline" ? t("status.agentOffline") : t("status.agentChecking")} />
             <StatusPill state={auth?.authorized ? "online" : "offline"} text={auth?.authorized ? t("login.connectedTitle") : t("login.title")} />
             <button className="icon-button" onClick={() => setView("settings")}><Settings size={18} /></button>
