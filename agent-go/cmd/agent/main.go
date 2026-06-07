@@ -17,6 +17,7 @@ import (
 	agentauth "telegram-drive-agent/internal/auth"
 	"telegram-drive-agent/internal/config"
 	"telegram-drive-agent/internal/db"
+	"telegram-drive-agent/internal/devices"
 	"telegram-drive-agent/internal/drive"
 	"telegram-drive-agent/internal/telegramstorage"
 	"telegram-drive-agent/internal/tray"
@@ -74,8 +75,9 @@ func main() {
 	driveService.SetCachePolicy(cfg.Cache.Mode, cfg.Cache.MaxBytes)
 	tunnelSvc := tunnel.New(driveTunnelListener{drive: driveService})
 	userService := users.New(metadataDB)
+	deviceService := devices.New(metadataDB)
 	mountManager := vfs.NewManager(driveService, cfg.DataDir)
-	apiServer := api.NewServer(version, cfg, authService, driveService, tunnelSvc, userService, mountManager)
+	apiServer := api.NewServer(version, cfg, authService, driveService, tunnelSvc, userService, mountManager, deviceService)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
