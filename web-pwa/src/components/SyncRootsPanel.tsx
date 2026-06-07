@@ -21,7 +21,7 @@ export function SyncRootsPanel() {
   }
 
   async function addRoot() {
-    const localPath = window.prompt("Nhập đường dẫn thư mục local cần đồng bộ");
+    const localPath = window.prompt("Nháº­p Ä‘Æ°á»ng dáº«n thÆ° má»¥c local cáº§n Ä‘á»“ng bá»™");
     if (!localPath) return;
     setLoading(true);
     setError(null);
@@ -51,7 +51,7 @@ export function SyncRootsPanel() {
   useEffect(() => { refresh(); }, []);
 
   useEffect(() => {
-    const stream = new EventSource(eventsUrl());
+    const stream = new EventSource(eventsUrl(), { withCredentials: true });
     stream.addEventListener("syncroot.created", refresh);
     stream.addEventListener("syncroot.updated", refresh);
     return () => stream.close();
@@ -61,30 +61,30 @@ export function SyncRootsPanel() {
     <section className="sync-panel">
       <div className="sync-panel__header">
         <div>
-          <h2>Đồng bộ máy tính</h2>
-          <p>Chọn thư mục local để Go Agent tự quét và đưa file lên ổ đĩa cloud.</p>
+          <h2>Äá»“ng bá»™ mÃ¡y tÃ­nh</h2>
+          <p>Chá»n thÆ° má»¥c local Ä‘á»ƒ Go Agent tá»± quÃ©t vÃ  Ä‘Æ°a file lÃªn á»• Ä‘Ä©a cloud.</p>
         </div>
         <div className="sync-panel__actions">
-          <button className="button button--secondary" onClick={refresh} disabled={loading}><RefreshCw size={16} /> Làm mới</button>
-          <button className="button button--primary" onClick={addRoot} disabled={loading}><Plus size={16} /> Thêm thư mục</button>
+          <button className="button button--secondary" onClick={refresh} disabled={loading}><RefreshCw size={16} /> LÃ m má»›i</button>
+          <button className="button button--primary" onClick={addRoot} disabled={loading}><Plus size={16} /> ThÃªm thÆ° má»¥c</button>
         </div>
       </div>
       {error && <div className="error-note">{error}</div>}
-      {roots.length === 0 && <div className="muted-box">Chưa có thư mục desktop nào được đồng bộ.</div>}
+      {roots.length === 0 && <div className="muted-box">ChÆ°a cÃ³ thÆ° má»¥c desktop nÃ o Ä‘Æ°á»£c Ä‘á»“ng bá»™.</div>}
       {roots.length > 0 && <div className="sync-root-list">
         {roots.map((root) => (
           <div className="sync-root" key={root.id}>
             <div className="sync-root__icon"><FolderSync size={20} /></div>
             <div className="sync-root__body">
               <strong>{root.local_path}</strong>
-              <span>{root.mode} · {root.enabled ? "Đang bật" : "Đã tắt"} · {root.status}</span>
+              <span>{root.mode} Â· {root.enabled ? "Äang báº­t" : "ÄÃ£ táº¯t"} Â· {root.status}</span>
             </div>
             <div className="sync-root__actions">
-              <button className="button button--ghost" onClick={() => runAction(() => scanSyncRoot(root.id))} disabled={loading || !root.enabled}>Quét lại</button>
+              <button className="button button--ghost" onClick={() => runAction(() => scanSyncRoot(root.id))} disabled={loading || !root.enabled}>QuÃ©t láº¡i</button>
               <button className="button button--ghost" onClick={() => runAction(() => updateSyncRoot(root.id, !root.enabled))} disabled={loading}>
-                {root.enabled ? <Pause size={15} /> : <Play size={15} />} {root.enabled ? "Tạm dừng" : "Bật lại"}
+                {root.enabled ? <Pause size={15} /> : <Play size={15} />} {root.enabled ? "Táº¡m dá»«ng" : "Báº­t láº¡i"}
               </button>
-              <button className="button button--ghost" onClick={() => runAction(() => deleteSyncRoot(root.id))} disabled={loading}><Trash2 size={15} /> Xóa</button>
+              <button className="button button--ghost" onClick={() => runAction(() => deleteSyncRoot(root.id))} disabled={loading}><Trash2 size={15} /> XÃ³a</button>
             </div>
           </div>
         ))}

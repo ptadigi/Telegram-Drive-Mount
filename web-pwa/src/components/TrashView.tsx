@@ -24,7 +24,7 @@ export function TrashView() {
   useEffect(() => { refresh(); }, []);
 
   useEffect(() => {
-    const stream = new EventSource(eventsUrl());
+    const stream = new EventSource(eventsUrl(), { withCredentials: true });
     stream.addEventListener("file.trashed", refresh);
     stream.addEventListener("folder.trashed", refresh);
     stream.addEventListener("file.restored", refresh);

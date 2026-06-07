@@ -135,7 +135,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/devices/pair/exchange", s.handleDevicePairExchange)
 	mux.HandleFunc("GET /v1/devices", s.handleDeviceList)
 	mux.HandleFunc("DELETE /v1/devices", s.handleDeviceRevoke)
-	return withJSON(s.withAuth(withCORS(mux)))
+	return withCORS(withJSON(s.withAuth(mux)))
 }
 
 func (s *Server) withAuth(next http.Handler) http.Handler {

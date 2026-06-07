@@ -69,7 +69,7 @@ export function SettingsView() {
     try {
       const result = await setCacheConfig(mode, gb * 1024 * 1024 * 1024);
       setCache(result.cache);
-      setNotice("Đã cập nhật cấu hình cache");
+      setNotice("ÄÃ£ cáº­p nháº­t cáº¥u hÃ¬nh cache");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -82,7 +82,7 @@ export function SettingsView() {
     try {
       const result = await cleanupCache();
       setCache(result.cache);
-      setNotice(`Đã dọn ${result.removed} file khỏi cache local`);
+      setNotice(`ÄÃ£ dá»n ${result.removed} file khá»i cache local`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -101,7 +101,7 @@ export function SettingsView() {
       }
       const result = await updateStorageSettings(payload);
       setStorage(result.storage);
-      setNotice(storageKind === "self" ? "Đã chuyển về Saved Messages" : "Đã lưu cấu hình storage channel");
+      setNotice(storageKind === "self" ? "ÄÃ£ chuyá»ƒn vá» Saved Messages" : "ÄÃ£ lÆ°u cáº¥u hÃ¬nh storage channel");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -120,7 +120,7 @@ export function SettingsView() {
       const result = await updateAPIAuth(payload);
       setAuth(result.auth);
       setAuthPass("");
-      setNotice(authMode === "basic" ? "Đã bật bảo vệ Basic Auth" : "Đã tắt bảo vệ API");
+      setNotice(authMode === "basic" ? "ÄÃ£ báº­t báº£o vá»‡ Basic Auth" : "ÄÃ£ táº¯t báº£o vá»‡ API");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -135,7 +135,7 @@ export function SettingsView() {
       const status = await startMount(mountPoint || undefined);
       setMountInfo(status);
       if (status.mount_point) setMountPoint(status.mount_point);
-      setNotice(status.mounted ? `Đã mount ổ ảo tại ${status.mount_point || ""}` : "Đang khởi động mount, kiểm tra trạng thái sau vài giây.");
+      setNotice(status.mounted ? `ÄÃ£ mount á»• áº£o táº¡i ${status.mount_point || ""}` : "Äang khá»Ÿi Ä‘á»™ng mount, kiá»ƒm tra tráº¡ng thÃ¡i sau vÃ i giÃ¢y.");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -149,7 +149,7 @@ export function SettingsView() {
     try {
       const status = await stopMount();
       setMountInfo(status);
-      setNotice("Đã unmount ổ ảo");
+      setNotice("ÄÃ£ unmount á»• áº£o");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -160,7 +160,7 @@ export function SettingsView() {
   useEffect(() => { refresh(); }, []);
 
   useEffect(() => {
-    const stream = new EventSource(eventsUrl());
+    const stream = new EventSource(eventsUrl(), { withCredentials: true });
     stream.addEventListener("share.config", refresh);
     return () => stream.close();
   }, []);
@@ -184,7 +184,7 @@ export function SettingsView() {
       });
       setConfig(result.config);
       setMode((result.config.mode as Mode) || "lan");
-      setNotice(result.config.health_message || "Đã lưu cấu hình.");
+      setNotice(result.config.health_message || "ÄÃ£ lÆ°u cáº¥u hÃ¬nh.");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -196,8 +196,8 @@ export function SettingsView() {
     <section className="settings-view">
       <header className="settings-view__header">
         <div>
-          <h2>Cấu hình chia sẻ</h2>
-          <p>Chọn cách hệ thống tạo link chia sẻ. Mọi thứ kỹ thuật do app tự lo phía sau.</p>
+          <h2>Cáº¥u hÃ¬nh chia sáº»</h2>
+          <p>Chá»n cÃ¡ch há»‡ thá»‘ng táº¡o link chia sáº». Má»i thá»© ká»¹ thuáº­t do app tá»± lo phÃ­a sau.</p>
         </div>
       </header>
 
@@ -205,22 +205,22 @@ export function SettingsView() {
         <ModeCard
           active={mode === "lan"}
           icon={<Wifi size={22} />}
-          title="Chỉ trong mạng LAN"
-          description="Không cần domain. Link chỉ mở được khi cùng Wi‑Fi."
+          title="Chá»‰ trong máº¡ng LAN"
+          description="KhÃ´ng cáº§n domain. Link chá»‰ má»Ÿ Ä‘Æ°á»£c khi cÃ¹ng Wiâ€‘Fi."
           onClick={() => save("lan")}
         />
         <ModeCard
           active={mode === "domain"}
           icon={<Globe size={22} />}
-          title="Dùng tên miền của tôi"
-          description="Trỏ subdomain về máy này. App tự kiểm tra và phục vụ link."
+          title="DÃ¹ng tÃªn miá»n cá»§a tÃ´i"
+          description="Trá» subdomain vá» mÃ¡y nÃ y. App tá»± kiá»ƒm tra vÃ  phá»¥c vá»¥ link."
           onClick={() => setMode("domain")}
         />
         <ModeCard
           active={mode === "tunnel"}
           icon={<Cloud size={22} />}
           title="Cloudflare Tunnel"
-          description="Bật một phát có ngay link public, không cần domain. Cần cài cloudflared trên máy."
+          description="Báº­t má»™t phÃ¡t cÃ³ ngay link public, khÃ´ng cáº§n domain. Cáº§n cÃ i cloudflared trÃªn mÃ¡y."
           onClick={() => save("tunnel")}
         />
       </div>
@@ -228,14 +228,14 @@ export function SettingsView() {
       {mode === "domain" && (
         <div className="settings-form">
           <label>
-            <span>Tên miền chia sẻ</span>
+            <span>TÃªn miá»n chia sáº»</span>
             <input value={domain} onChange={(event) => setDomain(event.target.value)} placeholder="share.tencuaban.com" />
           </label>
           <label>
-            <span>Base URL (tùy chọn)</span>
+            <span>Base URL (tÃ¹y chá»n)</span>
             <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://share.tencuaban.com" />
           </label>
-          <button className="button button--primary" onClick={() => save("domain")} disabled={loading}>Kiểm tra và lưu</button>
+          <button className="button button--primary" onClick={() => save("domain")} disabled={loading}>Kiá»ƒm tra vÃ  lÆ°u</button>
         </div>
       )}
 
@@ -248,8 +248,8 @@ export function SettingsView() {
             {config.health_ok ? <CheckCircle2 size={22} /> : <XCircle size={22} />}
           </div>
           <div>
-            <strong>Trạng thái chia sẻ</strong>
-            <span>{config.health_message || (config.health_ok ? "Sẵn sàng" : "Chưa kết nối được")}</span>
+            <strong>Tráº¡ng thÃ¡i chia sáº»</strong>
+            <span>{config.health_message || (config.health_ok ? "Sáºµn sÃ ng" : "ChÆ°a káº¿t ná»‘i Ä‘Æ°á»£c")}</span>
             <span className="muted-text">Local: {config.local_base_url || "-"}</span>
             {config.tunnel_active && config.tunnel_url && <span className="muted-text">Tunnel: {config.tunnel_url}</span>}
           </div>
@@ -259,130 +259,130 @@ export function SettingsView() {
       {cache && (
         <div className="settings-cache">
           <header>
-            <h3>Bộ nhớ cache local</h3>
-            <span>{formatBytes(cache.used_bytes)} / {formatBytes(cache.max_bytes)} · {cache.files} file</span>
+            <h3>Bá»™ nhá»› cache local</h3>
+            <span>{formatBytes(cache.used_bytes)} / {formatBytes(cache.max_bytes)} Â· {cache.files} file</span>
           </header>
           <div className="settings-cache__modes">
             <button className={`mode-card ${cache.mode === "smart" ? "mode-card--active" : ""}`} onClick={() => saveCache("smart", cacheLimitGB)}>
-              <strong>Smart cache</strong><span>Tự xóa file ít dùng để giữ dưới giới hạn (đề xuất)</span>
+              <strong>Smart cache</strong><span>Tá»± xÃ³a file Ã­t dÃ¹ng Ä‘á»ƒ giá»¯ dÆ°á»›i giá»›i háº¡n (Ä‘á» xuáº¥t)</span>
             </button>
             <button className={`mode-card ${cache.mode === "cloud_only" ? "mode-card--active" : ""}`} onClick={() => saveCache("cloud_only", cacheLimitGB)}>
-              <strong>Chỉ trên cloud</strong><span>Sync xong xóa cache, mỗi lần xem kéo lại từ Telegram</span>
+              <strong>Chá»‰ trÃªn cloud</strong><span>Sync xong xÃ³a cache, má»—i láº§n xem kÃ©o láº¡i tá»« Telegram</span>
             </button>
             <button className={`mode-card ${cache.mode === "mirror" ? "mode-card--active" : ""}`} onClick={() => saveCache("mirror", cacheLimitGB)}>
-              <strong>Giữ tất cả</strong><span>Phù hợp khi máy nhiều ổ, mọi file luôn có sẵn local</span>
+              <strong>Giá»¯ táº¥t cáº£</strong><span>PhÃ¹ há»£p khi mÃ¡y nhiá»u á»•, má»i file luÃ´n cÃ³ sáºµn local</span>
             </button>
           </div>
           <label className="settings-cache__limit">
-            Giới hạn cache (GB)
+            Giá»›i háº¡n cache (GB)
             <input type="number" min={1} value={cacheLimitGB} onChange={(event) => setCacheLimitGB(Math.max(1, Number(event.target.value)))} onBlur={() => saveCache(cache.mode, cacheLimitGB)} />
           </label>
-          <button className="button button--secondary" onClick={runCleanup}>Dọn cache ngay</button>
+          <button className="button button--secondary" onClick={runCleanup}>Dá»n cache ngay</button>
         </div>
       )}
       {storage && (
         <div className="settings-cache">
           <header>
-            <h3>Lưu trữ Telegram</h3>
-            <span>{storage.peer_kind === "channel" ? "Đang dùng channel riêng" : "Đang dùng Saved Messages"}</span>
+            <h3>LÆ°u trá»¯ Telegram</h3>
+            <span>{storage.peer_kind === "channel" ? "Äang dÃ¹ng channel riÃªng" : "Äang dÃ¹ng Saved Messages"}</span>
           </header>
           <div className="settings-cache__modes">
             <button className={`mode-card ${storageKind === "self" ? "mode-card--active" : ""}`} onClick={() => setStorageKind("self")}>
-              <strong>Saved Messages</strong><span>Lưu file trong tin nhắn đã lưu của tài khoản (mặc định)</span>
+              <strong>Saved Messages</strong><span>LÆ°u file trong tin nháº¯n Ä‘Ã£ lÆ°u cá»§a tÃ i khoáº£n (máº·c Ä‘á»‹nh)</span>
             </button>
             <button className={`mode-card ${storageKind === "channel" ? "mode-card--active" : ""}`} onClick={() => setStorageKind("channel")}>
-              <strong>Channel riêng</strong><span>Dùng private channel để lưu file, tách khỏi Saved Messages</span>
+              <strong>Channel riÃªng</strong><span>DÃ¹ng private channel Ä‘á»ƒ lÆ°u file, tÃ¡ch khá»i Saved Messages</span>
             </button>
           </div>
           {storageKind === "channel" && (
             <div className="settings-form">
               <label>
                 <span>Channel ID</span>
-                <input value={channelID} onChange={(event) => setChannelID(event.target.value.replace(/[^0-9-]/g, ""))} placeholder="ví dụ 1234567890" />
+                <input value={channelID} onChange={(event) => setChannelID(event.target.value.replace(/[^0-9-]/g, ""))} placeholder="vÃ­ dá»¥ 1234567890" />
               </label>
               <label>
                 <span>Access Hash</span>
-                <input value={accessHash} onChange={(event) => setAccessHash(event.target.value.replace(/[^0-9-]/g, ""))} placeholder="ví dụ 9876543210" />
+                <input value={accessHash} onChange={(event) => setAccessHash(event.target.value.replace(/[^0-9-]/g, ""))} placeholder="vÃ­ dá»¥ 9876543210" />
               </label>
               <label>
-                <span>Tên channel (tùy chọn)</span>
-                <input value={channelTitle} onChange={(event) => setChannelTitle(event.target.value)} placeholder="Tên hiển thị" />
+                <span>TÃªn channel (tÃ¹y chá»n)</span>
+                <input value={channelTitle} onChange={(event) => setChannelTitle(event.target.value)} placeholder="TÃªn hiá»ƒn thá»‹" />
               </label>
             </div>
           )}
-          <button className="button button--primary" onClick={saveStorage} disabled={loading}>Lưu cấu hình lưu trữ</button>
+          <button className="button button--primary" onClick={saveStorage} disabled={loading}>LÆ°u cáº¥u hÃ¬nh lÆ°u trá»¯</button>
           {storageKind === "channel" && <button className="button button--secondary" onClick={async () => {
             setLoading(true);
             try {
-              const result = await createStorageChannel(channelTitle || "Ổ Đĩa Cloud Ảo");
+              const result = await createStorageChannel(channelTitle || "á»” ÄÄ©a Cloud áº¢o");
               setStorage(result.storage);
               setChannelID(String(result.storage.channel_id));
               setAccessHash(String(result.storage.access_hash));
               setChannelTitle(result.storage.title || "");
-              setNotice(`Đã tạo channel ${result.storage.title || result.storage.channel_id}`);
+              setNotice(`ÄÃ£ táº¡o channel ${result.storage.title || result.storage.channel_id}`);
             } catch (err) {
               setError(err instanceof Error ? err.message : String(err));
             } finally {
               setLoading(false);
             }
-          }} disabled={loading}>Tạo channel mới tự động</button>}
+          }} disabled={loading}>Táº¡o channel má»›i tá»± Ä‘á»™ng</button>}
         </div>
       )}
 
       {auth && (
         <div className="settings-cache">
           <header>
-            <h3>Bảo mật API</h3>
-            <span>{auth.mode === "basic" ? "Đang bật Basic Auth" : "Đang mở (chỉ dùng cho LAN/desktop)"}</span>
+            <h3>Báº£o máº­t API</h3>
+            <span>{auth.mode === "basic" ? "Äang báº­t Basic Auth" : "Äang má»Ÿ (chá»‰ dÃ¹ng cho LAN/desktop)"}</span>
           </header>
           <div className="settings-cache__modes">
             <button className={`mode-card ${authMode === "open" ? "mode-card--active" : ""}`} onClick={() => setAuthMode("open")}>
-              <strong>Mở</strong><span>Không yêu cầu mật khẩu. Phù hợp khi chạy desktop hoặc LAN tin cậy.</span>
+              <strong>Má»Ÿ</strong><span>KhÃ´ng yÃªu cáº§u máº­t kháº©u. PhÃ¹ há»£p khi cháº¡y desktop hoáº·c LAN tin cáº­y.</span>
             </button>
             <button className={`mode-card ${authMode === "basic" ? "mode-card--active" : ""}`} onClick={() => setAuthMode("basic")}>
-              <strong>Basic Auth</strong><span>Yêu cầu user/password cho mọi truy cập, kể cả WebDAV. Bắt buộc khi deploy VPS.</span>
+              <strong>Basic Auth</strong><span>YÃªu cáº§u user/password cho má»i truy cáº­p, ká»ƒ cáº£ WebDAV. Báº¯t buá»™c khi deploy VPS.</span>
             </button>
           </div>
           {authMode === "basic" && (
             <div className="settings-form">
               <label>
-                <span>Tên đăng nhập</span>
+                <span>TÃªn Ä‘Äƒng nháº­p</span>
                 <input value={authUser} onChange={(event) => setAuthUser(event.target.value)} placeholder="admin" />
               </label>
               <label>
-                <span>Mật khẩu mới {auth.has_password && <em>(để trống nếu giữ nguyên)</em>}</span>
-                <input type="password" value={authPass} onChange={(event) => setAuthPass(event.target.value)} placeholder="••••••••" />
+                <span>Máº­t kháº©u má»›i {auth.has_password && <em>(Ä‘á»ƒ trá»‘ng náº¿u giá»¯ nguyÃªn)</em>}</span>
+                <input type="password" value={authPass} onChange={(event) => setAuthPass(event.target.value)} placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
               </label>
             </div>
           )}
-          <button className="button button--primary" onClick={saveAuth} disabled={loading}>Lưu cài đặt bảo mật</button>
+          <button className="button button--primary" onClick={saveAuth} disabled={loading}>LÆ°u cÃ i Ä‘áº·t báº£o máº­t</button>
         </div>
       )}
 
       <div className="settings-cache">
         <header>
-          <h3><HardDrive size={16} /> Ổ ảo Telegram Drive</h3>
-          <span>{mountInfo?.available ? `Backend: ${mountInfo.backend}` : "Bản build hiện tại không kèm mount engine"}</span>
+          <h3><HardDrive size={16} /> á»” áº£o Telegram Drive</h3>
+          <span>{mountInfo?.available ? `Backend: ${mountInfo.backend}` : "Báº£n build hiá»‡n táº¡i khÃ´ng kÃ¨m mount engine"}</span>
         </header>
         {mountInfo?.available ? (
           <div className="settings-form">
             <label>
-              <span>Điểm mount</span>
+              <span>Äiá»ƒm mount</span>
               <input value={mountPoint} onChange={(event) => setMountPoint(event.target.value)} placeholder="T:" />
             </label>
             <p className="form-hint">
-              Windows nên dùng drive letter dạng <code>T:</code>. macOS dùng <code>/Volumes/Telegram Drive</code>. Linux nên trỏ vào thư mục trống.
+              Windows nÃªn dÃ¹ng drive letter dáº¡ng <code>T:</code>. macOS dÃ¹ng <code>/Volumes/Telegram Drive</code>. Linux nÃªn trá» vÃ o thÆ° má»¥c trá»‘ng.
             </p>
             {mountInfo.error && <div className="error-note">{mountInfo.error}</div>}
             <div style={{ display: "flex", gap: 8 }}>
-              {!mountInfo.mounted && <button className="button button--primary" onClick={runMount} disabled={mountLoading}>Mount ổ ảo</button>}
+              {!mountInfo.mounted && <button className="button button--primary" onClick={runMount} disabled={mountLoading}>Mount á»• áº£o</button>}
               {mountInfo.mounted && <button className="button button--secondary" onClick={runUnmount} disabled={mountLoading}>Unmount</button>}
-              {mountInfo.mounted && mountInfo.mount_point && <span className="form-hint">Đang mount tại <strong>{mountInfo.mount_point}</strong></span>}
+              {mountInfo.mounted && mountInfo.mount_point && <span className="form-hint">Äang mount táº¡i <strong>{mountInfo.mount_point}</strong></span>}
             </div>
           </div>
         ) : (
           <p className="form-hint">
-            Để bật ổ ảo, build agent với <code>go build -tags fuse ./cmd/agent</code> và cài WinFsp (Windows) hoặc FUSE (macOS/Linux).
+            Äá»ƒ báº­t á»• áº£o, build agent vá»›i <code>go build -tags fuse ./cmd/agent</code> vÃ  cÃ i WinFsp (Windows) hoáº·c FUSE (macOS/Linux).
           </p>
         )}
       </div>

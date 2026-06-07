@@ -40,7 +40,7 @@ export function useUploadQueue(): UploadQueue {
 
   useEffect(() => {
     refreshTransfers();
-    const stream = new EventSource(eventsUrl());
+    const stream = new EventSource(eventsUrl(), { withCredentials: true });
     stream.addEventListener("transfer.updated", refreshTransfers);
     stream.addEventListener("file.created", refreshTransfers);
     return () => stream.close();
