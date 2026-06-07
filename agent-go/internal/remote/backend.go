@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strconv"
 	"strings"
@@ -213,7 +215,63 @@ func (b *Backend) StreamFromTelegram(ctx context.Context, fileID string, offset,
 }
 
 func (b *Backend) SaveStreamFile(ctx context.Context, data io.Reader, filename, mimeHint, folderID, relativePath string) (drive.File, error) {
-	return drive.File{}, errors.New("ghi qua remote chua duoc ho tro trong build read-only")
+	pr, pw := io.Pipe()
+	mw := multipart.NewWriter(pw)
+	go func() {
+		defer pw.Close()
+		defer mw.Close()
+		if folderID != "" {
+			_ = mw.WriteField("folder_id", folderID)
+		}
+		if relativePath != "" {
+			_ = mw.WriteField("relative_path", relativePath)
+		}
+		header := make(textproto.MIMEHeader)
+		header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename=%q`, filename))
+		if mimeHint != "" {
+			header.Set("Content-Type", mimeHint)
+		}
+		part, err := mw.CreatePart(header)
+		if err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+		if _, err := io.Copy(part, data); err != nil {
+			pw.CloseWithError(err)
+			return
+		}
+	}()
+
+	endpoint := b.baseURL + "/v1/files/upload"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, pr)
+	if err != nil {
+		return drive.File{}, err
+	}
+	req.Header.Set("Authorization", "Device "+b.token)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := b.http.Do(req)
+	if err != nil {
+		return drive.File{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		raw, _ := io.ReadAll(resp.Body)
+		var errResp struct {
+			Error string `json:"error"`
+		}
+		_ = json.Unmarshal(raw, &errResp)
+		if errResp.Error != "" {
+			return drive.File{}, fmt.Errorf("remote upload: %s", errResp.Error)
+		}
+		return drive.File{}, fmt.Errorf("remote upload HTTP %d", resp.StatusCode)
+	}
+	var result struct {
+		File drive.File `json:"file"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return drive.File{}, fmt.Errorf("decode upload response: %w", err)
+	}
+	return result.File, nil
 }
 
 func (b *Backend) CreateFolder(ctx context.Context, input drive.CreateFolderInput) (drive.Folder, error) {

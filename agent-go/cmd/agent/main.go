@@ -41,7 +41,31 @@ func main() {
 	dataDir := flag.String("data-dir", "", "thư mục dữ liệu Agent (ghi đè cấu hình)")
 	addr := flag.String("addr", "", "địa chỉ HTTP, ví dụ 0.0.0.0:8750")
 	withTray := flag.Bool("tray", false, "chạy kèm tray app desktop")
+	pairMode := flag.Bool("pair", false, "ghép thiết bị với VPS rồi thoát")
+	pairBase := flag.String("pair-url", "", "URL VPS khi --pair (vd https://drive.example.com)")
+	pairCode := flag.String("pair-code", "", "pairing code lấy trên PWA (vd 4F2A-9K2X)")
+	pairName := flag.String("pair-name", "", "tên thiết bị (mặc định hostname)")
+	remoteMode := flag.Bool("remote", false, "thin-client mode: bỏ SQLite/Telegram, chỉ mount qua VPS")
+	remoteBase := flag.String("remote-url", "", "VPS URL khi --remote (mặc định lấy từ token đã lưu)")
+	remoteMount := flag.String("remote-mount", "", "điểm mount khi --remote (mặc định T: hoặc /Volumes/...)")
+	tokenPath := flag.String("token-file", "", "đường dẫn token file (mặc định theo $XDG_CONFIG_HOME)")
 	flag.Parse()
+
+	if *pairMode {
+		if err := runPair(*pairBase, *pairCode, *pairName, *tokenPath); err != nil {
+			log.Fatalf("pair: %v", err)
+		}
+		return
+	}
+
+	if *remoteMode {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := runRemoteClient(ctx, *remoteBase, *tokenPath, *remoteMount); err != nil {
+			log.Fatalf("remote: %v", err)
+		}
+		return
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
