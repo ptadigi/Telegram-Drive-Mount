@@ -12,6 +12,11 @@ func TestMoveToTrashFile(t *testing.T) {
 	if runtime.GOOS != "windows" && runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
 		t.Skip("recycle bin chỉ test trên các platform hỗ trợ")
 	}
+	if runtime.GOOS == "darwin" {
+		// macOS Finder is not available on headless CI runners; the
+		// osascript path needs an interactive Finder session.
+		t.Skip("macOS Finder yêu cầu phiên đồ họa, skip trên CI headless")
+	}
 	if runtime.GOOS == "linux" {
 		// CI containers may not have a graphical session / gio.
 		if _, err := os.Stat(filepath.Join(os.Getenv("HOME"), ".local", "share")); err != nil {
