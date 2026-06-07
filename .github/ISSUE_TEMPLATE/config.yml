@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Báo lỗi bảo mật / Security advisory
+    url: https://github.com/ptadigi/Telegram-Drive-Mount/security/advisories/new
+    about: KHÔNG mở issue công khai cho lỗ hổng bảo mật, dùng GitHub Security Advisory.
+  - name: Thảo luận / Discussions
+    url: https://github.com/ptadigi/Telegram-Drive-Mount/discussions
+    about: Hỏi đáp, ý tưởng, chia sẻ self-host setup.
