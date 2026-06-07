@@ -88,6 +88,7 @@ func runMigrations(db *sql.DB) error {
 	}{
 		{1, migrate001Schema},
 		{2, migrate002Columns},
+		{3, migrate003Devices},
 	}
 	var current int
 	if err := db.QueryRow(`PRAGMA user_version`).Scan(&current); err != nil {
@@ -112,8 +113,45 @@ func migrate001Schema(db *sql.DB) error {
 }
 
 func migrate002Columns(db *sql.DB) error {
-	// Future migrations will live here. Keeping this no-op to claim
-	// version slot for the new tracking scheme.
+	// Future column-level migrations can live here. Reserved.
+	return nil
+}
+
+func migrate003Devices(db *sql.DB) error {
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS devices (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			name TEXT NOT NULL,
+			platform TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL,
+			last_seen_at INTEGER NOT NULL DEFAULT 0,
+			last_ip TEXT,
+			revoked_at INTEGER
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_devices_user_id ON devices(user_id)`,
+		`CREATE TABLE IF NOT EXISTS device_tokens (
+			token_hash TEXT PRIMARY KEY,
+			device_id TEXT NOT NULL,
+			created_at INTEGER NOT NULL,
+			expires_at INTEGER NOT NULL DEFAULT 0,
+			last_used_at INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_device_tokens_device ON device_tokens(device_id)`,
+		`CREATE TABLE IF NOT EXISTS pairing_codes (
+			code TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			expires_at INTEGER NOT NULL,
+			consumed_at INTEGER NOT NULL DEFAULT 0,
+			device_id TEXT,
+			created_at INTEGER NOT NULL
+		)`,
+	}
+	for _, stmt := range statements {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("schema devices: %w", err)
+		}
+	}
 	return nil
 }
 
