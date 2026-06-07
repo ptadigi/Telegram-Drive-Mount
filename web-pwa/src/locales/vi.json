@@ -132,5 +132,10 @@
     "loginState": "Phiên đăng nhập",
     "loginStarted": "Đang chờ mã",
     "notStarted": "Chưa bắt đầu"
+  },
+  "language": {
+    "label": "Ngôn ngữ",
+    "vi": "Tiếng Việt",
+    "en": "English"
   }
 }
