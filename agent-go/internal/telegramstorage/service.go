@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/telegram/downloader"
 	"github.com/gotd/td/telegram/message"
@@ -17,6 +18,7 @@ import (
 
 	"telegram-drive-agent/internal/config"
 	"telegram-drive-agent/internal/drive"
+	"telegram-drive-agent/internal/secret"
 )
 
 var ErrUnauthorized = errors.New("Telegram chưa được kết nối hoặc session đã hết hạn")
@@ -44,12 +46,30 @@ func (s *Service) runClient(ctx context.Context, fn func(runCtx context.Context,
 	}
 	s.clientMu.Lock()
 	defer s.clientMu.Unlock()
+	storage, err := newSessionStorage(s.cfg.Telegram.SessionPath)
+	if err != nil {
+		return err
+	}
 	client := telegram.NewClient(s.cfg.Telegram.APIID, s.cfg.Telegram.APIHash, telegram.Options{
-		SessionStorage: &telegram.FileSessionStorage{Path: s.cfg.Telegram.SessionPath},
+		SessionStorage: storage,
 	})
 	return client.Run(ctx, func(runCtx context.Context) error {
 		return fn(runCtx, client)
 	})
+}
+
+func newSessionStorage(path string) (session.Storage, error) {
+	key, err := secret.LoadKey()
+	if err != nil {
+		return nil, err
+	}
+	if key == nil {
+		// No env key configured: fall back to gotd's plain file storage so
+		// existing dev setups keep working. README warns the user to set
+		// TD_AGENT_SESSION_KEY in production.
+		return &telegram.FileSessionStorage{Path: path}, nil
+	}
+	return &secret.EncryptedSessionStorage{Path: path, Key: key}, nil
 }
 
 func (s *Service) UploadToSavedMessages(ctx context.Context, localPath string, originalName string) (drive.UploadedObject, error) {

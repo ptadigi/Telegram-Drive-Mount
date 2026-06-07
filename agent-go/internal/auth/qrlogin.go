@@ -98,8 +98,12 @@ func (s *Service) StartQR(parent context.Context) (QRStatus, error) {
 
 	disp := tg.NewUpdateDispatcher()
 	gaps := updates.New(updates.Config{Handler: disp})
+	storage, _ := newSessionStorage(cfg.Telegram.SessionPath)
+	if storage == nil {
+		storage = &telegram.FileSessionStorage{Path: cfg.Telegram.SessionPath}
+	}
 	client := telegram.NewClient(cfg.Telegram.APIID, cfg.Telegram.APIHash, telegram.Options{
-		SessionStorage: &telegram.FileSessionStorage{Path: cfg.Telegram.SessionPath},
+		SessionStorage: storage,
 		UpdateHandler:  gaps,
 	})
 
