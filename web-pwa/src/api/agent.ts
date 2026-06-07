@@ -61,6 +61,21 @@ export function startTelegramQR() { return sendJSON<TelegramQRStatus>("/v1/auth/
 export function getTelegramQRStatus(signal?: AbortSignal) { return getJSON<TelegramQRStatus>("/v1/auth/qr/status", signal); }
 export function submitTelegramQRPassword(password: string) { return sendJSON<TelegramQRStatus>("/v1/auth/qr/password", { password }); }
 export function cancelTelegramQR() { return sendJSON<TelegramQRStatus>("/v1/auth/qr/cancel", {}); }
+
+export type Device = { id: string; user_id: string; name: string; platform?: string; created_at: number; last_seen_at: number; last_ip?: string; revoked_at?: number; };
+export type PairingCode = { code: string; expires_at: number; };
+export type PairingResult = { device: Device; token: string; };
+export function startDevicePairing() { return sendJSON<PairingCode>("/v1/devices/pair/start", {}); }
+export function exchangeDevicePairing(code: string, name: string, platform?: string) { return sendJSON<PairingResult>("/v1/devices/pair/exchange", { code, name, platform: platform || "" }); }
+export function listDevices(signal?: AbortSignal) { return getJSON<{ devices: Device[] }>("/v1/devices", signal); }
+export async function revokeDevice(id: string) {
+  const response = await fetch(`${AGENT_BASE_URL}/v1/devices?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: `Lỗi ${response.status}` }));
+    throw new Error(data.error || `Lỗi ${response.status}`);
+  }
+  return response.json() as Promise<{ ok: boolean }>;
+}
 export type MountStatus = { available: boolean; mounted: boolean; mount_point?: string; drive_letter?: string; backend: string; error?: string; started_at?: number; };
 export function getMountStatus(signal?: AbortSignal) { return getJSON<MountStatus>("/v1/mount", signal); }
 export function startMount(mountPoint?: string) { return sendJSON<MountStatus>("/v1/mount", { mount_point: mountPoint || "" }); }

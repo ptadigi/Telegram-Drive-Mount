@@ -137,5 +137,20 @@
     "label": "Ngôn ngữ",
     "vi": "Tiếng Việt",
     "en": "English"
+  },
+  "devices": {
+    "title": "Thiết bị đã ghép",
+    "description": "Mỗi máy cài td-agent --pair sẽ xuất hiện ở đây. Mã ghép có hiệu lực 5 phút.",
+    "generateCode": "Tạo mã ghép thiết bị",
+    "refresh": "Làm mới",
+    "codeHint": "Mã có hiệu lực {{seconds}}s. Nhập vào td-agent --pair trên máy mới.",
+    "codeExpired": "Mã đã hết hạn, bấm tạo lại.",
+    "empty": "Chưa có thiết bị nào được ghép.",
+    "lastSeen": "Lần cuối: {{time}}",
+    "never": "chưa thấy",
+    "unknownPlatform": "Không rõ HĐH",
+    "revoke": "Thu hồi",
+    "revoked": "Đã thu hồi",
+    "revokeConfirm": "Thu hồi thiết bị này? Token client sẽ bị vô hiệu ngay."
   }
 }
