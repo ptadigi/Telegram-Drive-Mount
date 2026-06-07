@@ -1,0 +1,138 @@
+{
+  "app": {
+    "name": "Telegram Cloud Drive",
+    "tagline": "Turn Telegram into the storage layer for your own private cloud drive"
+  },
+  "status": {
+    "agentChecking": "Checking Go Agent...",
+    "agentOnline": "Go Agent is running",
+    "agentOffline": "Cannot reach Go Agent",
+    "telegramStorage": "Telegram storage",
+    "syncDesktop": "Desktop sync",
+    "mediaStreaming": "Media streaming",
+    "publicSharing": "Public sharing"
+  },
+  "actions": {
+    "upload": "Upload file",
+    "connectAgent": "Connect agent",
+    "openDrive": "Open drive",
+    "createShare": "Create share link"
+  },
+  "sections": {
+    "mobileUpload": "Upload from phone",
+    "virtualDrive": "Virtual drive",
+    "recentFiles": "Recent files",
+    "roadmap": "Roadmap",
+    "agentStatus": "Go Agent status"
+  },
+  "copy": {
+    "mobileUpload": "Login flow is in place. Phone uploads will be enabled once the Telegram storage adapter is finished.",
+    "virtualDrive": "Folder sync and the virtual drive run inside the Go Agent on your desktop, no Tauri required.",
+    "emptyRecent": "No file manager yet. The app currently wires the Go Agent, SQLite metadata and Telegram session.",
+    "roadmap": "Next step is uploading the first file to Telegram via the Go Agent, then file listing, streaming and sync.",
+    "agentStatus": "The PWA reads agent state directly. This is the base for Telegram config, desktop sync and the virtual drive."
+  },
+  "login": {
+    "title": "Connect Telegram",
+    "description": "Sign in to Telegram as usual to turn your account into a private cloud drive.",
+    "connectedTitle": "Telegram connected",
+    "connectedDescription": "The Go Agent already has a valid Telegram session. Next we open file management and uploads.",
+    "phone": "Telegram phone number",
+    "sendCode": "Send verification code",
+    "code": "Telegram code",
+    "verifyCode": "Verify code",
+    "codeHint": "The code is usually delivered inside the Telegram app itself, not via SMS.",
+    "changePhone": "Use another phone",
+    "password": "Cloud password",
+    "passwordPlaceholder": "Enter 2FA password",
+    "unlock": "Unlock",
+    "loading": "Working...",
+    "done": "Telegram login successful. Session is stored locally.",
+    "errors": {
+      "connection": "Telegram could not be reached. Check the Go Agent or try again."
+    }
+  },
+  "drive": {
+    "myDrive": "My Drive",
+    "myDriveDesc": "All cloud files and folders, with Telegram storing them in the background.",
+    "home": "Home",
+    "computers": "Computers",
+    "computersDesc": "Folders synced from your computers via the Go Agent.",
+    "recent": "Recent",
+    "shared": "Shared",
+    "sharedSoon": "Sharing with other people will land in the next release.",
+    "starred": "Starred",
+    "starredSoon": "Starring files and folders will be supported soon.",
+    "trash": "Trash",
+    "trashSoon": "Trash is being polished alongside delete/restore.",
+    "trashDesc": "Files and folders moved to the trash. They can be restored.",
+    "trashEmpty": "Trash is empty.",
+    "trashedFile": "Deleted file",
+    "trashedFolder": "Deleted folder",
+    "restore": "Restore",
+    "links": "Links",
+    "virtualDisk": "Virtual drive",
+    "telegramBackend": "Backed by Telegram",
+    "search": "Search Drive",
+    "newAction": "+ New",
+    "createShareLink": "Create share link",
+    "shareSoon": "Coming soon: share links via your own gateway.",
+    "dropHere": "Drop files here to upload",
+    "emptyDrop": "Drag files/folders here to get started, or click + New",
+    "heroEyebrow": "Personal cloud drive",
+    "heroTitle": "All your files, synced through Telegram",
+    "heroText": "Upload files and folders, generate thumbnails and sync in the background via the Go Agent. Built to feel like a real cloud drive."
+  },
+  "uploadDock": {
+    "activeSummary": "Uploading {{active}} file(s) · {{synced}} done",
+    "doneSummary": "{{synced}} synced · {{failed}} failed"
+  },
+  "files": {
+    "title": "My drive",
+    "description": "Manage files and folders like a cloud drive. After upload the Go Agent syncs them to Telegram.",
+    "upload": "Upload file",
+    "uploadAnyway": "Choose file to upload",
+    "uploadDone": "Uploaded {{name}}. Click Sync Telegram to push it to the cloud.",
+    "uploadAutoSync": "Uploaded {{name}}. The Go Agent is auto-syncing to Telegram.",
+    "multiUploadAutoSync": "Uploaded {{count}} files. The Go Agent is auto-syncing to Telegram.",
+    "uploadingAgent": "Uploading to agent:",
+    "uploadFolder": "Upload folder",
+    "syncTelegram": "Sync to Telegram",
+    "download": "Download",
+    "refresh": "Refresh",
+    "createFolder": "New folder",
+    "folderNamePrompt": "Name the new folder",
+    "folderCreated": "Folder {{name}} created.",
+    "root": "My drive",
+    "folder": "Folder",
+    "localFolder": "Local",
+    "createDemo": "Create demo file",
+    "renamePrompt": "Enter new name",
+    "rename": "Rename",
+    "share": "Create share link",
+    "viewDetails": "View details",
+    "trashConfirm": "Move {{name}} to trash?",
+    "trash": "Move to trash",
+    "loading": "Loading files...",
+    "empty": "No files in metadata yet.",
+    "unknownType": "Unknown file type"
+  },
+  "agent": {
+    "version": "Version",
+    "uptime": "Uptime",
+    "dataDir": "Data directory",
+    "database": "Metadata database",
+    "telegramSession": "Telegram session",
+    "telegramApi": "Telegram API",
+    "ready": "Ready",
+    "notReady": "Not ready",
+    "loginState": "Login session",
+    "loginStarted": "Waiting for code",
+    "notStarted": "Not started"
+  },
+  "language": {
+    "label": "Language",
+    "vi": "Tiếng Việt",
+    "en": "English"
+  }
+}
