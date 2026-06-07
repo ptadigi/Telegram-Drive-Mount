@@ -26,11 +26,11 @@ type fuseMounter struct {
 	point   string
 }
 
-func newPlatformMounter(svc *drive.Service, dataDir string) Mounter {
-	if svc == nil {
+func newPlatformMounter(backend Backend, dataDir string) Mounter {
+	if backend == nil {
 		return nil
 	}
-	fs := newDriveFS(svc, dataDir)
+	fs := newDriveFS(backend, dataDir)
 	host := fuse.NewFileSystemHost(fs)
 	host.SetCapReaddirPlus(true)
 	host.SetCapCaseInsensitive(false)
@@ -109,7 +109,7 @@ func defaultMountPoint() string {
 // driveFS adapts drive.Service to a read-write FUSE filesystem with write-back to Telegram.
 type driveFS struct {
 	fuse.FileSystemBase
-	svc      *drive.Service
+	svc      Backend
 	dataDir  string
 	mu       sync.Mutex
 	handles  map[uint64]*writeHandle
@@ -127,8 +127,8 @@ type writeHandle struct {
 	size     int64
 }
 
-func newDriveFS(svc *drive.Service, dataDir string) *driveFS {
-	return &driveFS{svc: svc, dataDir: dataDir, handles: map[uint64]*writeHandle{}, pending: map[string]*writeHandle{}}
+func newDriveFS(backend Backend, dataDir string) *driveFS {
+	return &driveFS{svc: backend, dataDir: dataDir, handles: map[uint64]*writeHandle{}, pending: map[string]*writeHandle{}}
 }
 
 func pendingKey(p string) string {
