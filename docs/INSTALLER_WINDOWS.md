@@ -84,7 +84,7 @@ cd agent-go
 $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
 $env:CGO_ENABLED = "1"
 $env:CPATH = "C:\Program Files (x86)\WinFsp\inc\fuse"
-go build -tags fuse -o ..\installer\td-agent.exe .\cmd\agent
+go build -tags "fuse tray" -o ..\installer\td-agent.exe .\cmd\agent
 
 # Build PWA
 cd ..\web-pwa
@@ -93,6 +93,7 @@ npm run build
 xcopy /E /I /Y dist ..\installer\pwa
 
 # Compile installer trong Inno Setup
-# (mở UI hoặc dùng iscc.exe)
-"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" ..\installer\td-agent-installer.iss
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" ..\installer\td-agent.iss
 ```
+
+> File `installer/td-agent.iss` đã có sẵn trong repo, không cần copy từ docs nữa.
