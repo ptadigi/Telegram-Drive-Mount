@@ -23,25 +23,25 @@ const currentHost = window.location.hostname || "127.0.0.1";
 export const AGENT_BASE_URL = `http://${currentHost}:8750`;
 
 async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`${AGENT_BASE_URL}${path}`, { signal });
-  if (!response.ok) throw new Error(`Agent API lỗi ${response.status}`);
+  const response = await fetch(`${AGENT_BASE_URL}${path}`, { signal, credentials: "include" });
+  if (!response.ok) throw new Error(`Agent API lá»—i ${response.status}`);
   return response.json() as Promise<T>;
 }
 
 async function sendJSON<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${AGENT_BASE_URL}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const response = await fetch(`${AGENT_BASE_URL}${path}`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ error: `Agent API lỗi ${response.status}` }));
-    throw new Error(data.error || `Agent API lỗi ${response.status}`);
+    const data = await response.json().catch(() => ({ error: `Agent API lá»—i ${response.status}` }));
+    throw new Error(data.error || `Agent API lá»—i ${response.status}`);
   }
   return response.json() as Promise<T>;
 }
 
 async function putJSON<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${AGENT_BASE_URL}${path}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const response = await fetch(`${AGENT_BASE_URL}${path}`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ error: `Agent API lỗi ${response.status}` }));
-    throw new Error(data.error || `Agent API lỗi ${response.status}`);
+    const data = await response.json().catch(() => ({ error: `Agent API lá»—i ${response.status}` }));
+    throw new Error(data.error || `Agent API lá»—i ${response.status}`);
   }
   return response.json() as Promise<T>;
 }
@@ -69,10 +69,10 @@ export function startDevicePairing() { return sendJSON<PairingCode>("/v1/devices
 export function exchangeDevicePairing(code: string, name: string, platform?: string) { return sendJSON<PairingResult>("/v1/devices/pair/exchange", { code, name, platform: platform || "" }); }
 export function listDevices(signal?: AbortSignal) { return getJSON<{ devices: Device[] }>("/v1/devices", signal); }
 export async function revokeDevice(id: string) {
-  const response = await fetch(`${AGENT_BASE_URL}/v1/devices?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  const response = await fetch(`${AGENT_BASE_URL}/v1/devices?id=${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" });
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ error: `Lỗi ${response.status}` }));
-    throw new Error(data.error || `Lỗi ${response.status}`);
+    const data = await response.json().catch(() => ({ error: `Lá»—i ${response.status}` }));
+    throw new Error(data.error || `Lá»—i ${response.status}`);
   }
   return response.json() as Promise<{ ok: boolean }>;
 }
@@ -80,10 +80,10 @@ export type MountStatus = { available: boolean; mounted: boolean; mount_point?: 
 export function getMountStatus(signal?: AbortSignal) { return getJSON<MountStatus>("/v1/mount", signal); }
 export function startMount(mountPoint?: string) { return sendJSON<MountStatus>("/v1/mount", { mount_point: mountPoint || "" }); }
 export async function stopMount() {
-  const response = await fetch(`${AGENT_BASE_URL}/v1/mount`, { method: "DELETE" });
+  const response = await fetch(`${AGENT_BASE_URL}/v1/mount`, { method: "DELETE", credentials: "include" });
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ error: `Lỗi ${response.status}` }));
-    throw new Error(data.error || `Lỗi ${response.status}`);
+    const data = await response.json().catch(() => ({ error: `Lá»—i ${response.status}` }));
+    throw new Error(data.error || `Lá»—i ${response.status}`);
   }
   return response.json() as Promise<MountStatus>;
 }
@@ -97,10 +97,10 @@ export function createSyncRoot(localPath: string, remoteFolderId = "") { return 
 export function scanSyncRoot(id: string) { return sendJSON<{ roots: SyncRoot[] }>("/v1/sync/roots/scan", { id }); }
 export function updateSyncRoot(id: string, enabled: boolean) { return putJSON<{ roots: SyncRoot[] }>("/v1/sync/roots", { id, enabled }); }
 export async function deleteSyncRoot(id: string) {
-  const response = await fetch(`${AGENT_BASE_URL}/v1/sync/roots?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  const response = await fetch(`${AGENT_BASE_URL}/v1/sync/roots?id=${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" });
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ error: `Agent API lỗi ${response.status}` }));
-    throw new Error(data.error || `Agent API lỗi ${response.status}`);
+    const data = await response.json().catch(() => ({ error: `Agent API lá»—i ${response.status}` }));
+    throw new Error(data.error || `Agent API lá»—i ${response.status}`);
   }
   return response.json() as Promise<{ roots: SyncRoot[] }>;
 }
@@ -119,18 +119,18 @@ export function moveFolder(id: string, newParentId: string) { return putJSON<{ f
 export function starFile(id: string, starred: boolean) { return putJSON<{ ok: boolean }>("/v1/files/star", { id, starred }); }
 export function starFolder(id: string, starred: boolean) { return putJSON<{ ok: boolean }>("/v1/folders/star", { id, starred }); }
 export async function permanentDeleteFile(id: string) {
-  const response = await fetch(`${AGENT_BASE_URL}/v1/files?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  const response = await fetch(`${AGENT_BASE_URL}/v1/files?id=${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" });
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ error: `Agent API lỗi ${response.status}` }));
-    throw new Error(data.error || `Agent API lỗi ${response.status}`);
+    const data = await response.json().catch(() => ({ error: `Agent API lá»—i ${response.status}` }));
+    throw new Error(data.error || `Agent API lá»—i ${response.status}`);
   }
   return response.json() as Promise<{ ok: boolean }>;
 }
 export async function permanentDeleteFolder(id: string) {
-  const response = await fetch(`${AGENT_BASE_URL}/v1/folders?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  const response = await fetch(`${AGENT_BASE_URL}/v1/folders?id=${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" });
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ error: `Agent API lỗi ${response.status}` }));
-    throw new Error(data.error || `Agent API lỗi ${response.status}`);
+    const data = await response.json().catch(() => ({ error: `Agent API lá»—i ${response.status}` }));
+    throw new Error(data.error || `Agent API lá»—i ${response.status}`);
   }
   return response.json() as Promise<{ ok: boolean }>;
 }
@@ -138,12 +138,13 @@ export function zipFolderUrl(id: string) { return `${AGENT_BASE_URL}/v1/folders/
 export async function downloadBundle(fileIds: string[], folderIds: string[]) {
   const response = await fetch(`${AGENT_BASE_URL}/v1/bundle/zip`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ file_ids: fileIds, folder_ids: folderIds }),
   });
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ error: `Lỗi ${response.status}` }));
-    throw new Error(data.error || `Lỗi ${response.status}`);
+    const data = await response.json().catch(() => ({ error: `Lá»—i ${response.status}` }));
+    throw new Error(data.error || `Lá»—i ${response.status}`);
   }
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
@@ -172,10 +173,10 @@ export function updateShare(id: string, payload: { password?: string | null; exp
   return putJSON<{ share: Share }>("/v1/shares", body);
 }
 export async function deleteShare(id: string) {
-  const response = await fetch(`${AGENT_BASE_URL}/v1/shares?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  const response = await fetch(`${AGENT_BASE_URL}/v1/shares?id=${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" });
   if (!response.ok) {
-    const data = await response.json().catch(() => ({ error: `Agent API lỗi ${response.status}` }));
-    throw new Error(data.error || `Agent API lỗi ${response.status}`);
+    const data = await response.json().catch(() => ({ error: `Agent API lá»—i ${response.status}` }));
+    throw new Error(data.error || `Agent API lá»—i ${response.status}`);
   }
   return response.json() as Promise<{ ok: boolean }>;
 }
@@ -220,13 +221,13 @@ export function uploadFile(file: File, folderId = "", onProgress?: (progress: Up
         onProgress?.({ phase: "processing", percent: 100, fileName: file.name });
         resolve(JSON.parse(request.responseText) as { file: DriveFile });
       } else {
-        const error = safeError(request.responseText, `Agent API lỗi ${request.status}`);
+        const error = safeError(request.responseText, `Agent API lá»—i ${request.status}`);
         onProgress?.({ phase: "failed", percent: 100, fileName: file.name, error });
         reject(new Error(error));
       }
     };
     request.onerror = () => {
-      const error = "Không kết nối được Go Agent";
+      const error = "KhÃ´ng káº¿t ná»‘i Ä‘Æ°á»£c Go Agent";
       onProgress?.({ phase: "failed", percent: 100, fileName: file.name, error });
       reject(new Error(error));
     };
