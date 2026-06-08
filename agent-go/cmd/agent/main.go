@@ -49,6 +49,8 @@ func main() {
 	remoteBase := flag.String("remote-url", "", "VPS URL khi --remote (mặc định lấy từ token đã lưu)")
 	remoteMount := flag.String("remote-mount", "", "điểm mount khi --remote (mặc định T: hoặc /Volumes/...)")
 	tokenPath := flag.String("token-file", "", "đường dẫn token file (mặc định theo $XDG_CONFIG_HOME)")
+	mountOnStart := flag.Bool("mount-on-start", false, "tự mount ổ ảo ngay khi agent khởi động")
+	mountPoint := flag.String("mount-point", "", "điểm mount khi --mount-on-start (mặc định T: / /Volumes/...)")
 	flag.Parse()
 
 	if *pairMode {
@@ -137,6 +139,19 @@ func main() {
 			log.Fatalf("http server failed: %v", err)
 		}
 	}()
+
+	if *mountOnStart {
+		go func() {
+			// Give the HTTP server a beat to come up, then mount.
+			time.Sleep(1 * time.Second)
+			status, err := mountManager.Mount(ctx, *mountPoint)
+			if err != nil {
+				log.Printf("mount-on-start lỗi: %v", err)
+				return
+			}
+			log.Printf("đã tự mount ổ ảo tại %s (backend=%s)", status.MountPoint, status.Backend)
+		}()
+	}
 
 	if *withTray {
 		execPath, _ := os.Executable()
