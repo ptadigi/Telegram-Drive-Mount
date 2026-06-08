@@ -68,7 +68,13 @@ Filename: "taskkill.exe"; Parameters: "/IM td-agent.exe /F"; Flags: runhidden
 - Sau khi xong, mở Start Menu → Ổ Đĩa Cloud Ảo.
 - Kiểm tra agent listen `127.0.0.1:8750`, mount drive `T:` từ tray.
 
-## Ghi chú
+## Tính năng installer
+
+- Cài WinFsp tự động (driver mount ổ ảo).
+- Tự sinh `TD_AGENT_SESSION_KEY` (32-byte hex) lưu vào biến môi trường user — session Telegram mã hoá, không phải quản lý key thủ công.
+- Tuỳ chọn "Tự khởi động cùng Windows": đăng ký `HKCU\...\Run` chạy `td-agent.exe --tray --mount-on-start`.
+- Shortcut Start Menu + Desktop chạy `--tray --mount-on-start` → mở app là có ổ T: luôn.
+- Gỡ cài đặt: kill agent + xoá registry autostart.
 
 - Nếu user đã có WinFsp, msiexec sẽ idempotent, không cần handle riêng.
 - Khi update version, đổi `AppVersion` và file MSI WinFsp tương ứng.
