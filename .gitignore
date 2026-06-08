@@ -37,3 +37,6 @@ cookies.txt
 agent-go/cookies.txt
 agent-go/agent.exe
 agent-go/td-agent.exe
+
+# local session encryption key (server)
+.session-key
