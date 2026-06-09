@@ -15,6 +15,7 @@ type Config struct {
 	Port            int            `json:"port"`
 	DataDir         string         `json:"data_dir"`
 	DatabasePath    string         `json:"database_path"`
+	PWADir          string         `json:"pwa_dir"`
 	ShutdownTimeout time.Duration  `json:"-"`
 	Telegram        TelegramConfig `json:"telegram"`
 	Cache           CacheConfig    `json:"cache"`
