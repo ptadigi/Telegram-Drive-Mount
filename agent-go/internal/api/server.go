@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -135,6 +136,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/devices/pair/exchange", s.handleDevicePairExchange)
 	mux.HandleFunc("GET /v1/devices", s.handleDeviceList)
 	mux.HandleFunc("DELETE /v1/devices", s.handleDeviceRevoke)
+	if dir := strings.TrimSpace(s.config.PWADir); dir != "" {
+		mux.Handle("/", spaHandler(dir))
+	}
 	return withCORS(withJSON(s.withAuth(mux)))
 }
 
@@ -1269,6 +1273,26 @@ func withJSON(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		next.ServeHTTP(w, r)
+	})
+}
+
+// spaHandler serves a single-page application directory: existing files
+// are returned as-is; everything else falls back to index.html so the
+// React router can take over (deep links keep working).
+func spaHandler(dir string) http.Handler {
+	fs := http.FileServer(http.Dir(dir))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		clean := strings.TrimPrefix(r.URL.Path, "/")
+		if clean == "" {
+			http.ServeFile(w, r, dir+"/index.html")
+			return
+		}
+		full := dir + "/" + clean
+		if info, err := os.Stat(full); err == nil && !info.IsDir() {
+			fs.ServeHTTP(w, r)
+			return
+		}
+		http.ServeFile(w, r, dir+"/index.html")
 	})
 }
 

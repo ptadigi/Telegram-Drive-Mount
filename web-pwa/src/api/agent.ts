@@ -19,8 +19,14 @@ export type AuthStatus = { configured: boolean; session_exists: boolean; login_s
 export type SyncRoot = { id: string; local_path: string; remote_folder_id?: string; mode: string; enabled: boolean; status: string; last_scan_at: number; created_at: number; updated_at: number; };
 export type UploadProgress = { phase: "uploading_agent" | "processing" | "completed" | "failed"; percent: number; fileName: string; error?: string; };
 
+// AGENT_BASE_URL resolution:
+// - Dev (PWA chạy trên :5173 hoặc :5174): gọi thẳng agent ở :8750 cùng host.
+// - Production (PWA serve qua reverse proxy cùng domain/HTTPS): gọi same-origin
+//   (đường dẫn tương đối), để OpenResty/nginx proxy /v1, /health, /share... về agent.
 const currentHost = window.location.hostname || "127.0.0.1";
-export const AGENT_BASE_URL = `http://${currentHost}:8750`;
+const devPorts = ["5173", "5174", "3000"];
+const isDev = devPorts.includes(window.location.port);
+export const AGENT_BASE_URL = isDev ? `http://${currentHost}:8750` : "";
 
 async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${AGENT_BASE_URL}${path}`, { signal, credentials: "include" });
