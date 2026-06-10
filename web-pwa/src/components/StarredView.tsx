@@ -36,32 +36,32 @@ export function StarredView() {
     <section className="drive-browser">
       <div className="drive-browser__header">
         <div>
-          <h2>CÃ³ gáº¯n dáº¥u sao</h2>
-          <p>CÃ¡c file vÃ  thÆ° má»¥c báº¡n Ä‘Ã£ Ä‘Ã¡nh dáº¥u sao.</p>
+          <h2>Có gắn dấu sao</h2>
+          <p>Các file và thư mục bạn đã đánh dấu sao.</p>
         </div>
         <div className="drive-browser__actions">
           <button className="button button--ghost" onClick={refresh} disabled={loading}><RefreshCw size={15} /></button>
         </div>
       </div>
-      {loading && <div className="muted-box">Äang táº£i...</div>}
-      {!loading && isEmpty && <div className="muted-box">ChÆ°a cÃ³ má»¥c nÃ o Ä‘Æ°á»£c Ä‘Ã¡nh dáº¥u sao.</div>}
+      {loading && <div className="muted-box">Đang tải...</div>}
+      {!loading && isEmpty && <div className="muted-box">Chưa có mục nào được đánh dấu sao.</div>}
       {!loading && !isEmpty && (
         <div className="file-grid">
           {contents.folders.map((folder) => (
             <div className="drive-card drive-card--folder" key={folder.id}>
               <div className="drive-card__thumb"><Folder size={36} /></div>
-              <div className="drive-card__name"><strong>{folder.name}</strong><span>ThÆ° má»¥c</span></div>
+              <div className="drive-card__name"><strong>{folder.name}</strong><span>Thư mục</span></div>
               <div className="drive-card__footer">
-                <button className="button button--ghost" onClick={() => starFolder(folder.id, false).then(refresh)}><Star size={14} /> Bá» sao</button>
+                <button className="button button--ghost" onClick={() => starFolder(folder.id, false).then(refresh)}><Star size={14} /> Bỏ sao</button>
               </div>
             </div>
           ))}
           {contents.files.map((file) => (
             <div className="drive-card" key={file.id}>
               <div className="drive-card__thumb">{file.preview_status === "ready" && file.kind === "image" ? <img src={thumbnailUrl(file.id)} alt="" /> : kindIcon(file.kind)}</div>
-              <div className="drive-card__name"><strong>{file.name}</strong><span>{kindLabel(file.kind)} Â· {formatBytes(file.size)}</span></div>
+              <div className="drive-card__name"><strong>{file.name}</strong><span>{kindLabel(file.kind)} · {formatBytes(file.size)}</span></div>
               <div className="drive-card__footer">
-                <button className="button button--ghost" onClick={() => starFile(file.id, false).then(refresh)}><Star size={14} /> Bá» sao</button>
+                <button className="button button--ghost" onClick={() => starFile(file.id, false).then(refresh)}><Star size={14} /> Bỏ sao</button>
                 <a className="drive-card__action" href={downloadFileUrl(file.id)}><Download size={14} /></a>
               </div>
             </div>
@@ -81,7 +81,7 @@ function kindIcon(kind: DriveFile["kind"]) {
 }
 
 function kindLabel(kind: string) {
-  const labels: Record<string, string> = { image: "HÃ¬nh áº£nh", video: "Video", audio: "Ã‚m thanh", document: "TÃ i liá»‡u", archive: "NÃ©n", other: "File" };
+  const labels: Record<string, string> = { image: "Hình ảnh", video: "Video", audio: "Âm thanh", document: "Tài liệu", archive: "Nén", other: "File" };
   return labels[kind] || "File";
 }
 

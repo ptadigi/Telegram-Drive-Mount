@@ -1,66 +1,69 @@
-# Äa thiáº¿t bá»‹ / Multi-device
+# Đa thiết bị / Multi-device
 
-> Tiáº¿ng Viá»‡t trÆ°á»›c, English below.
+> Tiếng Việt trước, English below.
 
-MÃ´ hÃ¬nh: 1 mÃ¡y chá»§ (VPS hoáº·c 1 PC) cháº¡y `td-agent` Ä‘áº§y Ä‘á»§ â€” giá»¯ Telegram session, metadata SQLite, cache. CÃ¡c mÃ¡y cÃ²n láº¡i cháº¡y `td-agent --remote` á»Ÿ cháº¿ Ä‘á»™ thin-client: khÃ´ng cÃ³ Telegram session, khÃ´ng cÃ³ DB, chá»‰ mount á»• áº£o vÃ  gá»i mÃ¡y chá»§ qua HTTPS.
+Mô hình: 1 máy chủ (VPS hoặc 1 PC) chạy `td-agent` đầy đủ — giữ Telegram session, metadata SQLite, cache. Các máy còn lại chạy `td-agent --remote` ở chế độ thin-client: không có Telegram session, không có DB, chỉ mount ổ ảo và gọi máy chủ qua HTTPS.
 
 `
-        Telegram (kho lÆ°u trá»¯ tháº­t)
-              | MTProto (session mÃ£ hoÃ¡ AES-256-GCM)
-        MÃ¡y chá»§ td-agent  (VPS hoáº·c PC chÃ­nh)
+        Telegram (kho lưu trữ thật)
+              | MTProto (session mã hoá AES-256-GCM)
+        Máy chủ td-agent  (VPS hoặc PC chính)
         - PWA + REST API + chunk cache + coalesce
               | HTTPS + Device token
-   PC2 --remote--+--remote-- PC3 ... + PWA trÃªn má»i trÃ¬nh duyá»‡t
+   PC2 --remote--+--remote-- PC3 ... + PWA trên mọi trình duyệt
 `
 
 ---
 
-## Tiáº¿ng Viá»‡t
+## Tiếng Việt
 
-### 1. Chuáº©n bá»‹ mÃ¡y chá»§
+### 1. Chuẩn bị máy chủ
 
 `powershell
-# Sinh khoÃ¡ mÃ£ hoÃ¡ session (giá»¯ cá»‘ Ä‘á»‹nh, máº¥t khoÃ¡ = pháº£i login Telegram láº¡i)
+# Sinh khoá mã hoá session (giữ cố định, mất khoá = phải login Telegram lại)
 # Dung: openssl rand -hex 32   (hoac bat ky chuoi 64 ky tu hex)
 $env:TD_AGENT_SESSION_KEY = "<64-ky-tu-hex>"
 
-# Cháº¡y mÃ¡y chá»§ (build kÃ¨m mount: go build -tags 'fuse tray')
+# Chạy máy chủ (build kèm mount: go build -tags 'fuse tray')
 .\td-agent.exe --config config.local.json
 `
 
-Má»Ÿ PWA, Ä‘Äƒng nháº­p, káº¿t ná»‘i Telegram (QR hoáº·c sá»‘ Ä‘iá»‡n thoáº¡i).
+Mở PWA, đăng nhập, kết nối Telegram (QR hoặc số điện thoại).
 
-### 2. Táº¡o mÃ£ ghÃ©p thiáº¿t bá»‹
+### 2. Tạo mã ghép thiết bị
 
-- Trong PWA: **Thiáº¿t bá»‹ Ä‘Ã£ ghÃ©p** â†’ **Táº¡o mÃ£ ghÃ©p thiáº¿t bá»‹**.
-- MÃ£ dáº¡ng `4F2A-9K2X`, hiá»‡u lá»±c 5 phÃºt, dÃ¹ng 1 láº§n.
+- Trong PWA: **Thiết bị đã ghép** → **Tạo mã ghép thiết bị**.
+- Mã dạng `4F2A-9K2X`, hiệu lực 5 phút, dùng 1 lần.
 
-### 3. GhÃ©p mÃ¡y con
+### 3. Ghép máy con
+
+> Người dùng Windows có thể tải `td-agent.exe` sẵn từ GitHub Releases để test ngay. Nếu muốn mount ổ ảo + tray, dùng bản build `go build -tags 'fuse tray'`.
+
 
 `powershell
-# TrÃªn mÃ¡y con (Ä‘Ã£ cÃ i WinFsp/FUSE + td-agent)
+# Trên máy con (đã cài WinFsp/FUSE + td-agent)
 .\td-agent.exe --pair --pair-url https://drive.tencuaban.com --pair-code 4F2A-9K2X
-# Token lÆ°u vÃ o %APPDATA%\TelegramVirtualDrive\agent-client\token.json (chmod 0600 trÃªn *nix)
+# Token lưu vào %APPDATA%\TelegramVirtualDrive\agent-client\token.json (chmod 0600 trên *nix)
 `
 
-### 4. Mount á»• áº£o trÃªn mÃ¡y con
+### 4. Mount ổ ảo trên máy con
 
 `powershell
 .\td-agent.exe --remote --remote-mount T:
 `
 
-MÃ¡y con tháº¥y Ä‘Ãºng cÃ¢y thÆ° má»¥c nhÆ° mÃ¡y chá»§. Má»Ÿ file = táº£i qua mÃ¡y chá»§ (stream tá»« Telegram, cÃ³ chunk cache). Táº¡o/sá»­a/xoÃ¡ file trong `T:` Ä‘á»“ng bá»™ ngÆ°á»£c lÃªn mÃ¡y chá»§.
+Máy con thấy đúng cây thư mục như máy chủ. Mở file = tải qua máy chủ (stream từ Telegram, có chunk cache). Tạo/sửa/xoá file trong `T:` đồng bộ ngược lên máy chủ.
 
-### 5. Thu há»“i thiáº¿t bá»‹
+### 5. Thu hồi thiết bị
 
-PWA â†’ **Thiáº¿t bá»‹ Ä‘Ã£ ghÃ©p** â†’ **Thu há»“i**. Token client bá»‹ vÃ´ hiá»‡u ngay.
+PWA → **Thiết bị đã ghép** → **Thu hồi**. Token client bị vô hiệu ngay.
 
-### LÆ°u Ã½ báº£o máº­t
+### Lưu ý bảo mật
 
-- Production báº¯t buá»™c HTTPS. Chá»‰ dev local má»›i Ä‘áº·t `TD_AGENT_INSECURE=1`.
-- `TD_AGENT_SESSION_KEY` pháº£i cá»‘ Ä‘á»‹nh giá»¯a cÃ¡c láº§n khá»Ÿi Ä‘á»™ng mÃ¡y chá»§.
-- Token thiáº¿t bá»‹ lÆ°u dáº¡ng SHA-256 hash trong DB, khÃ´ng lÆ°u plaintext.
-- Má»—i user/VPS dÃ¹ng tÃ i khoáº£n Telegram riÃªng cá»§a há».
+- Production bắt buộc HTTPS. Chỉ dev local mới đặt `TD_AGENT_INSECURE=1`.
+- `TD_AGENT_SESSION_KEY` phải cố định giữa các lần khởi động máy chủ.
+- Token thiết bị lưu dạng SHA-256 hash trong DB, không lưu plaintext.
+- Mỗi user/VPS dùng tài khoản Telegram riêng của họ.
 
 ---
 
@@ -68,7 +71,7 @@ PWA â†’ **Thiáº¿t bá»‹ Ä‘Ã£ ghÃ©p** â†’ **Thu há»“i*
 
 ### 1. Server
 
-`ash
+`ash
 export TD_AGENT_SESSION_KEY="$(openssl rand -hex 32)"   # keep this stable
 ./td-agent --config config.local.json                   # build with -tags 'fuse tray'
 `
@@ -77,18 +80,18 @@ Open the PWA, sign in, connect Telegram (QR or phone).
 
 ### 2. Generate a pairing code
 
-PWA â†’ **Paired devices** â†’ **Generate pairing code**. Code like `4F2A-9K2X`, valid 5 minutes, single use.
+PWA → **Paired devices** → **Generate pairing code**. Code like `4F2A-9K2X`, valid 5 minutes, single use.
 
 ### 3. Pair a client machine
 
-`ash
+`ash
 ./td-agent --pair --pair-url https://drive.example.com --pair-code 4F2A-9K2X
 # token saved under the OS config dir, file mode 0600
 `
 
 ### 4. Mount the virtual drive on the client
 
-`ash
+`ash
 ./td-agent --remote --remote-mount T:          # Windows
 ./td-agent --remote --remote-mount ~/TGDrive   # Linux/macOS
 `
@@ -97,7 +100,7 @@ The client sees the same tree as the server. Reads stream through the server (ch
 
 ### 5. Revoke a device
 
-PWA â†’ **Paired devices** â†’ **Revoke**. The client token is invalidated immediately.
+PWA → **Paired devices** → **Revoke**. The client token is invalidated immediately.
 
 ### Security notes
 

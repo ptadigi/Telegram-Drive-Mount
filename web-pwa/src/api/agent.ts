@@ -233,7 +233,7 @@ export function uploadFile(file: File, folderId = "", onProgress?: (progress: Up
       }
     };
     request.onerror = () => {
-      const error = "KhÃ´ng káº¿t ná»‘i Ä‘Æ°á»£c Go Agent";
+      const error = "Không kết nối được Go Agent";
       onProgress?.({ phase: "failed", percent: 100, fileName: file.name, error });
       reject(new Error(error));
     };

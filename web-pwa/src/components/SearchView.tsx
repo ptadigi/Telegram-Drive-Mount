@@ -60,7 +60,7 @@ export function SearchView({ query }: Props) {
     <section className="drive-browser">
       <div className="drive-browser__header">
         <div>
-          <h2>Kết quả cho “{query}”</h2>
+          <h2>Kết quả cho "{query}"</h2>
           <p>{folders.length} thư mục · {files.length} file</p>
         </div>
       </div>

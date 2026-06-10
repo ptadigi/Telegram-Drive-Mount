@@ -45,33 +45,33 @@ export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpen
     <div className="home-view">
       <section className="drive-hero-card">
         <div>
-          <span>Cloud drive cÃ¡ nhÃ¢n</span>
-          <h1>ChÃ o báº¡n, á»• Ä‘Ä©a cloud Ä‘Ã£ sáºµn sÃ ng</h1>
-          <p>Táº£i file lÃªn, Ä‘á»“ng bá»™ thÆ° má»¥c desktop vÃ  chia sáº» link an toÃ n qua domain riÃªng. Telegram lÃ  kho lÆ°u trá»¯ áº©n phÃ­a sau.</p>
+          <span>Cloud drive cá nhân</span>
+          <h1>Chào bạn, ổ đĩa cloud đã sẵn sàng</h1>
+          <p>Tải file lên, đồng bộ thư mục desktop và chia sẻ link an toàn qua domain riêng. Telegram là kho lưu trữ ẩn phía sau.</p>
         </div>
         <div className="drive-stats">
-          <Stat label="Tráº¡ng thÃ¡i" value={agentState === "online" ? "Äang cháº¡y" : "ChÆ°a káº¿t ná»‘i"} />
-          <Stat label="Database" value={database?.exists ? "Sáºµn sÃ ng" : "ChÆ°a sáºµn sÃ ng"} />
-          <Stat label="Telegram" value={auth?.session_exists ? "ÄÃ£ káº¿t ná»‘i" : "ChÆ°a Ä‘Äƒng nháº­p"} />
+          <Stat label="Trạng thái" value={agentState === "online" ? "Đang chạy" : "Chưa kết nối"} />
+          <Stat label="Database" value={database?.exists ? "Sẵn sàng" : "Chưa sẵn sàng"} />
+          <Stat label="Telegram" value={auth?.session_exists ? "Đã kết nối" : "Chưa đăng nhập"} />
           <Stat label="Uptime" value={info ? `${info.uptime_sec}s` : "-"} />
         </div>
       </section>
 
       <section className="home-actions">
-        <button className="home-action" onClick={onOpenDrive}><Plus size={18} /><span><strong>Má»Ÿ Drive cá»§a tÃ´i</strong><br /><small>Quáº£n lÃ½ file vÃ  thÆ° má»¥c</small></span></button>
-        <button className="home-action" onClick={onOpenStarred}><span className="home-action__icon home-action__icon--star">â˜…</span><span><strong>ÄÃ£ Ä‘Ã¡nh dáº¥u sao</strong><br /><small>Truy cáº­p nhanh cÃ¡c má»¥c quan trá»ng</small></span></button>
-        <button className="home-action" onClick={onOpenComputers}><span className="home-action__icon">ðŸ’»</span><span><strong>Äá»“ng bá»™ mÃ¡y tÃ­nh</strong><br /><small>ThÆ° má»¥c local Ä‘ang Ä‘Æ°á»£c watch</small></span></button>
-        <button className="home-action" onClick={onOpenSettings}><span className="home-action__icon">âš™</span><span><strong>Cáº¥u hÃ¬nh chia sáº»</strong><br /><small>Domain, LAN hoáº·c Cloudflare Tunnel</small></span></button>
+        <button className="home-action" onClick={onOpenDrive}><Plus size={18} /><span><strong>Mở Drive của tôi</strong><br /><small>Quản lý file và thư mục</small></span></button>
+        <button className="home-action" onClick={onOpenStarred}><span className="home-action__icon home-action__icon--star">★</span><span><strong>Đã đánh dấu sao</strong><br /><small>Truy cập nhanh các mục quan trọng</small></span></button>
+        <button className="home-action" onClick={onOpenComputers}><span className="home-action__icon">💻</span><span><strong>Đồng bộ máy tính</strong><br /><small>Thư mục local đang được watch</small></span></button>
+        <button className="home-action" onClick={onOpenSettings}><span className="home-action__icon">⚙</span><span><strong>Cấu hình chia sẻ</strong><br /><small>Domain, LAN hoặc Cloudflare Tunnel</small></span></button>
       </section>
 
       <section className="home-recent">
-        <header><Clock3 size={18} /> <h2>File cáº­p nháº­t gáº§n Ä‘Ã¢y</h2></header>
-        {recentFiles.length === 0 ? <div className="muted-box">ChÆ°a cÃ³ file nÃ o.</div> : (
+        <header><Clock3 size={18} /> <h2>File cập nhật gần đây</h2></header>
+        {recentFiles.length === 0 ? <div className="muted-box">Chưa có file nào.</div> : (
           <div className="file-grid">
             {recentFiles.map((file) => (
               <div className="drive-card" key={file.id}>
                 <div className="drive-card__thumb">{file.preview_status === "ready" && file.kind === "image" ? <img src={thumbnailUrl(file.id)} alt="" /> : <FileText size={32} />}</div>
-                <div className="drive-card__name"><strong>{file.name}</strong><span>{kindLabel(file.kind)} Â· {formatBytes(file.size)}</span></div>
+                <div className="drive-card__name"><strong>{file.name}</strong><span>{kindLabel(file.kind)} · {formatBytes(file.size)}</span></div>
               </div>
             ))}
           </div>
@@ -79,19 +79,19 @@ export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpen
       </section>
 
       <section className="home-recent">
-        <header>â˜… <h2>Má»¥c cÃ³ Ä‘Ã¡nh dáº¥u sao</h2></header>
-        {starredItems.length === 0 ? <div className="muted-box">ChÆ°a cÃ³ má»¥c nÃ o Ä‘Æ°á»£c Ä‘Ã¡nh dáº¥u sao.</div> : (
+        <header>★ <h2>Mục có đánh dấu sao</h2></header>
+        {starredItems.length === 0 ? <div className="muted-box">Chưa có mục nào được đánh dấu sao.</div> : (
           <div className="file-grid">
             {starred.folders.slice(0, 4).map((folder) => (
               <div className="drive-card drive-card--folder" key={folder.id}>
                 <div className="drive-card__thumb"><Folder size={32} /></div>
-                <div className="drive-card__name"><strong>{folder.name}</strong><span>ThÆ° má»¥c</span></div>
+                <div className="drive-card__name"><strong>{folder.name}</strong><span>Thư mục</span></div>
               </div>
             ))}
             {starred.files.slice(0, 4).map((file) => (
               <div className="drive-card" key={file.id}>
                 <div className="drive-card__thumb">{file.preview_status === "ready" && file.kind === "image" ? <img src={thumbnailUrl(file.id)} alt="" /> : <FileText size={32} />}</div>
-                <div className="drive-card__name"><strong>{file.name}</strong><span>{kindLabel(file.kind)} Â· {formatBytes(file.size)}</span></div>
+                <div className="drive-card__name"><strong>{file.name}</strong><span>{kindLabel(file.kind)} · {formatBytes(file.size)}</span></div>
               </div>
             ))}
           </div>
@@ -106,7 +106,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function kindLabel(kind: DriveFile["kind"]) {
-  const labels: Record<string, string> = { image: "HÃ¬nh áº£nh", video: "Video", audio: "Ã‚m thanh", document: "TÃ i liá»‡u", archive: "NÃ©n", other: "File" };
+  const labels: Record<string, string> = { image: "Hình ảnh", video: "Video", audio: "Âm thanh", document: "Tài liệu", archive: "Nén", other: "File" };
   return labels[kind] || "File";
 }
 

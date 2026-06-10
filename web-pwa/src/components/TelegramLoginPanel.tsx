@@ -211,6 +211,7 @@ export function TelegramLoginPanel({ auth }: Props) {
               <label>
                 Mật khẩu xác minh hai bước
                 <div className="input-wrap"><Lock size={17} /><input value={qrPassword} onChange={(e) => setQrPassword(e.target.value)} type="password" placeholder={t("login.passwordPlaceholder")} /></div>
+                <span className="form-hint">Telegram đang yêu cầu xác thực bổ sung sau khi quét QR. Nếu tài khoản không bật 2FA, hãy nhập mật khẩu đăng nhập Telegram đang dùng.</span>
               </label>
               <button className="button button--primary" disabled={loading}>{loading ? t("login.loading") : t("login.unlock")}</button>
             </form>
