@@ -1271,9 +1271,15 @@ func (s *Server) handleMountStop(w http.ResponseWriter, r *http.Request) {
 
 func withJSON(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if shouldDefaultJSON(r.URL.Path) {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func shouldDefaultJSON(path string) bool {
+	return strings.HasPrefix(path, "/v1/") || path == "/health" || path == "/.td-check"
 }
 
 // spaHandler serves a single-page application directory: existing files
