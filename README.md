@@ -39,10 +39,11 @@ PWA tiếng Việt + Go Desktop Agent + Gateway domain/Tunnel + Telegram storage
 
 ### Tải bản Windows EXE
 
-Nếu muốn test nhanh trên Windows mà không build từ source, tải file `td-agent.exe` từ **GitHub Releases** của repo rồi chạy cùng cấu hình mẫu.
+Nếu muốn test nhanh trên Windows mà không build từ source, tải `td-agent-windows-amd64-tray.exe` từ **GitHub Releases** của repo rồi chạy cùng cấu hình mẫu.
 
 - Bản ổn định: `https://github.com/ptadigi/Telegram-Drive-Mount/releases`
-- Build theo source: dùng lệnh ở phần dưới để tạo `td-agent.exe` có mount ổ ảo và tray.
+- File nên tải cho Windows desktop: `td-agent-windows-amd64-tray.exe`
+- Build theo source: dùng lệnh ở phần dưới để tạo `td-agent.exe` có tray + mount ổ ảo.
 
 ### Ứng dụng desktop / sync hai chiều
 

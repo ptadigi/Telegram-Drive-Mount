@@ -1,6 +1,7 @@
-import { Clock3, FileText, Folder, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
-import { AgentInfo, AuthStatus, DatabaseStatus, DriveContents, DriveFile, eventsUrl, listDriveContents, listStarred, thumbnailUrl } from "../api/agent";
+﻿import { Clock3, FileText, Folder, HardDrive, KeyRound, Plus, RefreshCw, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { AgentInfo, AuthStatus, DatabaseStatus, DriveContents, DriveFile, Device, eventsUrl, listDevices, listDriveContents, listStarred, startDevicePairing, thumbnailUrl } from "../api/agent";
 
 type Props = {
   info: AgentInfo | null;
@@ -14,13 +15,20 @@ type Props = {
 };
 
 export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpenStarred, onOpenSettings, onOpenComputers }: Props) {
+  const { t } = useTranslation();
   const [recent, setRecent] = useState<DriveContents>({ folders: [], files: [] });
   const [starred, setStarred] = useState<DriveContents>({ folders: [], files: [] });
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [pairCode, setPairCode] = useState<string | null>(null);
+  const [pairLoading, setPairLoading] = useState(false);
+  const [pairError, setPairError] = useState<string | null>(null);
 
   async function refresh() {
     try {
       setRecent(await listDriveContents(""));
       setStarred(await listStarred());
+      const deviceResult = await listDevices();
+      setDevices(deviceResult.devices ?? []);
     } catch {
       // ignore
     }
@@ -35,33 +43,106 @@ export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpen
     stream.addEventListener("folder.updated", refresh);
     stream.addEventListener("file.starred", refresh);
     stream.addEventListener("folder.starred", refresh);
+    stream.addEventListener("device.created", refresh);
     return () => stream.close();
   }, []);
 
   const recentFiles = recent.files.slice(0, 8);
   const starredItems = [...starred.folders.slice(0, 4), ...starred.files.slice(0, 4)];
+  const connectedDevices = useMemo(() => devices.filter((device) => !device.revoked_at).slice(0, 3), [devices]);
+
+  async function generatePairCode() {
+    setPairLoading(true);
+    setPairError(null);
+    try {
+      const result = await startDevicePairing();
+      setPairCode(result.code);
+      await refresh();
+    } catch (err) {
+      setPairError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPairLoading(false);
+    }
+  }
+
+  const pairCount = devices.filter((device) => !device.revoked_at).length;
 
   return (
     <div className="home-view">
-      <section className="drive-hero-card">
-        <div>
-          <span>Cloud drive cá nhân</span>
+      <section className="dashboard-hero">
+        <div className="dashboard-hero__copy">
+          <span className="eyebrow">Cloud drive cá nhân</span>
           <h1>Chào bạn, ổ đĩa cloud đã sẵn sàng</h1>
           <p>Tải file lên, đồng bộ thư mục desktop và chia sẻ link an toàn qua domain riêng. Telegram là kho lưu trữ ẩn phía sau.</p>
+          <div className="dashboard-hero__actions">
+            <button className="button button--primary" onClick={onOpenDrive}><Plus size={18} /> Mở Drive của tôi</button>
+            <button className="button button--secondary" onClick={onOpenSettings}><ShieldCheck size={18} /> Cấu hình</button>
+          </div>
         </div>
-        <div className="drive-stats">
-          <Stat label="Trạng thái" value={agentState === "online" ? "Đang chạy" : "Chưa kết nối"} />
-          <Stat label="Database" value={database?.exists ? "Sẵn sàng" : "Chưa sẵn sàng"} />
-          <Stat label="Telegram" value={auth?.session_exists ? "Đã kết nối" : "Chưa đăng nhập"} />
-          <Stat label="Uptime" value={info ? `${info.uptime_sec}s` : "-"} />
+        <div className="dashboard-hero__panel">
+          <div className="drive-stats drive-stats--stacked">
+            <Stat label="Trạng thái" value={agentState === "online" ? "Đang chạy" : "Chưa kết nối"} tone={agentState === "online" ? "good" : "warn"} />
+            <Stat label="Database" value={database?.exists ? "Sẵn sàng" : "Chưa sẵn sàng"} tone={database?.exists ? "good" : "warn"} />
+            <Stat label="Telegram" value={auth?.session_exists ? "Đã kết nối" : "Chưa đăng nhập"} tone={auth?.session_exists ? "good" : "warn"} />
+            <Stat label="Uptime" value={info ? `${info.uptime_sec}s` : "-"} tone="neutral" />
+          </div>
+          <div className="dashboard-hero__meta">
+            <span><HardDrive size={16} /> {database?.path || "-"}</span>
+            <span><Clock3 size={16} /> {info?.started_at ? new Date(info.started_at).toLocaleString() : "-"}</span>
+          </div>
         </div>
       </section>
 
-      <section className="home-actions">
+      <section className="home-actions home-actions--large">
         <button className="home-action" onClick={onOpenDrive}><Plus size={18} /><span><strong>Mở Drive của tôi</strong><br /><small>Quản lý file và thư mục</small></span></button>
         <button className="home-action" onClick={onOpenStarred}><span className="home-action__icon home-action__icon--star">★</span><span><strong>Đã đánh dấu sao</strong><br /><small>Truy cập nhanh các mục quan trọng</small></span></button>
         <button className="home-action" onClick={onOpenComputers}><span className="home-action__icon">💻</span><span><strong>Đồng bộ máy tính</strong><br /><small>Thư mục local đang được watch</small></span></button>
         <button className="home-action" onClick={onOpenSettings}><span className="home-action__icon">⚙</span><span><strong>Cấu hình chia sẻ</strong><br /><small>Domain, LAN hoặc Cloudflare Tunnel</small></span></button>
+      </section>
+
+      <section className="home-grid">
+        <article className="home-card home-card--pairing">
+          <header className="home-card__header">
+            <div>
+              <h2>Ghép thiết bị</h2>
+              <p>Nhập mã ghép để dùng app này như một máy con hoặc thiết bị mới.</p>
+            </div>
+            <KeyRound size={20} />
+          </header>
+          <div className="pairing-panel">
+            <button className="button button--primary" onClick={generatePairCode} disabled={pairLoading}>{pairLoading ? "Đang tạo mã..." : "Tạo mã ghép"}</button>
+            {pairCode && <div className="pair-code-display"><strong>{pairCode}</strong><span>Mã có hiệu lực 5 phút, dùng 1 lần.</span></div>}
+            {pairError && <div className="error-note">{pairError}</div>}
+            <div className="pair-summary">
+              <span><strong>{pairCount}</strong> thiết bị đang ghép</span>
+              <button className="button button--ghost" onClick={refresh}><RefreshCw size={14} /> Làm mới</button>
+            </div>
+            {connectedDevices.length > 0 ? (
+              <ul className="device-quick-list">
+                {connectedDevices.map((device) => (
+                  <li key={device.id}><strong>{device.name}</strong><span>{device.platform || "Không rõ"} · {device.last_seen_at ? new Date(device.last_seen_at * 1000).toLocaleString() : "Chưa từng"}</span></li>
+                ))}
+              </ul>
+            ) : (
+              <div className="muted-box">Chưa có thiết bị nào được ghép.</div>
+            )}
+          </div>
+        </article>
+
+        <article className="home-card">
+          <header className="home-card__header">
+            <div>
+              <h2>Thiết bị và trạng thái</h2>
+              <p>Kiểm tra nhanh agent, database và Telegram.</p>
+            </div>
+          </header>
+          <div className="device-status-grid">
+            <StatusBlock label="Agent" value={agentState === "online" ? "Sống" : "Offline"} tone={agentState === "online" ? "good" : "warn"} />
+            <StatusBlock label="Database" value={database?.exists ? "Sẵn" : "Thiếu"} tone={database?.exists ? "good" : "warn"} />
+            <StatusBlock label="Telegram" value={auth?.authorized ? "Đã login" : "Chưa login"} tone={auth?.authorized ? "good" : "warn"} />
+            <StatusBlock label="Uptime" value={info ? `${Math.floor(info.uptime_sec / 60)}m` : "-"} tone="neutral" />
+          </div>
+        </article>
       </section>
 
       <section className="home-recent">
@@ -101,8 +182,12 @@ export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpen
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return <div className="mini-stat"><span>{label}</span><strong>{value}</strong></div>;
+function Stat({ label, value, tone }: { label: string; value: string; tone: "good" | "warn" | "neutral"; }) {
+  return <div className={`mini-stat mini-stat--${tone}`}><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function StatusBlock({ label, value, tone }: { label: string; value: string; tone: "good" | "warn" | "neutral"; }) {
+  return <div className={`status-block status-block--${tone}`}><span>{label}</span><strong>{value}</strong></div>;
 }
 
 function kindLabel(kind: DriveFile["kind"]) {
