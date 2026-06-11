@@ -88,6 +88,61 @@ drive.tencuaban.com {
 }
 ```
 
+## Upload file lớn bị treo ở vài % (rất hay gặp)
+
+Triệu chứng: upload file nhỏ bình thường, nhưng file lớn (video, >50MB) treo ở vài %
+rồi đứng. Trong `sync.log` KHÔNG có dòng `upload_received` cho file đó.
+
+Nguyên nhân: reverse proxy chặn body request vượt giới hạn `client_max_body_size`,
+file không bao giờ tới được agent. Đây KHÔNG phải lỗi agent.
+
+Bắt buộc cấu hình ở reverse proxy:
+
+- **Nginx/OpenResty**: trong `server { }` của site:
+
+```nginx
+client_max_body_size 0;          # 0 = không giới hạn, hoặc đặt số lớn ví dụ 5g
+proxy_request_buffering off;     # stream thẳng lên agent, không buffer cả file vào proxy
+proxy_read_timeout 3600s;
+proxy_send_timeout 3600s;
+```
+
+- **1Panel / aaPanel (OpenResty trong Docker)**: mặc định `client_max_body_size 50m`
+  trong `nginx.conf` global. Thêm 4 dòng trên vào server block của site (file
+  `conf.d/<domain>.conf`), rồi reload: `docker exec <openresty-container> nginx -s reload`.
+- **Cloudflare (Free)**: giới hạn cứng 100MB/request, không nâng được trừ Enterprise.
+  File >100MB phải bypass Cloudflare (DNS-only) hoặc chờ tính năng chunked upload.
+
+## SSE realtime sau proxy
+
+Nếu danh sách file không tự cập nhật khi có thay đổi, proxy đang buffer Server-Sent
+Events. Đảm bảo không buffer `/v1/events`:
+
+```nginx
+location /v1/events {
+  proxy_pass http://127.0.0.1:8750;
+  proxy_buffering off;
+  proxy_cache off;
+}
+```
+
+Agent đã gửi `X-Accel-Buffering: no` + heartbeat, và PWA có cơ chế revalidate khi
+focus/visible/online + poll dự phòng, nên kể cả proxy chặn SSE thì UI vẫn cập nhật
+trong vài chục giây.
+
+## Cache cục bộ và dung lượng đĩa
+
+Telegram là nơi lưu trữ thật; cache cục bộ chỉ là bản nóng để xem nhanh.
+
+- Hạ cache xuống <1GB **an toàn, không mất file**: chỉ file đã `telegram_synced` mới
+  bị dọn; file đang chờ/đang sync/lỗi không bao giờ bị xóa.
+- Đánh đổi: cache càng nhỏ, xem lại file cũ càng hay phải kéo lại từ Telegram (chậm
+  hơn, tốn băng thông, dễ chạm FLOOD_WAIT nếu nhiều người dùng).
+- Lưu ý: file đang upload tạm trú trong `<data_dir>/uploads/` trước khi sync — đĩa VPS
+  vẫn cần đủ chỗ cho các file đang chờ, cache nhỏ không chặn phần này.
+- Chế độ cache: `smart` (giữ file nóng dưới ngưỡng, evict LRU — khuyến nghị),
+  `cloud_only` (sync xong xóa ngay), `mirror` (giữ tất cả, không evict).
+
 ## Backup & restore
 
 - Agent tự backup `metadata.db` mỗi 6 giờ vào `<data_dir>/backups/`. Giữ 14 file gần nhất.
