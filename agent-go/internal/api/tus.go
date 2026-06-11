@@ -34,8 +34,11 @@ func (s *Server) newTusHandler(basePath string) (http.Handler, error) {
 		StoreComposer:         composer,
 		DisableDownload:       true,
 		NotifyCompleteUploads: true,
-		// Cors handled by our own withCORS middleware; allow large uploads.
-		MaxSize: 0,
+		// Behind a reverse proxy the request scheme is http; trust
+		// X-Forwarded-Proto/Host so the returned upload URL is https and the
+		// client can PATCH chunks without mixed-content blocking.
+		RespectForwardedHeaders: true,
+		MaxSize:                 0,
 	})
 	if err != nil {
 		return nil, err
