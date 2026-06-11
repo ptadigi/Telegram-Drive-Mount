@@ -59,8 +59,8 @@ jobs:
       - name: go build tray
         working-directory: agent-go
         env:
-          CGO_ENABLED: "1"
-        run: go build -tags "tray" -trimpath -ldflags "-s -w" -o ../dist/td-agent-windows-amd64-tray.exe ./cmd/agent
+          CGO_ENABLED: "0"
+        run: go build -tags "tray" -trimpath -ldflags "-s -w -H windowsgui" -o ../dist/td-agent-windows-amd64-tray.exe ./cmd/agent
       - uses: actions/upload-artifact@v4
         with:
           name: td-agent-windows-amd64-tray
@@ -90,7 +90,7 @@ jobs:
         working-directory: agent-go
         env:
           CGO_ENABLED: "0"
-        run: go build -tags "fuse tray" -trimpath -ldflags "-s -w" -o ../installer/td-agent.exe ./cmd/agent
+        run: go build -tags "fuse tray" -trimpath -ldflags "-s -w -H windowsgui" -o ../installer/td-agent.exe ./cmd/agent
       - name: Download PWA dist
         uses: actions/download-artifact@v4
         with:

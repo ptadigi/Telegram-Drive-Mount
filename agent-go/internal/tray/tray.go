@@ -1,4 +1,4 @@
-//go:build tray
+﻿//go:build tray
 
 package tray
 
@@ -27,27 +27,27 @@ type Hooks struct {
 
 func Run(ctx context.Context, hooks Hooks) {
 	systray.Run(func() {
-		systray.SetTitle("Ổ Đĩa Cloud Ảo")
-		systray.SetTooltip("Ổ Đĩa Cloud Ảo - Telegram backend")
+		systray.SetTitle("á»” ÄÄ©a Cloud áº¢o")
+		systray.SetTooltip("á»” ÄÄ©a Cloud áº¢o - Telegram backend")
 		setIconBytes()
-		open := systray.AddMenuItem("Mở giao diện", "Mở PWA trong trình duyệt")
-		dataDir := systray.AddMenuItem("Mở thư mục dữ liệu", "Mở Explorer/Finder tại thư mục dữ liệu")
-		addRoot := systray.AddMenuItem("Thêm thư mục đồng bộ", "Chọn thư mục local để đồng bộ Telegram")
+		open := systray.AddMenuItem("Má»Ÿ giao diá»‡n", "Má»Ÿ PWA trong trÃ¬nh duyá»‡t")
+		dataDir := systray.AddMenuItem("Má»Ÿ thÆ° má»¥c dá»¯ liá»‡u", "Má»Ÿ Explorer/Finder táº¡i thÆ° má»¥c dá»¯ liá»‡u")
+		addRoot := systray.AddMenuItem("ThÃªm thÆ° má»¥c Ä‘á»“ng bá»™", "Chá»n thÆ° má»¥c local Ä‘á»ƒ Ä‘á»“ng bá»™ Telegram")
 		systray.AddSeparator()
-		pause := systray.AddMenuItem("Tạm dừng đồng bộ", "Tạm dừng worker đồng bộ Telegram")
-		resume := systray.AddMenuItem("Tiếp tục đồng bộ", "Bật lại worker đồng bộ Telegram")
+		pause := systray.AddMenuItem("Táº¡m dá»«ng Ä‘á»“ng bá»™", "Táº¡m dá»«ng worker Ä‘á»“ng bá»™ Telegram")
+		resume := systray.AddMenuItem("Tiáº¿p tá»¥c Ä‘á»“ng bá»™", "Báº­t láº¡i worker Ä‘á»“ng bá»™ Telegram")
 		resume.Hide()
 		systray.AddSeparator()
-		mountItem := systray.AddMenuItem("Mount ổ ảo", "Mount ổ Telegram Drive")
-		unmountItem := systray.AddMenuItem("Unmount ổ ảo", "Tháo ổ Telegram Drive")
+		mountItem := systray.AddMenuItem("Mount á»• áº£o", "Mount á»• Telegram Drive")
+		unmountItem := systray.AddMenuItem("Unmount á»• áº£o", "ThÃ¡o á»• Telegram Drive")
 		unmountItem.Hide()
 		if hooks.OnMount == nil && hooks.OnUnmount == nil {
 			mountItem.Hide()
 		}
 		systray.AddSeparator()
-		autostart := systray.AddMenuItemCheckbox("Tự khởi động cùng máy", "Kích hoạt khi đăng nhập OS", false)
+		autostart := systray.AddMenuItemCheckbox("Tá»± khá»Ÿi Ä‘á»™ng cÃ¹ng mÃ¡y", "KÃ­ch hoáº¡t khi Ä‘Äƒng nháº­p OS", false)
 		systray.AddSeparator()
-		quit := systray.AddMenuItem("Thoát", "Tắt Agent và thoát")
+		quit := systray.AddMenuItem("ThoÃ¡t", "Táº¯t Agent vÃ  thoÃ¡t")
 
 		go func() {
 			for {
@@ -61,7 +61,7 @@ func Run(ctx context.Context, hooks Hooks) {
 					_ = openPath(hooks.DataDir)
 				case <-addRoot.ClickedCh:
 					if hooks.OnAddRoot != nil {
-						if path, err := PickFolder("Chọn thư mục đồng bộ Telegram"); err == nil {
+						if path, err := PickFolder("Chá»n thÆ° má»¥c Ä‘á»“ng bá»™ Telegram"); err == nil {
 							_ = hooks.OnAddRoot(path)
 						}
 					}
@@ -112,12 +112,16 @@ func Run(ctx context.Context, hooks Hooks) {
 }
 
 func setIconBytes() {
-	systray.SetTemplateIcon(iconBytes, iconBytes)
+	if runtime.GOOS == "windows" {
+		systray.SetIcon(iconICO)
+		return
+	}
+	systray.SetIcon(iconPNG)
 }
 
 func openURL(url string) error {
 	if url == "" {
-		return fmt.Errorf("base url trống")
+		return fmt.Errorf("base url trá»‘ng")
 	}
 	switch runtime.GOOS {
 	case "windows":
@@ -131,7 +135,7 @@ func openURL(url string) error {
 
 func openPath(path string) error {
 	if path == "" {
-		return fmt.Errorf("đường dẫn trống")
+		return fmt.Errorf("Ä‘Æ°á»ng dáº«n trá»‘ng")
 	}
 	if _, err := os.Stat(path); err != nil {
 		return err
@@ -146,16 +150,3 @@ func openPath(path string) error {
 	}
 }
 
-var iconBytes = []byte{
-	0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-	0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x10,
-	0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0xF3, 0xFF, 0x61, 0x00, 0x00, 0x00,
-	0x4F, 0x49, 0x44, 0x41, 0x54, 0x38, 0x4F, 0x63, 0x60, 0x18, 0x05, 0xA3,
-	0x60, 0x14, 0x8C, 0x82, 0x51, 0x30, 0x0A, 0x46, 0xC1, 0x28, 0x18, 0x05,
-	0xA3, 0x60, 0x14, 0x8C, 0x82, 0x51, 0x30, 0x0A, 0x46, 0xC1, 0x28, 0x18,
-	0x05, 0xA3, 0x60, 0x14, 0x8C, 0x82, 0x51, 0x30, 0x0A, 0x46, 0xC1, 0x28,
-	0x18, 0x05, 0xA3, 0x60, 0x14, 0x8C, 0x82, 0x51, 0x30, 0x0A, 0x46, 0xC1,
-	0x28, 0x18, 0x05, 0xA3, 0x60, 0x14, 0x8C, 0x82, 0x51, 0x30, 0x0A, 0x46,
-	0xC1, 0x28, 0x18, 0x05, 0xA3, 0x60, 0x14, 0x00, 0x00, 0x00, 0x00, 0x49,
-	0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-}

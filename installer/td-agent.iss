@@ -1,11 +1,11 @@
-; Inno Setup script — Telegram Drive (Ổ Đĩa Cloud Ảo)
+﻿; Inno Setup script — Telegram Drive (Ổ Đĩa Cloud Ảo)
 ; Build: iscc.exe td-agent.iss
-; Yêu cầu copy san vao thu muc installer/:
-;   - td-agent.exe          (build voi: go build -tags "fuse tray")
-;   - pwa\                  (noi dung web-pwa\dist)
-;   - winfsp-2.0.23075.msi  (tai tu https://winfsp.dev)
+; Yêu cầu copy sẵn vào thư mục installer/:
+;   - td-agent.exe          (build với: go build -tags "fuse tray" -ldflags "-H windowsgui")
+;   - pwa\                  (nội dung web-pwa\dist)
+;   - winfsp-2.0.23075.msi  (tải từ https://winfsp.dev)
 
-#define AppName "O Dia Cloud Ao - Telegram Drive"
+#define AppName "Ổ Đĩa Cloud Ảo - Telegram Drive"
 #define AppVersion "1.0.0"
 #define AppPublisher "Innonet Agency - Automation AI Company"
 #define AppURL "https://github.com/ptadigi/Telegram-Drive-Mount"
@@ -21,7 +21,7 @@ AppUpdatesURL={#AppURL}
 VersionInfoCompany={#AppPublisher}
 VersionInfoProductName={#AppName}
 VersionInfoVersion={#AppVersion}
-VersionInfoCopyright="Copyright (C) Innonet Agency"
+VersionInfoCopyright=Copyright (C) Innonet Agency
 DefaultDirName={autopf}\TelegramDrive
 DefaultGroupName={#AppName}
 PrivilegesRequired=admin
@@ -31,27 +31,30 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
 
+[Languages]
+Name: "vi"; MessagesFile: "compiler:Default.isl"
+
 [Files]
 Source: "td-agent.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "pwa\*"; DestDir: "{app}\pwa"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#WinFspMsi}"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Tasks]
-Name: desktopicon; Description: "Tao shortcut tren Desktop"; GroupDescription: "Tuy chon:"
-Name: autostart; Description: "Tu khoi dong cung Windows (mount o ao khi dang nhap)"; GroupDescription: "Tuy chon:"
+Name: desktopicon; Description: "Tạo lối tắt trên Màn hình"; GroupDescription: "Tùy chọn:"
+Name: autostart; Description: "Tự khởi động cùng Windows"; GroupDescription: "Tùy chọn:"
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\td-agent.exe"; Parameters: "--tray --mount-on-start"
-Name: "{group}\Mo thu muc du lieu"; Filename: "{userappdata}\TelegramVirtualDrive\agent"
-Name: "{userdesktop}\{#AppName}"; Filename: "{app}\td-agent.exe"; Parameters: "--tray --mount-on-start"; Tasks: desktopicon
+Name: "{group}\{#AppName}"; Filename: "{app}\td-agent.exe"; Parameters: "--tray"
+Name: "{group}\Mở thư mục dữ liệu"; Filename: "{userappdata}\TelegramVirtualDrive\agent"
+Name: "{userdesktop}\{#AppName}"; Filename: "{app}\td-agent.exe"; Parameters: "--tray"; Tasks: desktopicon
 
 [Registry]
-; Autostart cung Windows: chay tray + tu mount o ao khi user dang nhap.
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "TelegramDrive"; ValueData: """{app}\td-agent.exe"" --tray --mount-on-start"; Tasks: autostart; Flags: uninsdeletevalue
+; Tự khởi động cùng Windows: chạy tray, app tự quyết mount theo cấu hình đã lưu.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "TelegramDrive"; ValueData: """{app}\td-agent.exe"" --tray"; Tasks: autostart; Flags: uninsdeletevalue
 
 [Run]
-Filename: "msiexec.exe"; Parameters: "/i ""{tmp}\{#WinFspMsi}"" /qb ADDLOCAL=ALL"; StatusMsg: "Dang cai WinFsp (driver mount o ao)..."; Flags: waituntilterminated
-Filename: "{app}\td-agent.exe"; Parameters: "--tray --mount-on-start"; Description: "Khoi dong {#AppName}"; Flags: nowait postinstall skipifsilent
+Filename: "msiexec.exe"; Parameters: "/i ""{tmp}\{#WinFspMsi}"" /qb ADDLOCAL=ALL"; StatusMsg: "Đang cài WinFsp (driver mount ổ ảo)..."; Flags: waituntilterminated
+Filename: "{app}\td-agent.exe"; Parameters: "--tray"; Description: "Khởi động {#AppName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 Filename: "taskkill.exe"; Parameters: "/IM td-agent.exe /F"; Flags: runhidden
@@ -60,7 +63,7 @@ Filename: "taskkill.exe"; Parameters: "/IM td-agent.exe /F"; Flags: runhidden
 const
   SessionKeyEnv = 'TD_AGENT_SESSION_KEY';
 
-// generateHexKey returns a 64-char hex string (32 random bytes).
+// GenerateHexKey trả về chuỗi hex 64 ký tự (32 byte ngẫu nhiên).
 function GenerateHexKey(): string;
 var
   i, b, hi, lo: Integer;
@@ -78,9 +81,9 @@ begin
   Result := hex;
 end;
 
-// Persist a session key to a user-level environment variable the first time,
-// so the encrypted Telegram session keeps working across reboots without the
-// user having to manage the key manually.
+// Lưu khóa session vào biến môi trường người dùng ở lần đầu, để session
+// Telegram mã hóa vẫn dùng được qua các lần khởi động mà không cần người
+// dùng tự quản lý khóa.
 procedure EnsureSessionKey();
 var
   existing: string;
@@ -97,10 +100,10 @@ begin
   if CurStep = ssPostInstall then
   begin
     EnsureSessionKey();
-    MsgBox('Da cai dat xong.' + #13#10 +
-           'Khoa ma hoa session Telegram (TD_AGENT_SESSION_KEY) da duoc tao tu dong ' +
-           'va luu trong bien moi truong nguoi dung. Khong xoa bien nay neu khong se phai dang nhap Telegram lai.' + #13#10 +
-           'O ao se tu mount khi ban dang nhap Windows (neu da chon Tu khoi dong).',
+    MsgBox('Đã cài đặt xong.' + #13#10 +
+           'Khóa mã hóa session Telegram (TD_AGENT_SESSION_KEY) đã được tạo tự động ' +
+           'và lưu trong biến môi trường người dùng. Không xóa biến này, nếu không sẽ phải đăng nhập Telegram lại.' + #13#10 +
+           'Mở ứng dụng để cấu hình kết nối tới máy chủ (local hoặc VPS) và ghép thiết bị.',
            mbInformation, MB_OK);
   end;
 end;
