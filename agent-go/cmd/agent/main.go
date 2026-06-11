@@ -25,6 +25,7 @@ import (
 	"telegram-drive-agent/internal/devices"
 	"telegram-drive-agent/internal/drive"
 	"telegram-drive-agent/internal/telegramstorage"
+	"telegram-drive-agent/internal/remote"
 	"telegram-drive-agent/internal/tray"
 	"telegram-drive-agent/internal/tunnel"
 	"telegram-drive-agent/internal/users"
@@ -130,7 +131,25 @@ func main() {
 	tunnelSvc := tunnel.New(driveTunnelListener{drive: driveService})
 	userService := users.New(metadataDB)
 	deviceService := devices.New(metadataDB)
-	mountManager := vfs.NewManager(driveService, cfg.DataDir)
+	// Choose the mount backend based on desktop onboarding state. In remote
+	// mode the virtual drive must stream from the paired server (not the empty
+	// local DB), so wire a remote.Backend using the saved device token.
+	var mountManager *vfs.Manager
+	if *withTray {
+		st := desktop.NewStore(cfg.DataDir).Load()
+		if desktop.Mode(st.Mode) == desktop.ModeRemote {
+			if tok, tokErr := remote.LoadToken(remote.DefaultTokenPath()); tokErr == nil {
+				backend := remote.NewBackend(tok.BaseURL, tok.Token, 60*time.Second)
+				mountManager = vfs.NewManagerWithBackend(backend, cfg.DataDir)
+				log.Printf("mount backend: remote (%s)", tok.BaseURL)
+			} else {
+				log.Printf("chế độ remote nhưng chưa có token (%v), tạm dùng backend local", tokErr)
+			}
+		}
+	}
+	if mountManager == nil {
+		mountManager = vfs.NewManager(driveService, cfg.DataDir)
+	}
 	apiServer := api.NewServer(version, cfg, authService, driveService, tunnelSvc, userService, mountManager, deviceService)
 	apiServer.SetDesktopMode(*withTray)
 
