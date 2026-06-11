@@ -31,6 +31,9 @@ import (
 
 const version = "1.0.0"
 
+var errSetupWindowUnavailable = errors.New("cửa sổ thiết lập không khả dụng trên bản build này")
+
+
 type driveTunnelListener struct {
 	drive *drive.Service
 }
@@ -54,7 +57,15 @@ func main() {
 	tokenPath := flag.String("token-file", "", "đường dẫn token file (mặc định theo $XDG_CONFIG_HOME)")
 	mountOnStart := flag.Bool("mount-on-start", false, "tự mount ổ ảo ngay khi agent khởi động")
 	mountPoint := flag.String("mount-point", "", "điểm mount khi --mount-on-start (mặc định T: / /Volumes/...)")
+	setupWindow := flag.String("setup-window", "", "(nội bộ) mở cửa sổ thiết lập WebView2 tới URL")
 	flag.Parse()
+
+	if *setupWindow != "" {
+		if err := runSetupWindow(*setupWindow); err != nil {
+			_ = openBrowser(*setupWindow)
+		}
+		return
+	}
 
 	if *pairMode {
 		if err := runPair(*pairBase, *pairCode, *pairName, *tokenPath); err != nil {
@@ -176,7 +187,7 @@ func main() {
 					log.Printf("tự mount (remote) lỗi: %v", err)
 				}
 			default:
-				_ = openBrowser(base + "/setup")
+				openSetup(execPath, base+"/setup")
 			}
 		}()
 		go tray.Run(ctx, tray.Hooks{
@@ -205,6 +216,9 @@ func main() {
 			OnUnmount: func() error {
 				_, err := mountManager.Unmount()
 				return err
+			},
+			OnSetup: func() {
+				openSetup(execPath, trayBaseURL(cfg)+"/setup")
 			},
 			OnQuit: func() {
 				stop()
@@ -243,6 +257,18 @@ func openBrowser(url string) error {
 	default:
 		return exec.Command("xdg-open", url).Start()
 	}
+}
+
+// openSetup opens the onboarding page in a native WebView2 window (spawned as
+// a child process so it owns its own UI thread). Falls back to the system
+// browser if the window cannot be launched.
+func openSetup(execPath, url string) {
+	if execPath != "" && runtime.GOOS == "windows" {
+		if err := exec.Command(execPath, "--setup-window", url).Start(); err == nil {
+			return
+		}
+	}
+	_ = openBrowser(url)
 }
 
 func splitAddr(value string) (string, int) {

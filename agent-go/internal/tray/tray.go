@@ -1,4 +1,4 @@
-﻿//go:build tray
+//go:build tray
 
 package tray
 
@@ -14,40 +14,45 @@ import (
 )
 
 type Hooks struct {
-	BaseURL    string
-	DataDir    string
-	ExecPath   string
-	OnPause    func()
-	OnResume   func()
-	OnAddRoot  func(path string) error
-	OnMount    func() (string, error)
-	OnUnmount  func() error
-	OnQuit     func()
+	BaseURL   string
+	DataDir   string
+	ExecPath  string
+	OnPause   func()
+	OnResume  func()
+	OnAddRoot func(path string) error
+	OnMount   func() (string, error)
+	OnUnmount func() error
+	OnSetup   func()
+	OnQuit    func()
 }
 
 func Run(ctx context.Context, hooks Hooks) {
 	systray.Run(func() {
-		systray.SetTitle("á»” ÄÄ©a Cloud áº¢o")
-		systray.SetTooltip("á»” ÄÄ©a Cloud áº¢o - Telegram backend")
+		systray.SetTitle("Ổ Đĩa Cloud Ảo")
+		systray.SetTooltip("Ổ Đĩa Cloud Ảo - Telegram backend")
 		setIconBytes()
-		open := systray.AddMenuItem("Má»Ÿ giao diá»‡n", "Má»Ÿ PWA trong trÃ¬nh duyá»‡t")
-		dataDir := systray.AddMenuItem("Má»Ÿ thÆ° má»¥c dá»¯ liá»‡u", "Má»Ÿ Explorer/Finder táº¡i thÆ° má»¥c dá»¯ liá»‡u")
-		addRoot := systray.AddMenuItem("ThÃªm thÆ° má»¥c Ä‘á»“ng bá»™", "Chá»n thÆ° má»¥c local Ä‘á»ƒ Ä‘á»“ng bá»™ Telegram")
+		open := systray.AddMenuItem("Mở giao diện", "Mở PWA trong trình duyệt")
+		setupItem := systray.AddMenuItem("Cấu hình máy chủ", "Mở cửa sổ thiết lập kết nối")
+		dataDir := systray.AddMenuItem("Mở thư mục dữ liệu", "Mở Explorer/Finder tại thư mục dữ liệu")
+		addRoot := systray.AddMenuItem("Thêm thư mục đồng bộ", "Chọn thư mục local để đồng bộ Telegram")
 		systray.AddSeparator()
-		pause := systray.AddMenuItem("Táº¡m dá»«ng Ä‘á»“ng bá»™", "Táº¡m dá»«ng worker Ä‘á»“ng bá»™ Telegram")
-		resume := systray.AddMenuItem("Tiáº¿p tá»¥c Ä‘á»“ng bá»™", "Báº­t láº¡i worker Ä‘á»“ng bá»™ Telegram")
+		pause := systray.AddMenuItem("Tạm dừng đồng bộ", "Tạm dừng worker đồng bộ Telegram")
+		resume := systray.AddMenuItem("Tiếp tục đồng bộ", "Bật lại worker đồng bộ Telegram")
 		resume.Hide()
 		systray.AddSeparator()
-		mountItem := systray.AddMenuItem("Mount á»• áº£o", "Mount á»• Telegram Drive")
-		unmountItem := systray.AddMenuItem("Unmount á»• áº£o", "ThÃ¡o á»• Telegram Drive")
+		mountItem := systray.AddMenuItem("Mount ổ ảo", "Mount ổ Telegram Drive")
+		unmountItem := systray.AddMenuItem("Unmount ổ ảo", "Tháo ổ Telegram Drive")
 		unmountItem.Hide()
 		if hooks.OnMount == nil && hooks.OnUnmount == nil {
 			mountItem.Hide()
 		}
+		if hooks.OnSetup == nil {
+			setupItem.Hide()
+		}
 		systray.AddSeparator()
-		autostart := systray.AddMenuItemCheckbox("Tá»± khá»Ÿi Ä‘á»™ng cÃ¹ng mÃ¡y", "KÃ­ch hoáº¡t khi Ä‘Äƒng nháº­p OS", false)
+		autostart := systray.AddMenuItemCheckbox("Tự khởi động cùng máy", "Kích hoạt khi đăng nhập OS", false)
 		systray.AddSeparator()
-		quit := systray.AddMenuItem("ThoÃ¡t", "Táº¯t Agent vÃ  thoÃ¡t")
+		quit := systray.AddMenuItem("Thoát", "Tắt Agent và thoát")
 
 		go func() {
 			for {
@@ -57,11 +62,15 @@ func Run(ctx context.Context, hooks Hooks) {
 					return
 				case <-open.ClickedCh:
 					_ = openURL(hooks.BaseURL)
+				case <-setupItem.ClickedCh:
+					if hooks.OnSetup != nil {
+						hooks.OnSetup()
+					}
 				case <-dataDir.ClickedCh:
 					_ = openPath(hooks.DataDir)
 				case <-addRoot.ClickedCh:
 					if hooks.OnAddRoot != nil {
-						if path, err := PickFolder("Chá»n thÆ° má»¥c Ä‘á»“ng bá»™ Telegram"); err == nil {
+						if path, err := PickFolder("Chọn thư mục đồng bộ Telegram"); err == nil {
 							_ = hooks.OnAddRoot(path)
 						}
 					}
@@ -121,7 +130,7 @@ func setIconBytes() {
 
 func openURL(url string) error {
 	if url == "" {
-		return fmt.Errorf("base url trá»‘ng")
+		return fmt.Errorf("base url trống")
 	}
 	switch runtime.GOOS {
 	case "windows":
@@ -135,7 +144,7 @@ func openURL(url string) error {
 
 func openPath(path string) error {
 	if path == "" {
-		return fmt.Errorf("Ä‘Æ°á»ng dáº«n trá»‘ng")
+		return fmt.Errorf("đường dẫn trống")
 	}
 	if _, err := os.Stat(path); err != nil {
 		return err
@@ -149,4 +158,3 @@ func openPath(path string) error {
 		return exec.Command("xdg-open", path).Start()
 	}
 }
-

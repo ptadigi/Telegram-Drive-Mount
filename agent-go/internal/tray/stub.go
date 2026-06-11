@@ -23,6 +23,7 @@ type Hooks struct {
 	OnAddRoot func(path string) error
 	OnMount   func() (string, error)
 	OnUnmount func() error
+	OnSetup   func()
 	OnQuit    func()
 }
 
