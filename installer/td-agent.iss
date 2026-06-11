@@ -55,16 +55,19 @@ const
 // generateHexKey returns a 64-char hex string (32 random bytes).
 function GenerateHexKey(): string;
 var
-  i, b: Integer;
-  hex: string;
+  i, b, hi, lo: Integer;
+  hex, digits: string;
 begin
+  digits := '0123456789abcdef';
   hex := '';
   for i := 1 to 32 do
   begin
     b := Random(256);
-    hex := hex + IntToHex(b, 2);
+    hi := (b div 16) + 1;
+    lo := (b mod 16) + 1;
+    hex := hex + Copy(digits, hi, 1) + Copy(digits, lo, 1);
   end;
-  Result := Lowercase(hex);
+  Result := hex;
 end;
 
 // Persist a session key to a user-level environment variable the first time,
