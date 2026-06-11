@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.7.x] - 2026-06-11
+
+### Desktop client + onboarding
+
+- **Desktop onboarding (no CLI)**: native WebView2 setup window with "connect to existing server" / "run local server", server-URL test, pairing-code entry. State machine (`unset`/`local`/`remote`) persisted in `desktop.json`; auto-mount on start per saved mode.
+- **Windows installer** `TelegramDriveSetup.exe`: bundles WinFsp, auto-detects PWA dir, `-H windowsgui` (no console window), valid `.ico` tray, Vietnamese (UTF-8 BOM), Innonet Agency branding. CI builds installer + tray + checksums; optional code-signing wired.
+- **Tray "Open UI"** opens the configured server URL (remote) or localhost (local), resolved fresh per click.
+- **Remote mount fix**: in remote mode the virtual drive mounts the paired server backend (was mounting the empty local DB → "not accessible").
+
+### Upload reliability
+
+- **Resumable chunked upload (tus protocol)** for files >32MB: 16MB chunks, single-stream, resumable across sessions, retry on error. Sidesteps reverse-proxy body-size limits. `RespectForwardedHeaders` so the upload URL is https behind a proxy.
+- **Concurrent upload pool (6 workers)** with throttled UI (250ms flush), aggregate progress bar (speed/ETA), retry-failed, `beforeunload` guard, folder-scan feedback. Fixes lag and stalls on thousand-file folders.
+- **Drop guard**: files dropped outside the dropzone no longer make the browser open the file.
+
+### Realtime + UI
+
+- **Stale-while-revalidate listing**: refresh on focus/visible/online + SSE + poll fallback. Fixes "uploaded to Telegram but not shown in PWA" caused by proxies buffering SSE. Agent sends anti-buffering headers + heartbeat on `/v1/events`.
+- **Token-driven design system** redesign of the PWA, WCAG-AA contrast, responsive bottom-nav, fixed missing classes.
+- **Vietnamese diacritics** fixed across installer, tray, and PWA.
+
+### Debug + docs
+
+- `GET /v1/debug/sync` + "Debug sync" view + `logs/sync.log` (JSON) for diagnosing upload/sync issues.
+- New `docs/TROUBLESHOOTING.md`; `docs/DEPLOY.md` covers proxy upload limits, SSE buffering, cache sizing; `docs/CODE_SIGNING.md` for self-signed + checksums.
+
+---
+
 ## [1.6.5] - 2026-05-21
 
 ### Features & Enhancements
