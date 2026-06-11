@@ -272,7 +272,11 @@ export function uploadFileResumable(
       const upload = new Upload(file, {
         endpoint: `${AGENT_BASE_URL}/v1/tus/`,
         chunkSize: TUS_CHUNK_SIZE,
-        parallelUploads: 4,
+        // Single-stream: parallel chunk uploads use server-side concatenation
+        // which is fragile behind a reverse proxy (ERR_UPLOAD_NOT_FOUND) and
+        // spikes memory on huge files. Cross-file parallelism still comes from
+        // the queue's worker pool. Single-stream stays chunked + resumable.
+        parallelUploads: 1,
         retryDelays: [0, 1000, 3000, 5000, 10000],
         removeFingerprintOnSuccess: true,
         metadata,
