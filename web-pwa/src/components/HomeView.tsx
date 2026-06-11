@@ -1,7 +1,9 @@
-﻿import { Clock3, FileText, Folder, HardDrive, KeyRound, Plus, RefreshCw, ShieldCheck } from "lucide-react";
+﻿import { Clock3, Download, FileText, Folder, HardDrive, KeyRound, Plus, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentInfo, AuthStatus, DatabaseStatus, DriveContents, DriveFile, Device, eventsUrl, listDevices, listDriveContents, listStarred, startDevicePairing, thumbnailUrl } from "../api/agent";
+
+const DESKTOP_RELEASE_URL = "https://github.com/ptadigi/Telegram-Drive-Mount/releases/latest";
 
 type Props = {
   info: AgentInfo | null;
@@ -66,6 +68,7 @@ export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpen
   }
 
   const pairCount = devices.filter((device) => !device.revoked_at).length;
+  const serverOrigin = window.location.origin;
 
   return (
     <div className="home-view">
@@ -104,27 +107,39 @@ export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpen
         <article className="home-card home-card--pairing">
           <header className="home-card__header">
             <div>
-              <h2>Ghép thiết bị</h2>
-              <p>Nhập mã ghép để dùng app này như một máy con hoặc thiết bị mới.</p>
+              <h2>Kết nối thiết bị mới</h2>
+              <p>Cài ứng dụng desktop để mount ổ ảo và đồng bộ. Làm theo 3 bước dưới đây.</p>
             </div>
             <KeyRound size={20} />
           </header>
           <div className="pairing-panel">
-            <button className="button button--primary" onClick={generatePairCode} disabled={pairLoading}>{pairLoading ? "Đang tạo mã..." : "Tạo mã ghép"}</button>
-            {pairCode && <div className="pair-code-display"><strong>{pairCode}</strong><span>Mã có hiệu lực 5 phút, dùng 1 lần.</span></div>}
-            {pairError && <div className="error-note">{pairError}</div>}
+            <ol className="pair-steps">
+              <li>
+                <strong>1. Tải &amp; cài ứng dụng</strong>
+                <a className="button button--secondary" href={DESKTOP_RELEASE_URL} target="_blank" rel="noreferrer"><Download size={15} /> Tải app desktop</a>
+                <span className="form-hint">Windows: tải <code>TelegramDriveSetup.exe</code> trên trang Releases.</span>
+              </li>
+              <li>
+                <strong>2. Mở app → chọn “Nối máy chủ có sẵn”</strong>
+                <span className="form-hint">Nhập địa chỉ máy chủ này: <code>{serverOrigin}</code></span>
+              </li>
+              <li>
+                <strong>3. Tạo mã ghép rồi dán vào app</strong>
+                <button className="button button--primary" onClick={generatePairCode} disabled={pairLoading}>{pairLoading ? "Đang tạo mã..." : "Tạo mã ghép"}</button>
+                {pairCode && <div className="pair-code-display"><strong>{pairCode}</strong><span>Mã có hiệu lực 5 phút, dùng 1 lần.</span></div>}
+                {pairError && <div className="error-note">{pairError}</div>}
+              </li>
+            </ol>
             <div className="pair-summary">
               <span><strong>{pairCount}</strong> thiết bị đang ghép</span>
               <button className="button button--ghost" onClick={refresh}><RefreshCw size={14} /> Làm mới</button>
             </div>
-            {connectedDevices.length > 0 ? (
+            {connectedDevices.length > 0 && (
               <ul className="device-quick-list">
                 {connectedDevices.map((device) => (
                   <li key={device.id}><strong>{device.name}</strong><span>{device.platform || "Không rõ"} · {device.last_seen_at ? new Date(device.last_seen_at * 1000).toLocaleString() : "Chưa từng"}</span></li>
                 ))}
               </ul>
-            ) : (
-              <div className="muted-box">Chưa có thiết bị nào được ghép.</div>
             )}
           </div>
         </article>

@@ -137,10 +137,10 @@
   },
   "devices": {
     "title": "Paired devices",
-    "description": "Every machine running td-agent --pair shows up here. Pairing codes are valid for 5 minutes.",
+    "description": "Install the desktop app, open it, and enter the pairing code below to connect a new machine. Codes are valid for 5 minutes.",
     "generateCode": "Generate pairing code",
     "refresh": "Refresh",
-    "codeHint": "Code valid for {{seconds}}s. Type it into td-agent --pair on the new machine.",
+    "codeHint": "Code valid for {{seconds}}s. Open the desktop app, choose \"Connect to existing server\", enter the server URL, then paste this code.",
     "codeExpired": "Code expired, please generate a new one.",
     "empty": "No paired device yet.",
     "lastSeen": "Last seen: {{time}}",

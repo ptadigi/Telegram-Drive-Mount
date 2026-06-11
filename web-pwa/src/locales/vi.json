@@ -140,10 +140,10 @@
   },
   "devices": {
     "title": "Thiết bị đã ghép",
-    "description": "Mỗi máy cài td-agent --pair sẽ xuất hiện ở đây. Mã ghép có hiệu lực 5 phút.",
+    "description": "Cài ứng dụng desktop, mở lên và nhập mã ghép bên dưới để kết nối máy mới. Mã có hiệu lực 5 phút.",
     "generateCode": "Tạo mã ghép thiết bị",
     "refresh": "Làm mới",
-    "codeHint": "Mã có hiệu lực {{seconds}}s. Nhập vào td-agent --pair trên máy mới.",
+    "codeHint": "Mã có hiệu lực {{seconds}}s. Mở ứng dụng desktop, chọn “Nối máy chủ có sẵn”, nhập URL máy chủ rồi dán mã này.",
     "codeExpired": "Mã đã hết hạn, bấm tạo lại.",
     "empty": "Chưa có thiết bị nào được ghép.",
     "lastSeen": "Lần cuối: {{time}}",

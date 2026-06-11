@@ -1,5 +1,5 @@
-/* ============================================================
-   Telegram Drive PWA — Design System
+﻿/* ============================================================
+   Telegram Drive PWA â€” Design System
    Token-driven, light theme, content-first productivity UI.
    ============================================================ */
 
@@ -754,3 +754,8 @@ a.button { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+.pair-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.pair-steps > li { display: grid; gap: 8px; padding-left: 14px; border-left: 2px solid var(--blue-200); }
+.pair-steps > li > strong { font-size: 14px; }
+.pair-steps .button { width: fit-content; }
+.pair-steps code { font-family: "JetBrains Mono", "Fira Code", Consolas, monospace; font-size: 0.85em; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; word-break: break-all; }
