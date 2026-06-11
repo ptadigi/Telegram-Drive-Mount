@@ -41,6 +41,16 @@ func (s *Service) logSync(entry SyncLogEntry) {
 	_ = json.NewEncoder(file).Encode(entry)
 }
 
+// LogSyncError is an exported helper for other packages (e.g. tus import) to
+// record a sync error into sync.log without exposing the internal entry type.
+func (s *Service) LogSyncError(event, fileName string, size int64, err error) {
+	msg := ""
+	if err != nil {
+		msg = err.Error()
+	}
+	s.logSync(SyncLogEntry{Level: "error", Event: event, FileName: fileName, Size: size, Error: msg})
+}
+
 func (s *Service) RecentSyncLogs(ctx context.Context, limit int) ([]SyncLogEntry, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 200

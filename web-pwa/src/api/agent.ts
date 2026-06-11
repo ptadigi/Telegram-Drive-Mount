@@ -218,8 +218,7 @@ export function streamFileUrl(id: string) { return `${AGENT_BASE_URL}/v1/files/s
 export function thumbnailUrl(id: string) { return `${AGENT_BASE_URL}/v1/files/thumbnail?id=${encodeURIComponent(id)}`; }
 export function seedDemoFile() { return sendJSON<{ contents?: DriveContents; files: DriveFile[] }>("/v1/files/demo", {}); }
 
-export function uploadFile(file: File, folderId = "", onProgress?: (progress: UploadProgress) => void, relativePath = "") {
-  return new Promise<{ file: DriveFile }>((resolve, reject) => {
+export function uploadFile(file: File, folderId = "", onProgress?: (progress: UploadProgress) => void, relativePath = "") {  return new Promise<{ file: DriveFile }>((resolve, reject) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("folder_id", folderId);
@@ -247,6 +246,62 @@ export function uploadFile(file: File, folderId = "", onProgress?: (progress: Up
     };
     request.send(formData);
   });
+}
+
+// TUS_CHUNK_SIZE / TUS_THRESHOLD: files larger than the threshold are uploaded
+// via the resumable tus protocol in 16MB chunks so they sidestep reverse-proxy
+// body-size limits and can resume after interruption.
+export const TUS_CHUNK_SIZE = 16 * 1024 * 1024;
+export const TUS_THRESHOLD = 32 * 1024 * 1024;
+
+// uploadFileResumable uploads a large file via tus (chunked + resumable).
+// Returns a promise resolving with the created DriveFile once the agent has
+// assembled + imported the upload. onProgress reports 0-100.
+export function uploadFileResumable(
+  file: File,
+  folderId = "",
+  onProgress?: (progress: UploadProgress) => void,
+  relativePath = "",
+): { promise: Promise<{ file: DriveFile }>; abort: () => void } {
+  let aborter: (() => void) | null = null;
+  const promise = new Promise<{ file: DriveFile }>((resolve, reject) => {
+    void import("tus-js-client").then(({ Upload }) => {
+      const metadata: Record<string, string> = { filename: file.name, filetype: file.type || "" };
+      if (folderId) metadata.folder_id = folderId;
+      if (relativePath) metadata.relative_path = relativePath;
+      const upload = new Upload(file, {
+        endpoint: `${AGENT_BASE_URL}/v1/tus/`,
+        chunkSize: TUS_CHUNK_SIZE,
+        parallelUploads: 4,
+        retryDelays: [0, 1000, 3000, 5000, 10000],
+        removeFingerprintOnSuccess: true,
+        metadata,
+        onError: (err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          onProgress?.({ phase: "failed", percent: 100, fileName: file.name, error: message });
+          reject(new Error(message));
+        },
+        onProgress: (sent, total) => {
+          const pct = total > 0 ? Math.round((sent / total) * 100) : 0;
+          onProgress?.({ phase: "uploading_agent", percent: pct, fileName: file.name });
+        },
+        onSuccess: () => {
+          // Agent imports the assembled file asynchronously; report processing.
+          onProgress?.({ phase: "processing", percent: 100, fileName: file.name });
+          // The created DriveFile id is not returned by tus; the queue resolves
+          // it from the transfers/file list. Resolve with a placeholder.
+          resolve({ file: { id: "", name: file.name } as DriveFile });
+        },
+      });
+      aborter = () => upload.abort();
+      // Resume from a previous interrupted upload if a matching one exists.
+      upload.findPreviousUploads().then((prev) => {
+        if (prev.length > 0) upload.resumeFromPreviousUpload(prev[0]);
+        upload.start();
+      });
+    }).catch(reject);
+  });
+  return { promise, abort: () => aborter?.() };
 }
 
 function safeError(raw: string, fallback: string) {

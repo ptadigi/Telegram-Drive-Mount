@@ -157,6 +157,10 @@ func (s *Server) Handler() http.Handler {
 	if dir := strings.TrimSpace(s.config.PWADir); dir != "" {
 		mux.Handle("/", spaHandler(dir))
 	}
+	if tusHandler, err := s.newTusHandler("/v1/tus/"); err == nil {
+		mux.Handle("/v1/tus/", tusHandler)
+		mux.Handle("/v1/tus", tusHandler)
+	}
 	return withCORS(withJSON(s.withAuth(mux)))
 }
 
@@ -1444,6 +1448,9 @@ func withJSON(next http.Handler) http.Handler {
 }
 
 func shouldDefaultJSON(path string) bool {
+	if strings.HasPrefix(path, "/v1/tus") {
+		return false
+	}
 	return strings.HasPrefix(path, "/v1/") || path == "/health" || path == "/.td-check"
 }
 

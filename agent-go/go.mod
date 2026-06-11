@@ -7,6 +7,7 @@ require (
 	github.com/getlantern/systray v1.2.2
 	github.com/gotd/td v0.144.0
 	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
+	github.com/tus/tusd/v2 v2.9.2
 	github.com/winfsp/cgofuse v1.6.0
 	golang.org/x/crypto v0.52.0
 	golang.org/x/net v0.55.0
@@ -45,6 +46,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
+	github.com/tus/lockfile v1.2.0 // indirect
 	go.opentelemetry.io/otel v1.43.0 // indirect
 	go.opentelemetry.io/otel/metric v1.43.0 // indirect
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect

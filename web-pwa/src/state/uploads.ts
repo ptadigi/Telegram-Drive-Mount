@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { eventsUrl, listTransfers, Transfer, uploadFile, UploadProgress } from "../api/agent";
+import { eventsUrl, listTransfers, Transfer, uploadFile, uploadFileResumable, TUS_THRESHOLD, UploadProgress } from "../api/agent";
 
 export type QueuePhase = UploadProgress["phase"] | "queued" | "synced";
 
@@ -144,25 +144,31 @@ export function useUploadQueue(): UploadQueue {
       runningRef.current += 1;
       upsert(id, { phase: "uploading_agent", percent: 0 });
       const file = item.fileHandle;
-      uploadFile(file, item.folderId, (progress) => {
+
+      const onProgress = (progress: { phase: QueuePhase; percent: number; error?: string }) => {
         upsert(id, { phase: progress.phase, percent: progress.percent, error: progress.error });
-      }, item.relativePath)
-        .then((result) => {
-          upsert(id, { fileId: result.file.id, phase: "processing", percent: 100 });
-          // Free the File handle only on success — failed items keep it so
-          // retryFailed() can re-upload without re-selecting files.
-          const done = itemsRef.current.get(id);
-          if (done) { delete (done as QueueItemInternal).fileHandle; }
-        })
-        .catch((err) => {
-          const message = err instanceof Error ? err.message : String(err);
-          upsert(id, { phase: "failed", percent: 100, error: message });
-        })
-        .finally(() => {
-          runningRef.current -= 1;
-          refreshTransfers();
-          pump();
-        });
+      };
+      const onDone = (fileId: string, terminal: QueuePhase) => {
+        upsert(id, { fileId, phase: terminal, percent: 100 });
+        const done = itemsRef.current.get(id);
+        if (done) { delete (done as QueueItemInternal).fileHandle; }
+      };
+      const onFail = (err: unknown) => {
+        upsert(id, { phase: "failed", percent: 100, error: err instanceof Error ? err.message : String(err) });
+      };
+      const settle = () => { runningRef.current -= 1; refreshTransfers(); pump(); };
+
+      if (file.size > TUS_THRESHOLD) {
+        // Large file: resumable chunked upload. Server imports + syncs async,
+        // so mark synced on success; the drive list reconciles via revalidate.
+        const { promise } = uploadFileResumable(file, item.folderId, onProgress, item.relativePath);
+        promise.then(() => onDone("", "synced")).catch(onFail).finally(settle);
+      } else {
+        uploadFile(file, item.folderId, onProgress, item.relativePath)
+          .then((result) => onDone(result.file.id, "processing"))
+          .catch(onFail)
+          .finally(settle);
+      }
     }
   }, [upsert, refreshTransfers]);
 
