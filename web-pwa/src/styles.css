@@ -377,3 +377,16 @@ a.button { text-decoration: none; }
 .status-block--good { background: #f0fdf4; border-color: #bbf7d0; }
 .status-block--warn { background: #fffbeb; border-color: #fde68a; }
 @media (max-width: 980px) { .dashboard-hero, .home-grid { grid-template-columns: 1fr; } .dashboard-hero { padding: 20px; } }
+.debug-view { display: grid; gap: 16px; }
+.debug-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); gap: 16px; }
+.debug-card { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
+.debug-card header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.debug-card h3 { margin: 0; font-size: 16px; }
+.debug-card header span { color: var(--muted); font-size: 12px; }
+.debug-log-list, .debug-transfer-list { display: grid; gap: 8px; max-height: 560px; overflow: auto; }
+.debug-log { margin: 0; white-space: pre-wrap; word-break: break-word; border-radius: 12px; padding: 10px; color: #0f172a; background: #f8fafc; border: 1px solid #e2e8f0; font-family: "JetBrains Mono", "Fira Code", Consolas, monospace; font-size: 12px; line-height: 1.45; }
+.debug-log--error { color: #7f1d1d; background: #fef2f2; border-color: #fecaca; }
+.debug-transfer { display: grid; gap: 4px; border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: #fff7ed; }
+.debug-transfer span { color: var(--muted); font-size: 12px; }
+.debug-transfer code { white-space: pre-wrap; word-break: break-word; color: #9a3412; }
+@media (max-width: 980px) { .debug-grid { grid-template-columns: 1fr; } }

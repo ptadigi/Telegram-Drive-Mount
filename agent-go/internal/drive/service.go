@@ -128,20 +128,20 @@ type pendingFile struct {
 }
 
 type Service struct {
-	db            *sql.DB
-	dataDir       string
-	uploader      TelegramUploader
-	events        *EventBus
-	tunnelURL     string
-	tunnelActive  bool
-	tunnelMu      sync.RWMutex
-	cachePolicy   CachePolicy
-	cacheMu       sync.RWMutex
-	syncWatchMu   sync.Mutex
-	syncWatchers  map[string]syncWatcherEntry
-	channelOnce   sync.Mutex
+	db             *sql.DB
+	dataDir        string
+	uploader       TelegramUploader
+	events         *EventBus
+	tunnelURL      string
+	tunnelActive   bool
+	tunnelMu       sync.RWMutex
+	cachePolicy    CachePolicy
+	cacheMu        sync.RWMutex
+	syncWatchMu    sync.Mutex
+	syncWatchers   map[string]syncWatcherEntry
+	channelOnce    sync.Mutex
 	streamCoalesce *chunkCoalesce
-	chunks        *chunkCache
+	chunks         *chunkCache
 }
 
 type syncWatcherEntry struct {
@@ -361,12 +361,20 @@ func (s *Service) CreateFolder(ctx context.Context, input CreateFolderInput) (Fo
 }
 
 func (s *Service) SaveUploadedFile(ctx context.Context, header *multipart.FileHeader, folderID string, relativePath string) (File, error) {
+	s.logSync(SyncLogEntry{Event: "upload_received", FileName: header.Filename, Size: header.Size, Phase: "http_upload"})
 	source, err := header.Open()
 	if err != nil {
+		s.logSync(SyncLogEntry{Level: "error", Event: "upload_open_failed", FileName: header.Filename, Size: header.Size, Phase: "http_upload", Error: err.Error()})
 		return File{}, fmt.Errorf("mở file upload: %w", err)
 	}
 	defer source.Close()
-	return s.saveFileFromReader(ctx, source, header.Filename, header.Header.Get("Content-Type"), folderID, relativePath, true)
+	file, err := s.saveFileFromReader(ctx, source, header.Filename, header.Header.Get("Content-Type"), folderID, relativePath, true)
+	if err != nil {
+		s.logSync(SyncLogEntry{Level: "error", Event: "upload_save_failed", FileName: header.Filename, Size: header.Size, Phase: "save_local", Error: err.Error()})
+		return File{}, err
+	}
+	s.logSync(SyncLogEntry{Event: "upload_saved", FileID: file.ID, FileName: file.Name, Size: file.Size, Phase: "queued", SyncState: file.SyncState, LocalPath: file.LocalPath})
+	return file, nil
 }
 
 func (s *Service) SaveLocalFile(ctx context.Context, sourcePath string, folderID string, relativePath string) (File, error) {
@@ -872,17 +880,21 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 			continue
 		}
 		if item.LocalPath == "" || !fileExists(item.LocalPath) {
+			message := "file local không còn trên đĩa"
 			_ = s.markSyncState(ctx, item.ID, "local_missing")
-			_ = s.updateTransfer(ctx, item.ID, "failed", 100, 0, item.Size, "file local không còn trên đĩa")
+			_ = s.updateTransfer(ctx, item.ID, "failed", 100, 0, item.Size, message)
+			s.logSync(SyncLogEntry{Level: "error", Event: "telegram_upload_failed", FileID: item.ID, FileName: item.Name, Phase: "local_missing", Size: item.Size, SyncState: "local_missing", Error: message, LocalPath: item.LocalPath})
 			s.clearRetry(item.ID)
 			result.Failed++
 			continue
 		}
 		if err := s.markSyncState(ctx, item.ID, "telegram_uploading"); err != nil {
+			s.logSync(SyncLogEntry{Level: "error", Event: "sync_state_failed", FileID: item.ID, FileName: item.Name, Phase: "telegram_uploading", Size: item.Size, Error: err.Error()})
 			result.Failed++
 			continue
 		}
 		_ = s.updateTransfer(ctx, item.ID, "syncing_telegram", 15, 0, item.Size, "")
+		s.logSync(SyncLogEntry{Event: "telegram_upload_start", FileID: item.ID, FileName: item.Name, Phase: "syncing_telegram", Size: item.Size, SyncState: "telegram_uploading", LocalPath: item.LocalPath})
 		var uploaded UploadedObject
 		var uploadErr error
 		if uploader != nil {
@@ -893,6 +905,7 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 		if uploadErr != nil {
 			_ = s.markSyncState(ctx, item.ID, "telegram_upload_failed")
 			_ = s.updateTransfer(ctx, item.ID, "failed", 100, 0, item.Size, uploadErr.Error())
+			s.logSync(SyncLogEntry{Level: "error", Event: "telegram_upload_failed", FileID: item.ID, FileName: item.Name, Phase: "upload_to_telegram", Size: item.Size, SyncState: "telegram_upload_failed", Error: uploadErr.Error(), LocalPath: item.LocalPath})
 			s.scheduleRetry(item.ID, uploadErr)
 			result.Failed++
 			continue
@@ -901,12 +914,14 @@ func (s *Service) SyncPendingToTelegram(ctx context.Context) (SyncResult, error)
 		if err := s.recordTelegramVersion(ctx, item.File, uploaded); err != nil {
 			_ = s.markSyncState(ctx, item.ID, "telegram_upload_failed")
 			_ = s.updateTransfer(ctx, item.ID, "failed", 100, item.Size, item.Size, err.Error())
+			s.logSync(SyncLogEntry{Level: "error", Event: "telegram_version_failed", FileID: item.ID, FileName: item.Name, Phase: "record_version", Size: item.Size, SyncState: "telegram_upload_failed", Error: err.Error(), LocalPath: item.LocalPath})
 			s.scheduleRetry(item.ID, err)
 			result.Failed++
 			continue
 		}
 		s.clearRetry(item.ID)
 		_ = s.updateTransfer(ctx, item.ID, "completed", 100, item.Size, item.Size, "")
+		s.logSync(SyncLogEntry{Event: "telegram_upload_done", FileID: item.ID, FileName: item.Name, Phase: "completed", Size: item.Size, SyncState: "telegram_synced", LocalPath: item.LocalPath})
 		s.maybeEvictAfterSync(ctx, item.ID)
 		result.Uploaded++
 	}

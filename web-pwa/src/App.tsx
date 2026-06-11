@@ -5,6 +5,7 @@ import { AgentConfig, AgentInfo, AppUser, AuthStatus, DatabaseStatus, getAuthSta
 import { ActivityView } from "./components/ActivityView";
 import { AuthGate } from "./components/AuthGate";
 import { DevicesView } from "./components/DevicesView";
+import { DebugView } from "./components/DebugView";
 import { DriveBrowser } from "./components/DriveBrowser";
 import { HomeView } from "./components/HomeView";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
@@ -19,7 +20,7 @@ import { UploadDock } from "./components/UploadDock";
 import { useUploadQueue } from "./state/uploads";
 
 type AgentState = "checking" | "online" | "offline";
-type ViewKey = "home" | "drive" | "computers" | "shared" | "starred" | "trash" | "settings" | "search" | "activity" | "devices";
+type ViewKey = "home" | "drive" | "computers" | "shared" | "starred" | "trash" | "settings" | "search" | "activity" | "devices" | "debug";
 
 export function App() {
   const sharedPath = window.location.pathname.match(/^\/share\/(.+)$/);
@@ -126,6 +127,7 @@ function DriveApp({ currentUser, onLogout }: { currentUser: AppUser; onLogout: (
             </button>
           ))}
           <a className="drive-nav__item drive-nav__item--ghost" onClick={() => setView("activity")}><Link2 size={18} /> Hoạt động</a>
+          <a className="drive-nav__item drive-nav__item--ghost" onClick={() => setView("debug")}><Database size={18} /> Debug sync</a>
           <a className="drive-nav__item drive-nav__item--ghost" onClick={() => setView("devices")}><HardDrive size={18} /> {t("devices.title")}</a>
         </nav>
         <div className="storage-card">
@@ -157,6 +159,7 @@ function DriveApp({ currentUser, onLogout }: { currentUser: AppUser; onLogout: (
         {view === "trash" && <TrashView />}
         {view === "settings" && <SettingsView />}
         {view === "activity" && <ActivityView />}
+        {view === "debug" && <DebugView />}
         {view === "devices" && <DevicesView />}
 
         <section className="agent-drawer">

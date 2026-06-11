@@ -60,6 +60,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/config", s.handleConfig)
 	mux.HandleFunc("GET /v1/database/status", s.handleDatabaseStatus)
 	mux.HandleFunc("GET /v1/transfers", s.handleTransfers)
+	mux.HandleFunc("GET /v1/debug/sync", s.handleDebugSync)
 	mux.HandleFunc("GET /v1/events", s.handleEvents)
 	mux.HandleFunc("GET /v1/sync/roots", s.handleListSyncRoots)
 	mux.HandleFunc("POST /v1/sync/roots", s.handleCreateSyncRoot)
@@ -309,6 +310,26 @@ func (s *Server) handleTransfers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"transfers": transfers})
+}
+
+func (s *Server) handleDebugSync(w http.ResponseWriter, r *http.Request) {
+	limit := 200
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 500 {
+			limit = n
+		}
+	}
+	logs, err := s.drive.RecentSyncLogs(r.Context(), limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	transfers, err := s.drive.ListTransfers(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"logs": logs, "transfers": transfers})
 }
 
 func (s *Server) handleListSyncRoots(w http.ResponseWriter, r *http.Request) {
