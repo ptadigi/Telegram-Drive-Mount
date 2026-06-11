@@ -1,41 +1,63 @@
-# Ký số installer Windows (Code Signing)
+# Ký số self-signed + Xác minh checksum
 
 Publisher: **Innonet Agency - Automation AI Company**
 
-Installer `TelegramDriveSetup.exe` và `td-agent.exe` được CI tự ký nếu có chứng chỉ. Khi chưa có cert, build vẫn chạy nhưng Windows SmartScreen sẽ báo "Unknown publisher".
+> Lưu ý quan trọng: chứng chỉ **self-signed KHÔNG gỡ được cảnh báo Windows
+> SmartScreen "Unknown publisher"** trên máy người khác. Nó chỉ chứng minh file
+> không bị sửa sau khi ký, và dùng tốt cho nội bộ/đội ngũ. Muốn gỡ hẳn cảnh báo
+> phải dùng cert OV/EV của CA (mua) hoặc SignPath Foundation (free cho OSS, cần
+> duyệt). Xem cuối tài liệu.
 
-## 1. Mua chứng chỉ
+## A. Tạo chứng chỉ self-signed (free)
 
-- Mua **Code Signing Certificate** (ưu tiên **OV/EV**) từ CA: DigiCert, Sectigo, GlobalSign...
-- Đăng ký đúng tên pháp nhân: `Innonet Agency - Automation AI Company`.
-- EV cert giúp gỡ cảnh báo SmartScreen nhanh hơn (reputation tức thì).
-
-## 2. Xuất file PFX
-
-CA cấp `.pfx` (chứa private key + cert) kèm mật khẩu.
-
-## 3. Nạp vào GitHub Secrets
-
-Trong repo: Settings → Secrets and variables → Actions → New repository secret.
-
-- `CODE_SIGN_PFX_BASE64`: nội dung PFX dạng base64.
-- `CODE_SIGN_PFX_PASSWORD`: mật khẩu PFX.
-
-Tạo base64 (PowerShell):
+Trên Windows PowerShell (quyền admin):
 
 ```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("cert.pfx")) | Set-Content cert.pfx.b64
+$cert = New-SelfSignedCertificate `
+  -Type CodeSigningCert `
+  -Subject "CN=Innonet Agency - Automation AI Company, O=Innonet Agency, C=VN" `
+  -KeyAlgorithm RSA -KeyLength 3072 `
+  -CertStoreLocation Cert:\CurrentUser\My `
+  -NotAfter (Get-Date).AddYears(5)
+
+$pwd = ConvertTo-SecureString -String "DAT-MAT-KHAU-MANH" -Force -AsPlainText
+Export-PfxCertificate -Cert $cert -FilePath "$HOME\td-codesign.pfx" -Password $pwd
 ```
 
-Dán nội dung `cert.pfx.b64` vào secret `CODE_SIGN_PFX_BASE64`.
+## B. Nạp vào GitHub Secrets
 
-## 4. Build
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\td-codesign.pfx")) | Set-Content "$HOME\td-codesign.b64"
+```
 
-Push tag `v1.0.0` (hoặc push main) → CI tự ký `td-agent.exe` và `TelegramDriveSetup.exe` bằng signtool + timestamp DigiCert.
+Trong repo: Settings → Secrets and variables → Actions:
+- `CODE_SIGN_PFX_BASE64`: dán nội dung file `.b64`.
+- `CODE_SIGN_PFX_PASSWORD`: mật khẩu PFX.
 
-Nếu chưa nạp secret, CI bỏ qua bước ký (không fail), nhưng file sẽ chưa được tin cậy.
+Push tag `v*` → CI tự ký `td-agent.exe` và `TelegramDriveSetup.exe` (signtool +
+timestamp). Nếu chưa nạp secret, CI bỏ qua bước ký, không fail.
 
-## Lưu ý
+## C. Xác minh bản tải (cho người dùng cộng đồng)
 
-- EV cert thường yêu cầu HSM/token; cân nhắc dùng cloud signing (Azure Trusted Signing / DigiCert KeyLocker) nếu không ký được trên CI bằng PFX.
-- Đừng commit PFX vào repo. Chỉ dùng GitHub Secrets.
+Mỗi release có file `SHA256SUMS.txt`. Người dùng tự kiểm tra:
+
+```powershell
+Get-FileHash .\TelegramDriveSetup.exe -Algorithm SHA256
+# So sánh với dòng tương ứng trong SHA256SUMS.txt
+```
+
+Trùng hash = file nguyên vẹn, không bị chèn mã độc.
+
+## D. Vì sao vẫn còn cảnh báo SmartScreen
+
+- Self-signed: máy người khác không có cert trong Trusted Root → vẫn "Unknown publisher".
+- Cách user mở: bấm **More info → Run anyway**.
+- Reputation SmartScreen tăng dần theo lượt tải, nhưng chậm và không chắc.
+
+## E. Khi muốn gỡ hẳn cảnh báo (sau này)
+
+1. **SignPath Foundation** — free cho OSS, ký qua service (không dùng PFX secret).
+   Cần đăng ký + duyệt tại signpath.org/teams. Khi được duyệt, workflow cần
+   chỉnh sang dùng SignPath action thay cho signtool + PFX.
+2. **Certum Open Source** — ~30 USD/năm, cert thật, gỡ được cảnh báo.
+3. **DigiCert/Sectigo OV/EV** — đắt hơn, EV gỡ cảnh báo nhanh nhất.

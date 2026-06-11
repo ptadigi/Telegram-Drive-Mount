@@ -158,6 +158,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+      - name: Generate SHA256 checksums
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name 'td-agent-*' -o -name 'TelegramDriveSetup.exe' \) -exec cp {} release/ \;
+          cd release
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -168,3 +175,4 @@ jobs:
             artifacts/td-agent-darwin-arm64/*
             artifacts/TelegramDriveSetup/*
             artifacts/web-pwa-dist/**
+            release/SHA256SUMS.txt

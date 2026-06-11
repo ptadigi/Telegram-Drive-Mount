@@ -39,17 +39,29 @@ PWA tiếng Việt + Go Desktop Agent + Gateway domain/Tunnel + Telegram storage
 
 ### Tải bản Windows EXE
 
-Nếu muốn test nhanh trên Windows mà không build từ source, tải `td-agent-windows-amd64-tray.exe` từ **GitHub Releases** của repo rồi chạy cùng cấu hình mẫu.
+Người dùng phổ thông nên tải **`TelegramDriveSetup.exe`** từ **GitHub Releases** — cài 1 file, tự cài WinFsp, có cửa sổ thiết lập kết nối.
 
 - Bản ổn định: `https://github.com/ptadigi/Telegram-Drive-Mount/releases`
-- File nên tải cho Windows desktop: `td-agent-windows-amd64-tray.exe`
+- Cài nhanh: `TelegramDriveSetup.exe`
+- Portable tray: `td-agent-windows-amd64-tray.exe`
 - Build theo source: dùng lệnh ở phần dưới để tạo `td-agent.exe` có tray + mount ổ ảo.
+
+### Xác minh file tải về
+
+Mỗi release kèm `SHA256SUMS.txt`. Kiểm tra file không bị sửa đổi:
+
+```powershell
+Get-FileHash .\TelegramDriveSetup.exe -Algorithm SHA256
+# So sánh với dòng tương ứng trong SHA256SUMS.txt
+```
+
+Lưu ý: bản phát hành hiện chưa ký số bằng chứng chỉ CA, nên Windows SmartScreen có thể báo "Unknown publisher". Bấm **More info → Run anyway** để chạy. Xem `docs/CODE_SIGNING.md`.
 
 ### Ứng dụng desktop / sync hai chiều
 
 - Build với `-tags fuse tray` để có tray + mount ổ ảo.
-- Chế độ `--remote` dùng EXE làm thin-client, mount qua VPS.
-- Với máy chủ/VPS, dùng `--mount-on-start` để tự gắn ổ khi khởi động.
+- Cài xong, mở app sẽ hiện cửa sổ thiết lập: chọn nối máy chủ có sẵn (local/VPS) hoặc chạy máy chủ trên máy này, rồi nhập mã ghép thiết bị.
+- Với máy chủ/VPS, agent tự mount lại theo cấu hình đã lưu khi khởi động.
 
 
 Yêu cầu: Go 1.22+, Node.js 20+, file `agent-go/config.local.json` chứa Telegram `api_id` và `api_hash` (lấy tại https://my.telegram.org/apps), không commit lên git.
