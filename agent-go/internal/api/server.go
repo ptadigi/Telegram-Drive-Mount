@@ -306,20 +306,43 @@ func (s *Server) handleDatabaseStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Cache-Control", "no-cache, no-transform")
 	w.Header().Set("Connection", "keep-alive")
+	// Disable proxy buffering (nginx/openresty) so events flush immediately.
+	// Cloudflare honors no-transform + text/event-stream; nginx needs this hint.
+	w.Header().Set("X-Accel-Buffering", "no")
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeError(w, http.StatusInternalServerError, errBadRequest("trình duyệt không hỗ trợ realtime stream"))
 		return
 	}
+	// Tell the client how soon to retry if the stream drops (mobile tabs).
+	_, _ = w.Write([]byte("retry: 3000\n\n"))
+	flusher.Flush()
 	events := s.drive.Events().Subscribe(r.Context())
-	for event := range events {
-		_, _ = w.Write([]byte("event: " + event.Type + "\n"))
-		_, _ = w.Write([]byte("data: "))
-		_, _ = w.Write(event.JSON())
-		_, _ = w.Write([]byte("\n\n"))
-		flusher.Flush()
+	// Heartbeat keeps intermediaries from idling the connection out and lets
+	// the client detect a dead stream quickly.
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			if _, err := w.Write([]byte(": keep-alive\n\n")); err != nil {
+				return
+			}
+			flusher.Flush()
+		case event, ok := <-events:
+			if !ok {
+				return
+			}
+			_, _ = w.Write([]byte("event: " + event.Type + "\n"))
+			_, _ = w.Write([]byte("data: "))
+			_, _ = w.Write(event.JSON())
+			_, _ = w.Write([]byte("\n\n"))
+			flusher.Flush()
+		}
 	}
 }
 

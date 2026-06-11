@@ -2,9 +2,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentInfo, AuthStatus, DatabaseStatus, DriveContents, DriveFile, Device, eventsUrl, listDevices, listDriveContents, listStarred, startDevicePairing, thumbnailUrl } from "../api/agent";
+import { useRevalidate } from "../state/revalidate";
 
 const DESKTOP_RELEASE_URL = "https://github.com/ptadigi/Telegram-Drive-Mount/releases/latest";
-
 type Props = {
   info: AgentInfo | null;
   database: DatabaseStatus | null;
@@ -38,16 +38,11 @@ export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpen
 
   useEffect(() => { refresh(); }, []);
 
-  useEffect(() => {
-    const stream = new EventSource(eventsUrl(), { withCredentials: true });
-    stream.addEventListener("file.created", refresh);
-    stream.addEventListener("file.updated", refresh);
-    stream.addEventListener("folder.updated", refresh);
-    stream.addEventListener("file.starred", refresh);
-    stream.addEventListener("folder.starred", refresh);
-    stream.addEventListener("device.created", refresh);
-    return () => stream.close();
-  }, []);
+  useRevalidate(refresh, {
+    eventsUrl: eventsUrl(),
+    sseEvents: ["file.created", "file.updated", "folder.updated", "file.starred", "folder.starred", "device.created"],
+    pollMs: 25000,
+  });
 
   const recentFiles = recent.files.slice(0, 8);
   const starredItems = [...starred.folders.slice(0, 4), ...starred.files.slice(0, 4)];

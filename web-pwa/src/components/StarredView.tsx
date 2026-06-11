@@ -2,6 +2,7 @@ import { Archive, Download, FileAudio, FileText, FileVideo, Folder, Image, Refre
 import { useEffect, useState } from "react";
 import { DriveContents, downloadFileUrl, listStarred, eventsUrl, starFile, starFolder, thumbnailUrl, DriveFile } from "../api/agent";
 import { useToast } from "../state/ui";
+import { useRevalidate } from "../state/revalidate";
 
 export function StarredView() {
   const [contents, setContents] = useState<DriveContents>({ folders: [], files: [] });
@@ -21,14 +22,11 @@ export function StarredView() {
 
   useEffect(() => { refresh(); }, []);
 
-  useEffect(() => {
-    const stream = new EventSource(eventsUrl(), { withCredentials: true });
-    stream.addEventListener("file.starred", refresh);
-    stream.addEventListener("folder.starred", refresh);
-    stream.addEventListener("file.updated", refresh);
-    stream.addEventListener("folder.updated", refresh);
-    return () => stream.close();
-  }, []);
+  useRevalidate(refresh, {
+    eventsUrl: eventsUrl(),
+    sseEvents: ["file.starred", "folder.starred", "file.updated", "folder.updated"],
+    pollMs: 25000,
+  });
 
   const isEmpty = contents.folders.length === 0 && contents.files.length === 0;
 

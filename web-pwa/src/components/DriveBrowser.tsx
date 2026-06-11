@@ -3,6 +3,7 @@ import React, { ChangeEvent, DragEvent, useCallback, useEffect, useRef, useState
 import { useTranslation } from "react-i18next";
 import { createFolder, downloadBundle, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, moveFile, moveFolder, renameFile, renameFolder, starFile, starFolder, thumbnailUrl, trashFile, trashFolder, zipFolderUrl } from "../api/agent";
 import { useConfirm, useToast } from "../state/ui";
+import { useRevalidate } from "../state/revalidate";
 import { ContextMenu, ContextMenuItem } from "./ContextMenu";
 import { DetailPanel } from "./DetailPanel";
 import { FileViewer } from "./FileViewer";
@@ -69,12 +70,22 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
 
   useEffect(() => { refresh(""); }, []);
 
+  // Stale-while-revalidate: SSE is the fast path, but focus/visibility/online
+  // and a light poll guarantee the list refreshes even when SSE is dropped by
+  // a proxy (Cloudflare) or the mobile tab was suspended.
+  useRevalidate(() => refresh(currentFolderId), {
+    eventsUrl: eventsUrl(),
+    sseEvents: ["file.created", "file.updated", "file.trashed", "folder.updated", "transfer.updated"],
+    pollMs: 20000,
+  });
+
+  // Refresh immediately when an upload finishes processing so the just-added
+  // file shows up without waiting for SSE/poll.
+  const syncedCount = uploadQueue.items.filter((i) => i.phase === "synced" || i.phase === "processing").length;
   useEffect(() => {
-    const stream = new EventSource(eventsUrl(), { withCredentials: true });
-    stream.addEventListener("file.created", () => refresh(currentFolderId));
-    stream.addEventListener("transfer.updated", () => refresh(currentFolderId));
-    return () => stream.close();
-  }, [currentFolderId, refresh]);
+    if (syncedCount > 0) refresh(currentFolderId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncedCount]);
 
   function openFolder(folder: DriveFolder) {
     setFolderStack((stack) => [...stack, folder]);
