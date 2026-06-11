@@ -33,11 +33,19 @@ type Server struct {
 	tunnel    *tunnel.Service
 	users     *users.Service
 	devices   *devices.Service
-	mounts    *vfs.Manager
-	desktop   *desktop.Store
-	shareRate *rateLimiter
-	authMu    sync.RWMutex
-	authCfg   config.AuthConfig
+	mounts      *vfs.Manager
+	desktop     *desktop.Store
+	desktopMode bool
+	shareRate   *rateLimiter
+	authMu      sync.RWMutex
+	authCfg     config.AuthConfig
+}
+
+// SetDesktopMode enables desktop onboarding endpoints. Only the local tray
+// app turns this on; server/VPS deployments leave it off so the onboarding
+// API is never exposed publicly.
+func (s *Server) SetDesktopMode(enabled bool) {
+	s.desktopMode = enabled
 }
 
 func NewServer(version string, cfg config.Config, authService *agentauth.Service, driveService *drive.Service, tunnelService *tunnel.Service, userService *users.Service, mountManager *vfs.Manager, deviceService *devices.Service) *Server {
@@ -356,9 +364,17 @@ func isLoopback(r *http.Request) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// desktopAllowed reports whether desktop onboarding endpoints may run for this
+// request. Requires the agent to be in desktop (tray) mode AND the request to
+// originate from localhost. Server/VPS deployments never enable desktop mode,
+// so these endpoints stay private to the local desktop app.
+func (s *Server) desktopAllowed(r *http.Request) bool {
+	return s.desktopMode && isLoopback(r)
+}
+
 func (s *Server) handleDesktopState(w http.ResponseWriter, r *http.Request) {
-	if !isLoopback(r) {
-		writeError(w, http.StatusForbidden, errBadRequest("chỉ truy cập được từ máy cục bộ"))
+	if !s.desktopAllowed(r) {
+		writeError(w, http.StatusForbidden, errBadRequest("chỉ dùng được trên ứng dụng desktop"))
 		return
 	}
 	state := s.desktop.Load()
@@ -366,8 +382,8 @@ func (s *Server) handleDesktopState(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDesktopTestServer(w http.ResponseWriter, r *http.Request) {
-	if !isLoopback(r) {
-		writeError(w, http.StatusForbidden, errBadRequest("chỉ truy cập được từ máy cục bộ"))
+	if !s.desktopAllowed(r) {
+		writeError(w, http.StatusForbidden, errBadRequest("chỉ dùng được trên ứng dụng desktop"))
 		return
 	}
 	var input struct {
@@ -381,8 +397,8 @@ func (s *Server) handleDesktopTestServer(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleDesktopPair(w http.ResponseWriter, r *http.Request) {
-	if !isLoopback(r) {
-		writeError(w, http.StatusForbidden, errBadRequest("chỉ truy cập được từ máy cục bộ"))
+	if !s.desktopAllowed(r) {
+		writeError(w, http.StatusForbidden, errBadRequest("chỉ dùng được trên ứng dụng desktop"))
 		return
 	}
 	var input struct {
@@ -412,8 +428,8 @@ func (s *Server) handleDesktopPair(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDesktopLocal(w http.ResponseWriter, r *http.Request) {
-	if !isLoopback(r) {
-		writeError(w, http.StatusForbidden, errBadRequest("chỉ truy cập được từ máy cục bộ"))
+	if !s.desktopAllowed(r) {
+		writeError(w, http.StatusForbidden, errBadRequest("chỉ dùng được trên ứng dụng desktop"))
 		return
 	}
 	state := desktop.State{Mode: string(desktop.ModeLocal), ServerURL: "http://127.0.0.1:8750", MountPoint: "T:", UpdatedAt: time.Now().Unix()}
@@ -425,8 +441,8 @@ func (s *Server) handleDesktopLocal(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDesktopReset(w http.ResponseWriter, r *http.Request) {
-	if !isLoopback(r) {
-		writeError(w, http.StatusForbidden, errBadRequest("chỉ truy cập được từ máy cục bộ"))
+	if !s.desktopAllowed(r) {
+		writeError(w, http.StatusForbidden, errBadRequest("chỉ dùng được trên ứng dụng desktop"))
 		return
 	}
 	if err := s.desktop.Reset(); err != nil {

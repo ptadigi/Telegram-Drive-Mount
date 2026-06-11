@@ -107,6 +107,7 @@ func main() {
 	deviceService := devices.New(metadataDB)
 	mountManager := vfs.NewManager(driveService, cfg.DataDir)
 	apiServer := api.NewServer(version, cfg, authService, driveService, tunnelSvc, userService, mountManager, deviceService)
+	apiServer.SetDesktopMode(*withTray)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
