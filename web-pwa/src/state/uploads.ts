@@ -149,6 +149,10 @@ export function useUploadQueue(): UploadQueue {
       }, item.relativePath)
         .then((result) => {
           upsert(id, { fileId: result.file.id, phase: "processing", percent: 100 });
+          // Free the File handle only on success — failed items keep it so
+          // retryFailed() can re-upload without re-selecting files.
+          const done = itemsRef.current.get(id);
+          if (done) { delete (done as QueueItemInternal).fileHandle; }
         })
         .catch((err) => {
           const message = err instanceof Error ? err.message : String(err);
@@ -156,9 +160,6 @@ export function useUploadQueue(): UploadQueue {
         })
         .finally(() => {
           runningRef.current -= 1;
-          // Drop the File handle once done to free memory for huge batches.
-          const done = itemsRef.current.get(id);
-          if (done) { delete (done as QueueItemInternal).fileHandle; }
           refreshTransfers();
           pump();
         });
