@@ -15,9 +15,9 @@ import (
 // Hooks must mirror the real implementation so the caller can pass the same
 // struct regardless of build tag.
 type Hooks struct {
-	BaseURL   string
 	DataDir   string
 	ExecPath  string
+	OnOpenUI  func()
 	OnPause   func()
 	OnResume  func()
 	OnAddRoot func(path string) error

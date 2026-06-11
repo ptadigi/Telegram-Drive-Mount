@@ -14,9 +14,9 @@ import (
 )
 
 type Hooks struct {
-	BaseURL   string
 	DataDir   string
 	ExecPath  string
+	OnOpenUI  func()
 	OnPause   func()
 	OnResume  func()
 	OnAddRoot func(path string) error
@@ -61,7 +61,9 @@ func Run(ctx context.Context, hooks Hooks) {
 					systray.Quit()
 					return
 				case <-open.ClickedCh:
-					_ = openURL(hooks.BaseURL)
+					if hooks.OnOpenUI != nil {
+						hooks.OnOpenUI()
+					}
 				case <-setupItem.ClickedCh:
 					if hooks.OnSetup != nil {
 						hooks.OnSetup()
@@ -126,20 +128,6 @@ func setIconBytes() {
 		return
 	}
 	systray.SetIcon(iconPNG)
-}
-
-func openURL(url string) error {
-	if url == "" {
-		return fmt.Errorf("base url trống")
-	}
-	switch runtime.GOOS {
-	case "windows":
-		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	case "darwin":
-		return exec.Command("open", url).Start()
-	default:
-		return exec.Command("xdg-open", url).Start()
-	}
 }
 
 func openPath(path string) error {

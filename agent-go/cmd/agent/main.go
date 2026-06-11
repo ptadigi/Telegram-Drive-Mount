@@ -10,7 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -103,6 +105,18 @@ func main() {
 	}
 	cfg.Normalize()
 
+	// Desktop builds ship the PWA next to the executable. When pwa_dir isn't
+	// configured, auto-detect <exeDir>/pwa so the agent serves the UI and the
+	// /setup onboarding page without any manual config (fixes 404 on /setup).
+	if strings.TrimSpace(cfg.PWADir) == "" {
+		if exe, err := os.Executable(); err == nil {
+			candidate := filepath.Join(filepath.Dir(exe), "pwa")
+			if info, statErr := os.Stat(filepath.Join(candidate, "index.html")); statErr == nil && !info.IsDir() {
+				cfg.PWADir = candidate
+			}
+		}
+	}
+
 	metadataDB, err := db.Open(cfg.DatabasePath)
 	if err != nil {
 		log.Fatalf("không thể mở database metadata: %v", err)
@@ -191,9 +205,11 @@ func main() {
 			}
 		}()
 		go tray.Run(ctx, tray.Hooks{
-			BaseURL:  trayBaseURL(cfg),
 			DataDir:  cfg.DataDir,
 			ExecPath: execPath,
+			OnOpenUI: func() {
+				_ = openBrowser(resolveUIBaseURL(cfg))
+			},
 			OnPause: func() {
 				paused.Store(true)
 				log.Println("đã tạm dừng đồng bộ qua tray")
@@ -246,6 +262,18 @@ func trayBaseURL(cfg config.Config) string {
 		host = "127.0.0.1"
 	}
 	return fmt.Sprintf("http://%s:%d", host, cfg.Port)
+}
+
+// resolveUIBaseURL returns the URL the desktop tray should open for the main
+// UI. In remote mode the real Drive UI lives on the server the user paired
+// with, so we open that; otherwise (local / not configured) we open the
+// local agent. Reads fresh state each call so it reflects onboarding changes.
+func resolveUIBaseURL(cfg config.Config) string {
+	st := desktop.NewStore(cfg.DataDir).Load()
+	if desktop.Mode(st.Mode) == desktop.ModeRemote && strings.TrimSpace(st.ServerURL) != "" {
+		return strings.TrimRight(st.ServerURL, "/")
+	}
+	return trayBaseURL(cfg)
 }
 
 func openBrowser(url string) error {
