@@ -15,8 +15,10 @@ import (
 
 	agentauth "telegram-drive-agent/internal/auth"
 	"telegram-drive-agent/internal/config"
+	"telegram-drive-agent/internal/desktop"
 	"telegram-drive-agent/internal/devices"
 	"telegram-drive-agent/internal/drive"
+	"telegram-drive-agent/internal/remote"
 	"telegram-drive-agent/internal/tunnel"
 	"telegram-drive-agent/internal/users"
 	"telegram-drive-agent/internal/vfs"
@@ -32,6 +34,7 @@ type Server struct {
 	users     *users.Service
 	devices   *devices.Service
 	mounts    *vfs.Manager
+	desktop   *desktop.Store
 	shareRate *rateLimiter
 	authMu    sync.RWMutex
 	authCfg   config.AuthConfig
@@ -48,6 +51,7 @@ func NewServer(version string, cfg config.Config, authService *agentauth.Service
 		users:     userService,
 		devices:   deviceService,
 		mounts:    mountManager,
+		desktop:   desktop.NewStore(cfg.DataDir),
 		shareRate: newRateLimiter(20, time.Minute),
 		authCfg:   cfg.Auth,
 	}
@@ -61,6 +65,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/database/status", s.handleDatabaseStatus)
 	mux.HandleFunc("GET /v1/transfers", s.handleTransfers)
 	mux.HandleFunc("GET /v1/debug/sync", s.handleDebugSync)
+	mux.HandleFunc("GET /v1/desktop/state", s.handleDesktopState)
+	mux.HandleFunc("POST /v1/desktop/test-server", s.handleDesktopTestServer)
+	mux.HandleFunc("POST /v1/desktop/pair", s.handleDesktopPair)
+	mux.HandleFunc("POST /v1/desktop/local", s.handleDesktopLocal)
+	mux.HandleFunc("POST /v1/desktop/reset", s.handleDesktopReset)
 	mux.HandleFunc("GET /v1/events", s.handleEvents)
 	mux.HandleFunc("GET /v1/sync/roots", s.handleListSyncRoots)
 	mux.HandleFunc("POST /v1/sync/roots", s.handleCreateSyncRoot)
@@ -234,6 +243,9 @@ func isPublicPath(path string) bool {
 	case "/v1/devices/pair/exchange":
 		return true
 	}
+	if strings.HasPrefix(path, "/v1/desktop/") {
+		return true
+	}
 	return false
 }
 
@@ -330,6 +342,99 @@ func (s *Server) handleDebugSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"logs": logs, "transfers": transfers})
+}
+
+// isLoopback reports whether the request originates from localhost. Desktop
+// onboarding endpoints configure the agent and must never be reachable from a
+// public deployment.
+func isLoopback(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func (s *Server) handleDesktopState(w http.ResponseWriter, r *http.Request) {
+	if !isLoopback(r) {
+		writeError(w, http.StatusForbidden, errBadRequest("chỉ truy cập được từ máy cục bộ"))
+		return
+	}
+	state := s.desktop.Load()
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
+func (s *Server) handleDesktopTestServer(w http.ResponseWriter, r *http.Request) {
+	if !isLoopback(r) {
+		writeError(w, http.StatusForbidden, errBadRequest("chỉ truy cập được từ máy cục bộ"))
+		return
+	}
+	var input struct {
+		URL string `json:"url"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	info := desktop.TestServer(r.Context(), input.URL)
+	writeJSON(w, http.StatusOK, info)
+}
+
+func (s *Server) handleDesktopPair(w http.ResponseWriter, r *http.Request) {
+	if !isLoopback(r) {
+		writeError(w, http.StatusForbidden, errBadRequest("chỉ truy cập được từ máy cục bộ"))
+		return
+	}
+	var input struct {
+		URL  string `json:"url"`
+		Code string `json:"code"`
+		Name string `json:"name"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	result, err := desktop.ExchangePairing(r.Context(), input.URL, input.Code, input.Name)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	tok := remote.Token{BaseURL: result.BaseURL, Token: result.Token, DeviceID: result.DeviceID, UserID: result.UserID}
+	if err := remote.SaveToken(remote.DefaultTokenPath(), tok); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	state := desktop.State{Mode: string(desktop.ModeRemote), ServerURL: result.BaseURL, DeviceName: input.Name, MountPoint: "T:", UpdatedAt: time.Now().Unix()}
+	if err := s.desktop.Save(state); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
+func (s *Server) handleDesktopLocal(w http.ResponseWriter, r *http.Request) {
+	if !isLoopback(r) {
+		writeError(w, http.StatusForbidden, errBadRequest("chỉ truy cập được từ máy cục bộ"))
+		return
+	}
+	state := desktop.State{Mode: string(desktop.ModeLocal), ServerURL: "http://127.0.0.1:8750", MountPoint: "T:", UpdatedAt: time.Now().Unix()}
+	if err := s.desktop.Save(state); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"state": state})
+}
+
+func (s *Server) handleDesktopReset(w http.ResponseWriter, r *http.Request) {
+	if !isLoopback(r) {
+		writeError(w, http.StatusForbidden, errBadRequest("chỉ truy cập được từ máy cục bộ"))
+		return
+	}
+	if err := s.desktop.Reset(); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	_ = remote.DeleteToken(remote.DefaultTokenPath())
+	writeJSON(w, http.StatusOK, map[string]any{"state": desktop.State{Mode: string(desktop.ModeUnset)}})
 }
 
 func (s *Server) handleListSyncRoots(w http.ResponseWriter, r *http.Request) {

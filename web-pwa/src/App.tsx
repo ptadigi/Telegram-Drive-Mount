@@ -11,6 +11,7 @@ import { HomeView } from "./components/HomeView";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
 import { SearchView } from "./components/SearchView";
 import { SettingsView } from "./components/SettingsView";
+import { SetupWizard } from "./components/SetupWizard";
 import { SharePage } from "./components/SharePage";
 import { StarredView } from "./components/StarredView";
 import { SyncRootsPanel } from "./components/SyncRootsPanel";
@@ -26,6 +27,9 @@ export function App() {
   const sharedPath = window.location.pathname.match(/^\/share\/(.+)$/);
   if (sharedPath) {
     return <SharePage slug={decodeURIComponent(sharedPath[1])} />;
+  }
+  if (window.location.pathname.replace(/\/+$/, "") === "/setup") {
+    return <SetupWizard />;
   }
   return <AuthGuard />;
 }

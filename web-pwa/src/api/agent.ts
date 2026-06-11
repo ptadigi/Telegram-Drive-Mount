@@ -95,6 +95,14 @@ export async function stopMount() {
 }
 
 export function listFiles(signal?: AbortSignal) { return getJSON<{ files: DriveFile[] }>("/v1/files", signal); }
+
+export type DesktopState = { mode: "unset" | "local" | "remote"; server_url?: string; device_name?: string; mount_point?: string; updated_at?: number; };
+export type DesktopServerInfo = { ok: boolean; url: string; service?: string; version?: string; error?: string; };
+export function getDesktopState(signal?: AbortSignal) { return getJSON<{ state: DesktopState }>("/v1/desktop/state", signal); }
+export function testDesktopServer(url: string) { return sendJSON<DesktopServerInfo>("/v1/desktop/test-server", { url }); }
+export function pairDesktop(url: string, code: string, name: string) { return sendJSON<{ state: DesktopState }>("/v1/desktop/pair", { url, code, name }); }
+export function setDesktopLocal() { return sendJSON<{ state: DesktopState }>("/v1/desktop/local", {}); }
+export function resetDesktop() { return sendJSON<{ state: DesktopState }>("/v1/desktop/reset", {}); }
 export function listDriveContents(folderId = "", signal?: AbortSignal) { return getJSON<DriveContents>(`/v1/drive/contents?folder_id=${encodeURIComponent(folderId)}`, signal); }
 export function listTransfers(signal?: AbortSignal) { return getJSON<{ transfers: Transfer[] }>("/v1/transfers", signal); }
 export function eventsUrl() { return `${AGENT_BASE_URL}/v1/events`; }

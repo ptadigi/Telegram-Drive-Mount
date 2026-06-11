@@ -8,7 +8,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"runtime"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -17,6 +19,7 @@ import (
 	agentauth "telegram-drive-agent/internal/auth"
 	"telegram-drive-agent/internal/config"
 	"telegram-drive-agent/internal/db"
+	"telegram-drive-agent/internal/desktop"
 	"telegram-drive-agent/internal/devices"
 	"telegram-drive-agent/internal/drive"
 	"telegram-drive-agent/internal/telegramstorage"
@@ -155,6 +158,26 @@ func main() {
 
 	if *withTray {
 		execPath, _ := os.Executable()
+		// Honor saved desktop onboarding state: open setup on first run,
+		// auto-mount when already configured.
+		go func() {
+			time.Sleep(1 * time.Second)
+			store := desktop.NewStore(cfg.DataDir)
+			st := store.Load()
+			base := trayBaseURL(cfg)
+			switch desktop.Mode(st.Mode) {
+			case desktop.ModeLocal:
+				if _, err := mountManager.Mount(ctx, st.MountPoint); err != nil {
+					log.Printf("tự mount (local) lỗi: %v", err)
+				}
+			case desktop.ModeRemote:
+				if _, err := mountManager.Mount(ctx, st.MountPoint); err != nil {
+					log.Printf("tự mount (remote) lỗi: %v", err)
+				}
+			default:
+				_ = openBrowser(base + "/setup")
+			}
+		}()
 		go tray.Run(ctx, tray.Hooks{
 			BaseURL:  trayBaseURL(cfg),
 			DataDir:  cfg.DataDir,
@@ -208,6 +231,17 @@ func trayBaseURL(cfg config.Config) string {
 		host = "127.0.0.1"
 	}
 	return fmt.Sprintf("http://%s:%d", host, cfg.Port)
+}
+
+func openBrowser(url string) error {
+	switch runtime.GOOS {
+	case "windows":
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		return exec.Command("open", url).Start()
+	default:
+		return exec.Command("xdg-open", url).Start()
+	}
 }
 
 func splitAddr(value string) (string, int) {
