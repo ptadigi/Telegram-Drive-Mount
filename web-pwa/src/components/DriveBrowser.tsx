@@ -56,6 +56,37 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     return () => window.removeEventListener("drive:quick-action", onQuickAction);
   }, [currentFolderId]);
 
+  // Global guard: a file dropped anywhere OUTSIDE the dropzone (sidebar gaps,
+  // page margins, padding) would otherwise make the browser navigate to / open
+  // the file. Swallow those drags so the page never gets replaced by the file.
+  useEffect(() => {
+    function isInsideDropzone(target: EventTarget | null): boolean {
+      return target instanceof Element && !!target.closest(".drive-browser, .drive-card--folder");
+    }
+    function onWindowDragOver(event: Event) {
+      const e = event as globalThis.DragEvent;
+      if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes("Files")) return;
+      if (!isInsideDropzone(e.target)) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "none";
+      }
+    }
+    function onWindowDrop(event: Event) {
+      const e = event as globalThis.DragEvent;
+      if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes("Files")) return;
+      if (!isInsideDropzone(e.target)) {
+        e.preventDefault();
+        setDropping(false);
+      }
+    }
+    window.addEventListener("dragover", onWindowDragOver);
+    window.addEventListener("drop", onWindowDrop);
+    return () => {
+      window.removeEventListener("dragover", onWindowDragOver);
+      window.removeEventListener("drop", onWindowDrop);
+    };
+  }, []);
+
   const refresh = useCallback(async (folderId = currentFolderId) => {
     setLoading(true);
     setError(null);
