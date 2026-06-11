@@ -87,7 +87,7 @@ jobs:
       - name: go build (fuse + tray)
         working-directory: agent-go
         env:
-          CGO_ENABLED: "1"
+          CGO_ENABLED: "0"
         run: go build -tags "fuse tray" -trimpath -ldflags "-s -w" -o ../installer/td-agent.exe ./cmd/agent
       - name: Download PWA dist
         uses: actions/download-artifact@v4
