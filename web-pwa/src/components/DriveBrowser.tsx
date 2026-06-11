@@ -308,9 +308,12 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     const collected: { file: File; relativePath: string }[] = [];
     if (items && items.length > 0 && typeof items[0].webkitGetAsEntry === "function") {
       const entries = Array.from(items).map((item) => item.webkitGetAsEntry()).filter(Boolean) as FileSystemEntry[];
+      const hasDir = entries.some((e) => e.isDirectory);
+      if (hasDir) toast("Đang quét thư mục, vui lòng đợi…", "info");
       for (const entry of entries) {
         await collectEntry(entry, "", collected);
       }
+      if (hasDir) toast(`Đã quét ${collected.length} file, bắt đầu tải lên`, "success");
     } else {
       const files = Array.from(event.dataTransfer.files || []);
       for (const file of files) collected.push({ file, relativePath: file.name });

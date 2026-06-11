@@ -759,3 +759,10 @@ a.button { text-decoration: none; }
 .pair-steps > li > strong { font-size: 14px; }
 .pair-steps .button { width: fit-content; }
 .pair-steps code { font-family: "JetBrains Mono", "Fira Code", Consolas, monospace; font-size: 0.85em; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; word-break: break-all; }
+.upload-dock__title { display: grid; gap: 2px; }
+.upload-dock__title strong { font-size: 14px; }
+.upload-dock__title span { color: var(--muted); font-size: 12px; }
+.upload-dock__bar { height: 4px; background: var(--surface-2); overflow: hidden; }
+.upload-dock__bar > span { display: block; height: 100%; background: var(--accent); transition: width 280ms ease; }
+.upload-dock__bar > span.is-done { background: var(--green-500); }
+.upload-dock__more { padding: 10px 14px; color: var(--muted); font-size: 12px; text-align: center; }
