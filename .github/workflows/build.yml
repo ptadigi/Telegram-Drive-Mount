@@ -66,6 +66,45 @@ jobs:
           name: td-agent-windows-amd64-tray
           path: dist/td-agent-windows-amd64-tray.exe
 
+  windows-installer:
+    name: Build Windows Installer
+    runs-on: windows-latest
+    needs: [pwa]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+          cache-dependency-path: agent-go/go.sum
+      - name: Install WinFsp
+        shell: pwsh
+        run: |
+          $url = "https://github.com/winfsp/winfsp/releases/download/v2.0/winfsp-2.0.23075.msi"
+          New-Item -ItemType Directory -Force -Path installer | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile installer/winfsp-2.0.23075.msi
+          Start-Process msiexec.exe -ArgumentList '/i','installer/winfsp-2.0.23075.msi','/qn' -Wait
+      - name: go build (fuse + tray)
+        working-directory: agent-go
+        env:
+          CGO_ENABLED: "1"
+        run: go build -tags "fuse tray" -trimpath -ldflags "-s -w" -o ../installer/td-agent.exe ./cmd/agent
+      - name: Download PWA dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-pwa-dist
+          path: installer/pwa
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y }
+          & "$iscc" installer/td-agent.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TelegramDriveSetup
+          path: installer/Output/TelegramDriveSetup.exe
+
   pwa:
     name: Build PWA
     runs-on: ubuntu-latest
@@ -89,7 +128,7 @@ jobs:
 
   release:
     name: Release
-    needs: [agent, windows-tray, pwa]
+    needs: [agent, windows-tray, windows-installer, pwa]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -106,4 +145,5 @@ jobs:
             artifacts/td-agent-windows-amd64/*
             artifacts/td-agent-windows-amd64-tray/*
             artifacts/td-agent-darwin-arm64/*
+            artifacts/TelegramDriveSetup/*
             artifacts/web-pwa-dist/**
