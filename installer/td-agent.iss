@@ -5,15 +5,23 @@
 ;   - pwa\                  (noi dung web-pwa\dist)
 ;   - winfsp-2.0.23075.msi  (tai tu https://winfsp.dev)
 
-#define AppName "O Dia Cloud Ao"
-#define AppVersion "0.1.0"
-#define AppPublisher "Pham Thanh"
+#define AppName "O Dia Cloud Ao - Telegram Drive"
+#define AppVersion "1.0.0"
+#define AppPublisher "Innonet Agency - Automation AI Company"
+#define AppURL "https://github.com/ptadigi/Telegram-Drive-Mount"
 #define WinFspMsi "winfsp-2.0.23075.msi"
 
 [Setup]
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
+AppPublisherURL={#AppURL}
+AppSupportURL={#AppURL}
+AppUpdatesURL={#AppURL}
+VersionInfoCompany={#AppPublisher}
+VersionInfoProductName={#AppName}
+VersionInfoVersion={#AppVersion}
+VersionInfoCopyright="Copyright (C) Innonet Agency"
 DefaultDirName={autopf}\TelegramDrive
 DefaultGroupName={#AppName}
 PrivilegesRequired=admin

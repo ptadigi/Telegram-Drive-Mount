@@ -26,7 +26,7 @@ import (
 	"telegram-drive-agent/internal/vfs"
 )
 
-const version = "0.1.0-dev"
+const version = "1.0.0"
 
 type driveTunnelListener struct {
 	drive *drive.Service

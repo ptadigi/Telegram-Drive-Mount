@@ -70,6 +70,8 @@ jobs:
     name: Build Windows Installer
     runs-on: windows-latest
     needs: [pwa]
+    env:
+      CODE_SIGN_PFX_BASE64: ${{ secrets.CODE_SIGN_PFX_BASE64 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -94,12 +96,31 @@ jobs:
         with:
           name: web-pwa-dist
           path: installer/pwa
+      - name: Sign agent binary
+        if: ${{ env.CODE_SIGN_PFX_BASE64 != '' }}
+        shell: pwsh
+        env:
+          CODE_SIGN_PFX_BASE64: ${{ secrets.CODE_SIGN_PFX_BASE64 }}
+          CODE_SIGN_PFX_PASSWORD: ${{ secrets.CODE_SIGN_PFX_PASSWORD }}
+        run: |
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\cert.pfx", [Convert]::FromBase64String($env:CODE_SIGN_PFX_BASE64))
+          $st = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
+          & $st.FullName sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:CODE_SIGN_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 installer/td-agent.exe
       - name: Build installer
         shell: pwsh
         run: |
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y }
           & "$iscc" installer/td-agent.iss
+      - name: Sign installer
+        if: ${{ env.CODE_SIGN_PFX_BASE64 != '' }}
+        shell: pwsh
+        env:
+          CODE_SIGN_PFX_BASE64: ${{ secrets.CODE_SIGN_PFX_BASE64 }}
+          CODE_SIGN_PFX_PASSWORD: ${{ secrets.CODE_SIGN_PFX_PASSWORD }}
+        run: |
+          $st = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
+          & $st.FullName sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:CODE_SIGN_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 installer/Output/TelegramDriveSetup.exe
       - uses: actions/upload-artifact@v4
         with:
           name: TelegramDriveSetup
