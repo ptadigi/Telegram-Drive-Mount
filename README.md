@@ -87,19 +87,16 @@ curl -fsSL https://raw.githubusercontent.com/ptadigi/Telegram-Drive-Mount/main/d
 
 ## 📸 Ảnh giao diện
 
-<!-- Bổ sung ảnh vào docs/screenshots/ theo tên dưới đây. Xem docs/screenshots/README.md. -->
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/dashboard.png" alt="Dashboard" onerror="this.style.display='none'"/><br/><sub>Dashboard — số liệu tệp/thư mục/dung lượng</sub></td>
-    <td width="50%"><img src="docs/screenshots/drive.png" alt="Drive" onerror="this.style.display='none'"/><br/><sub>Drive — lưới file, icon màu theo định dạng</sub></td>
+    <td width="50%"><img src="docs/screenshots/dashboard.png" alt="Dashboard"/><br/><sub>Dashboard — số liệu tệp/thư mục/dung lượng</sub></td>
+    <td width="50%"><img src="docs/screenshots/drive.png" alt="Drive"/><br/><sub>Drive — lưới file, icon màu theo định dạng</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/viewer.png" alt="Viewer" onerror="this.style.display='none'"/><br/><sub>Xem file trong app (ảnh/video/docx)</sub></td>
-    <td width="50%"><img src="docs/screenshots/share.png" alt="Share" onerror="this.style.display='none'"/><br/><sub>Chia sẻ link an toàn + trang xem công khai</sub></td>
+    <td width="50%"><img src="docs/screenshots/share.png" alt="Share"/><br/><sub>Chia sẻ link an toàn (mật khẩu/hết hạn/giới hạn)</sub></td>
+    <td width="50%" align="center"><img src="docs/screenshots/mobile.png" alt="Mobile" width="240"/><br/><sub>Giao diện điện thoại (PWA, bottom nav)</sub></td>
   </tr>
 </table>
-
-> Ảnh chưa hiển thị? Xem [docs/screenshots/README.md](docs/screenshots/README.md) để biết tên file cần bổ sung.
 
 ---
 
