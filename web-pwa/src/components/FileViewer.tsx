@@ -1,4 +1,4 @@
-import { Download, ExternalLink, X, ZoomIn, ZoomOut } from "../icons";
+import { Download, ExternalLink, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { AGENT_BASE_URL, DriveFile, downloadFileUrl, streamFileUrl, thumbnailUrl } from "../api/agent";
 

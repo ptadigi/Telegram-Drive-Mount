@@ -1,4 +1,4 @@
-import { ChevronRight, Folder } from "../icons";
+import { ChevronRight, Folder } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DriveFolder, listDriveContents, moveFile, moveFolder } from "../api/agent";
 import { useToast } from "../state/ui";

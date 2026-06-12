@@ -1,4 +1,4 @@
-import { FolderSync, Pause, Play, Plus, RefreshCw, Trash2 } from "../icons";
+import { FolderSync, Pause, Play, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createSyncRoot, deleteSyncRoot, eventsUrl, listSyncRoots, scanSyncRoot, SyncRoot, updateSyncRoot } from "../api/agent";
 

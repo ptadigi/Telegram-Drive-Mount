@@ -1,4 +1,4 @@
-import { Copy, Link2, RefreshCw, Trash2 } from "../icons";
+import { Copy, Link2, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createShare, deleteShare, getShareConfig, listShares, shareLink, ShareConfig, updateShare, Share } from "../api/agent";
 

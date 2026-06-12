@@ -1,4 +1,4 @@
-import { Laptop2, RefreshCw, ShieldOff, Sparkles } from "../icons";
+import { Laptop2, RefreshCw, ShieldOff, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {

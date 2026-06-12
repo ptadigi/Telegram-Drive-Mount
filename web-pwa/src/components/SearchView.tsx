@@ -1,4 +1,4 @@
-import { Archive, Download, FileAudio, FileText, FileVideo, Folder, Image, Search } from "../icons";
+import { Archive, Download, FileAudio, FileText, FileVideo, Folder, Image, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DriveFile, DriveFolder, downloadFileUrl, search, thumbnailUrl } from "../api/agent";
 import { useToast } from "../state/ui";

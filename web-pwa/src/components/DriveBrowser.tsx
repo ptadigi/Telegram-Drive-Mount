@@ -1,4 +1,5 @@
-import { Archive, CheckCircle2, Download, FileAudio, FileIcon, FileText, FileVideo, Folder, FolderInput, FolderPlus, FolderUp, Image, Info, LayoutGrid, Link2, List, MoreVertical, Pencil, RefreshCw, Star, Trash2, Upload } from "../icons";
+import { Archive, CheckCircle2, Download, FileAudio, FileText, FileVideo, Folder, FolderInput, FolderPlus, FolderUp, Image, Info, LayoutGrid, Link2, List, MoreVertical, Pencil, RefreshCw, Star, Trash2, Upload } from "lucide-react";
+import { FileIcon } from "../icons";
 import React, { ChangeEvent, DragEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createFolder, downloadBundle, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, moveFile, moveFolder, renameFile, renameFolder, starFile, starFolder, thumbnailUrl, trashFile, trashFolder, zipFolderUrl } from "../api/agent";
@@ -708,6 +709,14 @@ function CardThumb({ file }: { file: DriveFile }) {
   const [failed, setFailed] = useState(false);
   if (!canHaveThumb(file) || failed) return <FileIcon kind={file.kind} ext={file.extension} size={32} />;
   return <img src={thumbnailUrl(file.id)} alt="" loading="lazy" onError={() => setFailed(true)} />;
+}
+
+function kindIcon(kind: DriveFile["kind"]) {
+  if (kind === "image") return <Image size={32} />;
+  if (kind === "video") return <FileVideo size={32} />;
+  if (kind === "audio") return <FileAudio size={32} />;
+  if (kind === "archive") return <Archive size={32} />;
+  return <FileText size={32} />;
 }
 
 function kindLabel(kind: string) {
