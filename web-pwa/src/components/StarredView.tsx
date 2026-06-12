@@ -9,20 +9,21 @@ export function StarredView() {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
-  async function refresh() {
-    setLoading(true);
+  async function refresh(opts?: { silent?: boolean }) {
+    const silent = opts?.silent ?? false;
+    if (!silent) setLoading(true);
     try {
       setContents(await listStarred());
     } catch (err) {
-      toast(err instanceof Error ? err.message : String(err), "error");
+      if (!silent) toast(err instanceof Error ? err.message : String(err), "error");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
   useEffect(() => { refresh(); }, []);
 
-  useRevalidate(refresh, {
+  useRevalidate(() => refresh({ silent: true }), {
     eventsUrl: eventsUrl(),
     sseEvents: ["file.starred", "folder.starred", "file.updated", "folder.updated"],
     pollMs: 25000,
@@ -38,7 +39,7 @@ export function StarredView() {
           <p>Các file và thư mục bạn đã đánh dấu sao.</p>
         </div>
         <div className="drive-browser__actions">
-          <button className="button button--ghost" onClick={refresh} disabled={loading}><RefreshCw size={15} /></button>
+          <button className="button button--ghost" onClick={() => refresh()} disabled={loading}><RefreshCw size={15} /></button>
         </div>
       </div>
       {loading && <div className="muted-box">Đang tải...</div>}
@@ -50,7 +51,7 @@ export function StarredView() {
               <div className="drive-card__thumb"><Folder size={36} /></div>
               <div className="drive-card__name"><strong>{folder.name}</strong><span>Thư mục</span></div>
               <div className="drive-card__footer">
-                <button className="button button--ghost" onClick={() => starFolder(folder.id, false).then(refresh)}><Star size={14} /> Bỏ sao</button>
+                <button className="button button--ghost" onClick={() => starFolder(folder.id, false).then(() => refresh())}><Star size={14} /> Bỏ sao</button>
               </div>
             </div>
           ))}
@@ -59,7 +60,7 @@ export function StarredView() {
               <div className="drive-card__thumb">{file.preview_status === "ready" && file.kind === "image" ? <img src={thumbnailUrl(file.id)} alt="" /> : kindIcon(file.kind)}</div>
               <div className="drive-card__name"><strong>{file.name}</strong><span>{kindLabel(file.kind)} · {formatBytes(file.size)}</span></div>
               <div className="drive-card__footer">
-                <button className="button button--ghost" onClick={() => starFile(file.id, false).then(refresh)}><Star size={14} /> Bỏ sao</button>
+                <button className="button button--ghost" onClick={() => starFile(file.id, false).then(() => refresh())}><Star size={14} /> Bỏ sao</button>
                 <a className="drive-card__action" href={downloadFileUrl(file.id)}><Download size={14} /></a>
               </div>
             </div>

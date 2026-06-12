@@ -95,15 +95,20 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     };
   }, []);
 
-  const refresh = useCallback(async (folderId = currentFolderId) => {
-    setLoading(true);
+  const refresh = useCallback(async (folderId = currentFolderId, opts?: { silent?: boolean }) => {
+    // Background revalidations (poll/focus/SSE/upload progress) run silently so
+    // the list never flashes the loading state. Only explicit navigation and
+    // the first load show the spinner.
+    const silent = opts?.silent ?? false;
+    if (!silent) setLoading(true);
     setError(null);
     try {
-      setContents(await listDriveContents(folderId));
+      const next = await listDriveContents(folderId);
+      setContents(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (!silent) setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [currentFolderId]);
 
@@ -112,7 +117,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   // Stale-while-revalidate: SSE is the fast path, but focus/visibility/online
   // and a light poll guarantee the list refreshes even when SSE is dropped by
   // a proxy (Cloudflare) or the mobile tab was suspended.
-  useRevalidate(() => refresh(currentFolderId), {
+  useRevalidate(() => refresh(currentFolderId, { silent: true }), {
     eventsUrl: eventsUrl(),
     sseEvents: ["file.created", "file.updated", "file.trashed", "folder.updated", "transfer.updated"],
     pollMs: 20000,
@@ -123,8 +128,8 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   const uploadInFlight = uploadQueue.items.some((i) => i.phase === "queued" || i.phase === "uploading_agent" || i.phase === "processing");
   useEffect(() => {
     if (!uploadInFlight) return;
-    refresh(currentFolderId);
-    const timer = window.setInterval(() => refresh(currentFolderId), 2000);
+    refresh(currentFolderId, { silent: true });
+    const timer = window.setInterval(() => refresh(currentFolderId, { silent: true }), 2000);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadInFlight, currentFolderId]);
@@ -133,7 +138,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   // file if the backend finished just after the last interval tick.
   const settledSyncedCount = uploadQueue.items.filter((i) => i.phase === "synced").length;
   useEffect(() => {
-    if (settledSyncedCount > 0) refresh(currentFolderId);
+    if (settledSyncedCount > 0) refresh(currentFolderId, { silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settledSyncedCount]);
 
