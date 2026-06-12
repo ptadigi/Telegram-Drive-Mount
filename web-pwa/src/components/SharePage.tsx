@@ -112,7 +112,38 @@ function SharePreview({ slug, file, password }: { slug: string; file: { name: st
   if (isVideo) return <div className="share-preview"><video src={rawUrl} controls playsInline /></div>;
   if (isAudio) return <div className="share-preview share-preview--audio"><audio src={rawUrl} controls /></div>;
   if (isPdf) return <div className="share-preview share-preview--pdf"><iframe title={file.name} src={rawUrl} /></div>;
+  if (ext === ".docx") return <ShareDocxPreview url={rawUrl} />;
   return <div className="share-page__icon"><FileText size={36} /></div>;
+}
+
+function ShareDocxPreview({ url }: { url: string }) {
+  const [html, setHtml] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setHtml(null);
+    (async () => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Không tải được tài liệu");
+        const buf = await res.arrayBuffer();
+        const mammoth = await import("mammoth");
+        const result = await mammoth.convertToHtml({ arrayBuffer: buf });
+        if (!cancelled) setHtml(result.value || "<p>(Tài liệu trống)</p>");
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [url]);
+  if (loading) return <div className="muted-box">Đang mở tài liệu Word...</div>;
+  if (error) return <div className="share-page__icon"><FileText size={36} /></div>;
+  return <div className="share-preview share-preview--doc"><div className="viewer__doc" dangerouslySetInnerHTML={{ __html: html || "" }} /></div>;
 }
 
 function formatBytes(bytes: number) {
