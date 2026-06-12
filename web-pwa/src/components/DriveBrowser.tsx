@@ -56,28 +56,36 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     return () => window.removeEventListener("drive:quick-action", onQuickAction);
   }, [currentFolderId]);
 
-  // Global guard: a file dropped anywhere OUTSIDE the dropzone (sidebar gaps,
-  // page margins, padding) would otherwise make the browser navigate to / open
-  // the file. Swallow those drags so the page never gets replaced by the file.
+  // Global guard for file drags. The browser's default action for a dropped
+  // file is to OPEN/DOWNLOAD it (replacing the page). To prevent that anywhere
+  // on the document we must preventDefault() on BOTH dragover AND drop for any
+  // drag carrying files — not just outside the dropzone. The React onDrop
+  // handlers on .drive-browser / .drive-card--folder still run (they fire
+  // earlier in the bubble phase) and perform the actual upload enqueue; this
+  // window-level guard only stops the browser from hijacking the drop.
   useEffect(() => {
+    function hasFiles(dt: DataTransfer | null): boolean {
+      return !!dt && Array.from(dt.types).includes("Files");
+    }
     function isInsideDropzone(target: EventTarget | null): boolean {
       return target instanceof Element && !!target.closest(".drive-browser, .drive-card--folder");
     }
     function onWindowDragOver(event: Event) {
       const e = event as globalThis.DragEvent;
-      if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes("Files")) return;
-      if (!isInsideDropzone(e.target)) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "none";
+      if (!hasFiles(e.dataTransfer)) return;
+      // Always cancel the default so the browser never opens the file.
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = isInsideDropzone(e.target) ? "copy" : "none";
       }
     }
     function onWindowDrop(event: Event) {
       const e = event as globalThis.DragEvent;
-      if (!e.dataTransfer || !Array.from(e.dataTransfer.types).includes("Files")) return;
-      if (!isInsideDropzone(e.target)) {
-        e.preventDefault();
-        setDropping(false);
-      }
+      if (!hasFiles(e.dataTransfer)) return;
+      // Cancel the browser default everywhere. Inside the dropzone the React
+      // onDrop already enqueued the files; outside we simply swallow it.
+      e.preventDefault();
+      if (!isInsideDropzone(e.target)) setDropping(false);
     }
     window.addEventListener("dragover", onWindowDragOver);
     window.addEventListener("drop", onWindowDrop);
