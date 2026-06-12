@@ -53,6 +53,15 @@ func (s *Server) handleUserLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	// Single-user self-host repair: if this is the only account, adopt any
+	// data that ended up with an empty owner (e.g. large tus uploads imported
+	// by an older agent build before owner-binding was fixed). This is scoped
+	// to the single-user case so it can never reassign another user's files.
+	if count, cerr := s.users.CountUsers(r.Context()); cerr == nil && count == 1 {
+		if aerr := s.drive.AdoptOrphanedData(r.Context(), user.ID); aerr != nil {
+			s.drive.WriteAudit(r.Context(), user.ID, "user.adopt_failed", "user", user.ID, map[string]any{"error": aerr.Error()})
+		}
+	}
 	users.WriteSessionCookie(w, r, token, expires)
 	writeJSON(w, http.StatusOK, map[string]any{"user": user})
 }

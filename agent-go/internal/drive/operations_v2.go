@@ -38,10 +38,10 @@ func (s *Service) searchFolders(ctx context.Context, pattern string) ([]Folder, 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, COALESCE(parent_id, ''), name, created_at, updated_at
 		FROM folders
-		WHERE deleted_at IS NULL AND LOWER(name) LIKE ?
+		WHERE deleted_at IS NULL AND LOWER(name) LIKE ? AND COALESCE(user_id, '') = COALESCE(?, '')
 		ORDER BY updated_at DESC
 		LIMIT 200
-	`, pattern)
+	`, pattern, UserFromContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("tìm thư mục: %w", err)
 	}
@@ -61,10 +61,10 @@ func (s *Service) searchFiles(ctx context.Context, pattern string) ([]File, erro
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, COALESCE(folder_id, ''), name, COALESCE(extension, ''), COALESCE(kind, 'other'), size, COALESCE(mime_type, ''), sync_state, COALESCE(local_path, ''), COALESCE(thumbnail_path, ''), COALESCE(preview_status, 'pending'), created_at, updated_at
 		FROM files
-		WHERE deleted_at IS NULL AND LOWER(name) LIKE ?
+		WHERE deleted_at IS NULL AND LOWER(name) LIKE ? AND COALESCE(user_id, '') = COALESCE(?, '')
 		ORDER BY updated_at DESC
 		LIMIT 500
-	`, pattern)
+	`, pattern, UserFromContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("tìm file: %w", err)
 	}

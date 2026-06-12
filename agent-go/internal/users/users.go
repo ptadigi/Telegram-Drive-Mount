@@ -47,6 +47,17 @@ func (s *Service) HasAnyUser(ctx context.Context) (bool, error) {
 	return count > 0, nil
 }
 
+// CountUsers returns the total number of registered accounts. Used to gate
+// single-user-only repair behaviour (e.g. orphan data adoption on login).
+func (s *Service) CountUsers(ctx context.Context) (int, error) {
+	var count int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+
 const bcryptCost = 12
 
 func (s *Service) RegisterFirstAdmin(ctx context.Context, email, password, displayName, userAgent string) (User, string, time.Time, error) {
