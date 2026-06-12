@@ -1175,7 +1175,15 @@ func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", file.MimeType)
 	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
-	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+urlQueryEscape(file.Name))
+	w.Header().Set("Accept-Ranges", "bytes")
+	// disposition=inline lets the share page preview the file (image/video/pdf)
+	// in the browser; default is attachment (download). The password gate in
+	// ResolveShare has already been enforced above either way.
+	if r.URL.Query().Get("disposition") == "inline" {
+		w.Header().Set("Content-Disposition", "inline; filename*=UTF-8''"+urlQueryEscape(file.Name))
+	} else {
+		w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+urlQueryEscape(file.Name))
+	}
 	http.ServeFile(w, r, file.LocalPath)
 }
 

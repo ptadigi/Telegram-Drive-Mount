@@ -70,7 +70,7 @@ export function SharePage({ slug }: { slug: string }) {
         )}
         {!loading && data && data.file && (
           <div className="share-page__file">
-            <div className="share-page__icon"><FileText size={36} /></div>
+            <SharePreview slug={slug} file={data.file} password={password} />
             <h1>{data.file.name}</h1>
             <p>{formatBytes(data.file.size)} · {data.file.mime_type || data.file.kind || "File"}</p>
             <a className="button button--primary" href={`${AGENT_BASE_URL}/share/${encodeURIComponent(slug)}/raw${password ? `?password=${encodeURIComponent(password)}` : ""}`}>
@@ -94,6 +94,25 @@ export function SharePage({ slug }: { slug: string }) {
       <footer className="share-page__footer">Powered by Ổ Đĩa Cloud Ảo · Telegram làm kho lưu trữ</footer>
     </main>
   );
+}
+
+function SharePreview({ slug, file, password }: { slug: string; file: { name: string; mime_type?: string; kind?: string }; password: string }) {
+  const rawUrl = `${AGENT_BASE_URL}/share/${encodeURIComponent(slug)}/raw?disposition=inline${password ? `&password=${encodeURIComponent(password)}` : ""}`;
+  const name = (file.name || "").toLowerCase();
+  const mime = (file.mime_type || "").toLowerCase();
+  const kind = file.kind || "";
+  const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+
+  const isImage = kind === "image" || mime.startsWith("image/");
+  const isVideo = kind === "video" || mime.startsWith("video/");
+  const isAudio = kind === "audio" || mime.startsWith("audio/");
+  const isPdf = ext === ".pdf" || mime === "application/pdf";
+
+  if (isImage) return <div className="share-preview"><img src={rawUrl} alt={file.name} /></div>;
+  if (isVideo) return <div className="share-preview"><video src={rawUrl} controls playsInline /></div>;
+  if (isAudio) return <div className="share-preview share-preview--audio"><audio src={rawUrl} controls /></div>;
+  if (isPdf) return <div className="share-preview share-preview--pdf"><iframe title={file.name} src={rawUrl} /></div>;
+  return <div className="share-page__icon"><FileText size={36} /></div>;
 }
 
 function formatBytes(bytes: number) {
