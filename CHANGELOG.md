@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.7.6] - 2026-06-12
+
+### Fixed
+
+- **Remote mount showed stale local files (no app restart needed anymore)**: the mount backend was chosen once at agent startup, so opening the app (mounting local) and *then* connecting to a server left the running agent on the local backend — `T:` showed old local files instead of the paired server's files until restart. The drive now switches backend at runtime after pair/local/reset (`vfs.Manager.SwitchBackend` unmounts, swaps backend + mounter, remounts).
+- **Drag & drop treated as browser download**: dropping a file onto the drive area let the browser open/download it instead of uploading. Now `preventDefault` runs on both `dragover` and `drop` at the window level for any file-carrying drag; the React handlers still enqueue the upload.
+- **List flicker / "page reload" flash**: background revalidations (poll/focus/SSE/upload progress) toggled the loading state on every tick, blanking the list. Background refreshes now run silently; only navigation/first-load show the spinner. (DriveBrowser, StarredView)
+
+### Notes
+
+- Bundles all 1.7.5 fixes (large-file owner binding, search user scoping, orphan adoption on login, stale-resume 404, tus janitor, session-token hashing, folder-create race).
+
+---
+
 ## [1.7.5] - 2026-06-12
 
 ### Fixed

@@ -130,3 +130,15 @@ luồng (parallelUploads=1) vẫn giữ chunk + retry. Có janitor dọn temp tu
   này sẽ làm session cũ hết hiệu lực một lần (đăng nhập lại).
 - Tạo thư mục khi upload folder nhiều file song song đã được serialize để tránh
   tạo trùng thư mục cùng (parent, name, user).
+
+
+## 16. Ổ T: hiện sai file (không khớp với server) sau khi mới connect
+
+Triệu chứng: vừa cài app, connect tới URL server, nhưng ổ T: hiện file local cũ
+chứ không phải file trên server.
+Nguyên nhân (<= 1.7.5): backend của ổ đĩa được chọn lúc agent khởi động. Nếu mở
+app (mount local) rồi mới connect server, agent đang chạy vẫn giữ backend local.
+Fix (>= 1.7.6): sau khi pair/đổi local/reset, agent tự đổi backend và mount lại
+ngay, không cần khởi động lại app.
+Cách chữa nhanh trên bản cũ: thoát app trong tray rồi mở lại để agent mount đúng
+backend remote.
