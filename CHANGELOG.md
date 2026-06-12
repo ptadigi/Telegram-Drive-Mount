@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.7] - 2026-06-12
+
+### Performance
+
+- **Tens-of-thousands-file folder uploads**: dropping (or picking) a very large folder no longer freezes the tab or spikes memory. The previous path collected every file into one array before enqueuing — holding all `File` handles, blocking the UI during the scan, and only starting uploads after the whole tree was walked. Now the tree is streamed: an iterative (non-recursive) walk flushes files to the upload queue in batches of 200, yielding to the event loop between batches, so uploads begin while scanning continues and memory stays bounded. The folder picker and the queue's enqueue path were batched too (removed an O(n²) per-batch state rebuild).
+
+---
+
 ## [1.7.6] - 2026-06-12
 
 ### Fixed
