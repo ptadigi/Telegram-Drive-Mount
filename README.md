@@ -10,7 +10,11 @@ Giao diện như Google Drive, mount ổ ảo `T:` trên máy tính, chia sẻ l
 [![License](https://img.shields.io/github/license/ptadigi/Telegram-Drive-Mount)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Docker-blue)
 
-[Cài đặt](#-cài-đặt-nhanh-1-click) · [Tính năng](#-tính-năng) · [Tài liệu](#-tài-liệu) · [Đóng góp](CONTRIBUTING.md)
+[Cài đặt](#-cài-đặt-nhanh-1-click) · [Tính năng](#-tính-năng) · [Ảnh giao diện](#-ảnh-giao-diện) · [Tài liệu](#-tài-liệu) · [Đóng góp](CONTRIBUTING.md)
+
+<br/>
+
+<img src="web-pwa/public/og-image.png" alt="Telegram Drive — Ổ Đĩa Cloud Ảo" width="720" />
 
 </div>
 
@@ -78,6 +82,24 @@ curl -fsSL https://raw.githubusercontent.com/ptadigi/Telegram-Drive-Mount/main/d
 **Bảo mật**
 - Tài khoản PWA (bcrypt), session token hash, phân tách dữ liệu theo người dùng, Basic Auth tùy chọn.
 - Session Telegram mã hóa AES-256 tại chỗ — không gửi đi đâu.
+
+---
+
+## 📸 Ảnh giao diện
+
+<!-- Bổ sung ảnh vào docs/screenshots/ theo tên dưới đây. Xem docs/screenshots/README.md. -->
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/dashboard.png" alt="Dashboard" onerror="this.style.display='none'"/><br/><sub>Dashboard — số liệu tệp/thư mục/dung lượng</sub></td>
+    <td width="50%"><img src="docs/screenshots/drive.png" alt="Drive" onerror="this.style.display='none'"/><br/><sub>Drive — lưới file, icon màu theo định dạng</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/viewer.png" alt="Viewer" onerror="this.style.display='none'"/><br/><sub>Xem file trong app (ảnh/video/docx)</sub></td>
+    <td width="50%"><img src="docs/screenshots/share.png" alt="Share" onerror="this.style.display='none'"/><br/><sub>Chia sẻ link an toàn + trang xem công khai</sub></td>
+  </tr>
+</table>
+
+> Ảnh chưa hiển thị? Xem [docs/screenshots/README.md](docs/screenshots/README.md) để biết tên file cần bổ sung.
 
 ---
 
