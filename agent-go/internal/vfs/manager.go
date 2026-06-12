@@ -205,3 +205,37 @@ func (m *Manager) Shutdown() {
 		_, _ = m.Unmount()
 	}
 }
+
+// SwitchBackend swaps the active backend at runtime and (re)mounts at
+// mountPoint. This lets the desktop app change between local and remote modes
+// without restarting the agent: after pairing/unpairing we rebuild the mounter
+// on the new backend so the virtual drive immediately reflects the right
+// source. It unmounts any current mount first. A no-op safe guard: if the new
+// mounter can't be built, the previous state is left untouched.
+func (m *Manager) SwitchBackend(backend Backend, mountPoint string) (Status, error) {
+	if m == nil {
+		return Status{}, errors.New("mount manager chưa khởi tạo")
+	}
+	// Tear down the current mount (best-effort) before swapping.
+	if m.mounter != nil && m.mounter.IsMounted() {
+		_, _ = m.Unmount()
+	}
+
+	mounter := newPlatformMounter(backend, m.dataDir)
+	m.mu.Lock()
+	m.backend = backend
+	m.mounter = mounter
+	if mounter == nil {
+		m.status = Status{Available: false, Backend: "none"}
+		m.mu.Unlock()
+		return m.status, errors.New("mount engine không có sẵn trong bản build này")
+	}
+	m.status = Status{Available: true, Backend: mounter.Backend()}
+	m.mu.Unlock()
+
+	resolved := mountPoint
+	if resolved == "" {
+		resolved = defaultMountPoint()
+	}
+	return m.Mount(context.Background(), resolved)
+}

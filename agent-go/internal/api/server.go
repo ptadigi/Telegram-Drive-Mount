@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -423,6 +424,46 @@ func (s *Server) handleDesktopTestServer(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, info)
 }
 
+// applyMountForState (re)mounts the virtual drive to match the desktop state's
+// mode at runtime, so pairing/unpairing takes effect without an app restart.
+// Runs in the background since mounting can take a few seconds; failures are
+// non-fatal (the user can retry from the tray). Best-effort.
+func (s *Server) applyMountForState(state desktop.State) {
+	if s.mounts == nil {
+		return
+	}
+	mountPoint := state.MountPoint
+	if mountPoint == "" {
+		mountPoint = "T:"
+	}
+	go func() {
+		switch desktop.Mode(state.Mode) {
+		case desktop.ModeRemote:
+			tok, err := remote.LoadToken(remote.DefaultTokenPath())
+			if err != nil {
+				log.Printf("remount remote: chưa có token (%v)", err)
+				return
+			}
+			backend := remote.NewBackend(tok.BaseURL, tok.Token, 60*time.Second)
+			if _, err := s.mounts.SwitchBackend(backend, mountPoint); err != nil {
+				log.Printf("remount remote thất bại: %v", err)
+			} else {
+				log.Printf("remount: remote (%s)", tok.BaseURL)
+			}
+		case desktop.ModeLocal:
+			backend := vfs.NewLocalBackend(s.drive)
+			if _, err := s.mounts.SwitchBackend(backend, mountPoint); err != nil {
+				log.Printf("remount local thất bại: %v", err)
+			} else {
+				log.Printf("remount: local")
+			}
+		default:
+			// Unset: unmount so a stale mount doesn't linger after reset.
+			_, _ = s.mounts.Unmount()
+		}
+	}()
+}
+
 func (s *Server) handleDesktopPair(w http.ResponseWriter, r *http.Request) {
 	if !s.desktopAllowed(r) {
 		writeError(w, http.StatusForbidden, errBadRequest("chỉ dùng được trên ứng dụng desktop"))
@@ -451,6 +492,7 @@ func (s *Server) handleDesktopPair(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	s.applyMountForState(state)
 	writeJSON(w, http.StatusOK, map[string]any{"state": state})
 }
 
@@ -464,6 +506,7 @@ func (s *Server) handleDesktopLocal(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	s.applyMountForState(state)
 	writeJSON(w, http.StatusOK, map[string]any{"state": state})
 }
 
@@ -477,6 +520,7 @@ func (s *Server) handleDesktopReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = remote.DeleteToken(remote.DefaultTokenPath())
+	s.applyMountForState(desktop.State{Mode: string(desktop.ModeUnset)})
 	writeJSON(w, http.StatusOK, map[string]any{"state": desktop.State{Mode: string(desktop.ModeUnset)}})
 }
 

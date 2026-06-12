@@ -37,6 +37,11 @@ type localBackend struct {
 
 func newLocalBackend(svc *drive.Service) *localBackend { return &localBackend{svc: svc} }
 
+// NewLocalBackend exposes the in-process backend so callers outside this
+// package (e.g. the desktop API switching back to local mode at runtime) can
+// rebuild the mount on the local drive service.
+func NewLocalBackend(svc *drive.Service) Backend { return &localBackend{svc: svc} }
+
 func (b *localBackend) ListFolderContents(ctx context.Context, folderID string) (drive.FolderContents, error) {
 	return b.svc.ListFolderContents(ctx, folderID)
 }
