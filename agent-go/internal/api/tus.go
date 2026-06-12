@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	tushandler "github.com/tus/tusd/v2/pkg/handler"
 
@@ -13,6 +14,14 @@ import (
 
 	"telegram-drive-agent/internal/drive"
 )
+
+// tusTempTTL is how long an incomplete tus temp upload may sit on disk before
+// the janitor removes it. Interrupted/abandoned uploads (browser closed, failed
+// chunk, parallel-upload leftovers) otherwise accumulate as 0-byte temp + .info
+// files. Active uploads refresh their mtime as chunks arrive, so a generous TTL
+// never deletes an in-progress upload.
+const tusTempTTL = 12 * time.Hour
+
 
 // newTusHandler builds an embedded tus resumable-upload handler mounted under
 // basePath. Completed uploads are imported into the drive pipeline (DB + queue
@@ -51,8 +60,44 @@ func (s *Server) newTusHandler(basePath string) (http.Handler, error) {
 		}
 	}()
 
+	// Janitor: periodically sweep abandoned tus temp files so a self-hosted
+	// instance never accumulates dead 0-byte uploads from interrupted sessions.
+	go s.runTusJanitor(tusDir)
+
 	return http.StripPrefix(basePath, handler), nil
 }
+
+// runTusJanitor removes tus temp files older than tusTempTTL. It runs hourly
+// and is safe against in-progress uploads because tusd touches the data + .info
+// files as chunks arrive, keeping their mtime fresh well within the TTL.
+func (s *Server) runTusJanitor(tusDir string) {
+	sweep := func() {
+		entries, err := os.ReadDir(tusDir)
+		if err != nil {
+			return
+		}
+		cutoff := time.Now().Add(-tusTempTTL)
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			if info.ModTime().Before(cutoff) {
+				_ = os.Remove(filepath.Join(tusDir, entry.Name()))
+			}
+		}
+	}
+	sweep()
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		sweep()
+	}
+}
+
 
 func (s *Server) importTusUpload(event tushandler.HookEvent) {
 	info := event.Upload
