@@ -142,3 +142,12 @@ Fix (>= 1.7.6): sau khi pair/đổi local/reset, agent tự đổi backend và m
 ngay, không cần khởi động lại app.
 Cách chữa nhanh trên bản cũ: thoát app trong tray rồi mở lại để agent mount đúng
 backend remote.
+
+
+## 17. Thumbnail video/PDF không hiện (chỉ thấy icon)
+
+Ảnh luôn có thumbnail (xử lý thuần Go). Video cần `ffmpeg`, PDF cần `pdftoppm`
+(poppler) hoặc `mutool` (mupdf) cài sẵn trên máy chạy agent. Thiếu thì file vẫn
+upload bình thường, chỉ hiển thị icon thay cho ảnh xem trước.
+Cài nhanh (Debian/Ubuntu): `apt-get install -y ffmpeg poppler-utils`
+Thumbnail được tạo lại tự động khi mở file (nếu bản gốc còn trong cache local).

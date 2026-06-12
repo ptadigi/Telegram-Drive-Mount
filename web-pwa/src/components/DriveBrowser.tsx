@@ -577,7 +577,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
               onDragEnd={() => setDragItem(null)}
             >
               <div className="drive-card__thumb">
-                {file.preview_status === "ready" && file.kind === "image" ? <img src={thumbnailUrl(file.id)} alt="" /> : kindIcon(file.kind)}
+                {file.preview_status === "ready" ? <img src={thumbnailUrl(file.id)} alt="" loading="lazy" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} /> : kindIcon(file.kind)}
               </div>
               <div className="drive-card__name">
                 <strong>{file.name}{file.starred && <Star size={12} className="star-mark" />}</strong>

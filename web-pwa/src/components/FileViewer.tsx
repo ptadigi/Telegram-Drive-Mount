@@ -1,6 +1,6 @@
-import { Download, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import { AGENT_BASE_URL, DriveFile, downloadFileUrl, streamFileUrl } from "../api/agent";
+import { Download, ExternalLink, X, ZoomIn, ZoomOut } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AGENT_BASE_URL, DriveFile, downloadFileUrl, streamFileUrl, thumbnailUrl } from "../api/agent";
 
 type Props = {
   file: DriveFile | null;
@@ -50,13 +50,14 @@ export function FileViewer({ file, onClose }: Props) {
           <span>{(file.kind || "file").toUpperCase()} · {formatBytes(file.size)}</span>
         </div>
         <div className="viewer__actions">
+          <a className="button button--secondary" href={url} target="_blank" rel="noopener noreferrer"><ExternalLink size={14} /> Mở tab mới</a>
           <a className="button button--secondary" href={downloadFileUrl(file.id)}><Download size={14} /> Tải xuống</a>
           <button className="icon-button" onClick={onClose} aria-label="Đóng"><X size={16} /></button>
         </div>
       </header>
       <main className="viewer__body">
-        {variant === "image" && <img src={url} alt={file.name} />}
-        {variant === "video" && <video controls src={streamUrl}></video>}
+        {variant === "image" && <ImageViewer src={url} alt={file.name} poster={file.preview_status === "ready" ? thumbnailUrl(file.id) : undefined} />}
+        {variant === "video" && <video controls autoPlay playsInline src={streamUrl} poster={file.preview_status === "ready" ? thumbnailUrl(file.id) : undefined}></video>}
         {variant === "audio" && <audio controls src={streamUrl}></audio>}
         {variant === "pdf" && <iframe title={file.name} src={url}></iframe>}
         {variant === "markdown" && <ViewerText content={textContent} loading={loadingText} error={textError} mono={false} />}
@@ -64,6 +65,60 @@ export function FileViewer({ file, onClose }: Props) {
         {variant === "office" && <OfficeFallback url={url} ext={ext} mime={mime} />}
         {variant === "binary" && <UnsupportedFallback ext={ext} />}
       </main>
+    </div>
+  );
+}
+
+function ImageViewer({ src, alt, poster }: { src: string; alt: string; poster?: string }) {
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [loaded, setLoaded] = useState(false);
+  const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+
+  function clampZoom(z: number) { return Math.min(6, Math.max(1, z)); }
+  function zoomBy(delta: number) {
+    setZoom((z) => {
+      const next = clampZoom(z + delta);
+      if (next === 1) setOffset({ x: 0, y: 0 });
+      return next;
+    });
+  }
+  function onWheel(e: React.WheelEvent) {
+    e.preventDefault();
+    zoomBy(e.deltaY < 0 ? 0.3 : -0.3);
+  }
+  function onDoubleClick() { setZoom((z) => (z > 1 ? (setOffset({ x: 0, y: 0 }), 1) : 2)); }
+  function onPointerDown(e: React.PointerEvent) {
+    if (zoom <= 1) return;
+    dragRef.current = { x: e.clientX, y: e.clientY, ox: offset.x, oy: offset.y };
+    (e.target as Element).setPointerCapture(e.pointerId);
+  }
+  function onPointerMove(e: React.PointerEvent) {
+    if (!dragRef.current) return;
+    setOffset({ x: dragRef.current.ox + (e.clientX - dragRef.current.x), y: dragRef.current.oy + (e.clientY - dragRef.current.y) });
+  }
+  function onPointerUp() { dragRef.current = null; }
+
+  return (
+    <div className="image-viewer" onWheel={onWheel}>
+      {!loaded && poster && <img className="image-viewer__poster" src={poster} alt="" aria-hidden />}
+      <img
+        className="image-viewer__img"
+        src={src}
+        alt={alt}
+        draggable={false}
+        onLoad={() => setLoaded(true)}
+        style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`, cursor: zoom > 1 ? "grab" : "zoom-in" }}
+        onDoubleClick={onDoubleClick}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+      />
+      <div className="image-viewer__controls">
+        <button className="icon-button" onClick={() => zoomBy(-0.3)} aria-label="Thu nhỏ"><ZoomOut size={16} /></button>
+        <span>{Math.round(zoom * 100)}%</span>
+        <button className="icon-button" onClick={() => zoomBy(0.3)} aria-label="Phóng to"><ZoomIn size={16} /></button>
+      </div>
     </div>
   );
 }

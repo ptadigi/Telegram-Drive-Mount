@@ -7,8 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"image"
-	"image/jpeg"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -801,13 +799,28 @@ func (s *Service) GetThumbnail(ctx context.Context, id string) (ThumbnailFile, e
 	if err != nil {
 		return ThumbnailFile{}, err
 	}
-	if file.ThumbnailPath == "" {
+	// Lazy (re)generate: files uploaded by older builds, or whose thumbnail was
+	// evicted, have no thumbnail on disk. If the source is still cached locally
+	// and the kind supports it, build the thumbnail on demand. Best-effort —
+	// returns the icon-fallback error if it can't.
+	if file.ThumbnailPath == "" || !fileExistsLocal(file.ThumbnailPath) {
+		if file.LocalPath != "" && fileExistsLocal(file.LocalPath) && canThumbnail(file.Kind, strings.ToLower(file.Extension)) {
+			if path, genErr := s.generateThumbnail(file.ID, file.LocalPath, file.Kind, strings.ToLower(file.Extension)); genErr == nil {
+				_, _ = s.db.ExecContext(ctx, `UPDATE files SET thumbnail_path = ?, preview_status = 'ready', updated_at = ? WHERE id = ?`, path, time.Now().Unix(), file.ID)
+				return ThumbnailFile{Path: path, MimeType: "image/jpeg"}, nil
+			}
+		}
 		return ThumbnailFile{}, fmt.Errorf("file chưa có thumbnail")
 	}
-	if _, err := os.Stat(file.ThumbnailPath); err != nil {
-		return ThumbnailFile{}, fmt.Errorf("thumbnail không còn trong cache: %w", err)
-	}
 	return ThumbnailFile{Path: file.ThumbnailPath, MimeType: "image/jpeg"}, nil
+}
+
+func fileExistsLocal(path string) bool {
+	if path == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func (s *Service) ListTransfers(ctx context.Context) ([]Transfer, error) {
@@ -1176,76 +1189,18 @@ func (s *Service) SeedDemoFile(ctx context.Context) error {
 }
 
 func (s *Service) preparePreview(fileID, localPath, kind string) (string, string) {
-	if kind != "image" {
+	ext := strings.ToLower(filepath.Ext(localPath))
+	if !canThumbnail(kind, ext) {
 		return "", previewStatusForKind(kind)
 	}
-	thumbnailPath, err := s.createImageThumbnail(fileID, localPath)
+	thumbnailPath, err := s.generateThumbnail(fileID, localPath, kind, ext)
 	if err != nil {
-		return "", "failed"
+		// Best-effort: a missing ffmpeg/poppler or an undecodable file just
+		// means no bitmap thumbnail; the UI shows a kind icon. Don't fail the
+		// upload over a preview.
+		return "", "unsupported"
 	}
 	return thumbnailPath, "ready"
-}
-
-func (s *Service) createImageThumbnail(fileID, localPath string) (string, error) {
-	source, err := os.Open(localPath)
-	if err != nil {
-		return "", err
-	}
-	defer source.Close()
-
-	img, _, err := image.Decode(source)
-	if err != nil {
-		return "", err
-	}
-	thumb := resizeNearest(img, 320)
-
-	thumbDir := filepath.Join(s.dataDir, "thumbs")
-	if err := os.MkdirAll(thumbDir, 0o755); err != nil {
-		return "", err
-	}
-	thumbPath := filepath.Join(thumbDir, fileID+".jpg")
-	target, err := os.Create(thumbPath)
-	if err != nil {
-		return "", err
-	}
-	defer target.Close()
-	if err := jpeg.Encode(target, thumb, &jpeg.Options{Quality: 82}); err != nil {
-		return "", err
-	}
-	return thumbPath, nil
-}
-
-func resizeNearest(src image.Image, maxSize int) image.Image {
-	bounds := src.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
-	if width <= 0 || height <= 0 {
-		return src
-	}
-	if width <= maxSize && height <= maxSize {
-		return src
-	}
-	scale := float64(maxSize) / float64(width)
-	if height > width {
-		scale = float64(maxSize) / float64(height)
-	}
-	dstW := int(float64(width) * scale)
-	dstH := int(float64(height) * scale)
-	if dstW < 1 {
-		dstW = 1
-	}
-	if dstH < 1 {
-		dstH = 1
-	}
-	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
-	for y := 0; y < dstH; y++ {
-		sy := bounds.Min.Y + y*height/dstH
-		for x := 0; x < dstW; x++ {
-			sx := bounds.Min.X + x*width/dstW
-			dst.Set(x, y, src.At(sx, sy))
-		}
-	}
-	return dst
 }
 
 func detectMimeType(name, headerType string, sample []byte) string {

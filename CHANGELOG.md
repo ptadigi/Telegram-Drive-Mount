@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.7.8] - 2026-06-12
+
+### Added
+
+- **Standard thumbnail system for all file types**: images now scale with a high-quality bilinear kernel (was nearest-neighbor); videos get a real frame thumbnail via `ffmpeg`; PDFs render their first page via `pdftoppm` (poppler) or `mutool` (mupdf). External tools are optional — when missing, the file falls back to a clean kind icon, so uploads never fail over a preview. Thumbnails are (re)generated lazily on demand for files uploaded by older builds while the source is still cached locally.
+- **Web Share Target**: once the PWA is installed, phones can share files into it from the OS share sheet (`POST /share-target`); shared files land in the drive root under the signed-in session.
+- **Richer in-PWA viewer**: image viewer with zoom (wheel/buttons/double-tap) and pan, blurred-thumbnail placeholder while the full image loads; video uses the thumbnail as a poster and autoplays; "Open in new tab" alongside Download. Range-based streaming (seek) and Office/text/markdown/PDF viewing were already in place.
+
+### UI
+
+- Compact toolbar (segmented view toggle, icon-only secondary actions, single primary Upload), smaller/denser file & folder cards, removed redundant header text.
+- Share modal no longer overflows on mobile (link wraps; actions stack).
+
+---
+
 ## [1.7.7] - 2026-06-12
 
 ### Performance
