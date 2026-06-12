@@ -794,6 +794,34 @@ func (s *Service) SaveStreamFile(ctx context.Context, data io.Reader, filename s
 	return s.saveFileFromReader(ctx, data, filename, mimeHint, folderID, relativePath, true)
 }
 
+// DriveStats summarises a user's drive: total files, folders, and bytes
+// (excluding trashed items). Scoped to the request user.
+type DriveStats struct {
+	FileCount   int64 `json:"file_count"`
+	FolderCount int64 `json:"folder_count"`
+	TotalBytes  int64 `json:"total_bytes"`
+}
+
+func (s *Service) GetDriveStats(ctx context.Context) (DriveStats, error) {
+	var st DriveStats
+	uid := UserFromContext(ctx)
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*), COALESCE(SUM(size), 0)
+		FROM files
+		WHERE deleted_at IS NULL AND COALESCE(user_id, '') = COALESCE(?, '')
+	`, uid).Scan(&st.FileCount, &st.TotalBytes); err != nil {
+		return DriveStats{}, fmt.Errorf("đếm file: %w", err)
+	}
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM folders
+		WHERE deleted_at IS NULL AND COALESCE(user_id, '') = COALESCE(?, '')
+	`, uid).Scan(&st.FolderCount); err != nil {
+		return DriveStats{}, fmt.Errorf("đếm thư mục: %w", err)
+	}
+	return st, nil
+}
+
 func (s *Service) GetThumbnail(ctx context.Context, id string) (ThumbnailFile, error) {
 	file, err := s.getFile(ctx, id)
 	if err != nil {

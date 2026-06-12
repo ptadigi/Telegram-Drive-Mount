@@ -74,6 +74,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/info", s.handleInfo)
 	mux.HandleFunc("GET /v1/config", s.handleConfig)
 	mux.HandleFunc("GET /v1/database/status", s.handleDatabaseStatus)
+	mux.HandleFunc("GET /v1/stats", s.handleStats)
 	mux.HandleFunc("GET /v1/transfers", s.handleTransfers)
 	mux.HandleFunc("GET /v1/debug/sync", s.handleDebugSync)
 	mux.HandleFunc("GET /v1/desktop/state", s.handleDesktopState)
@@ -313,6 +314,15 @@ func (s *Server) handleDatabaseStatus(w http.ResponseWriter, r *http.Request) {
 		"path":   s.config.DatabasePath,
 		"exists": fileExists(s.config.DatabasePath),
 	})
+}
+
+func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := s.drive.GetDriveStats(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {

@@ -56,6 +56,8 @@ export function getHealth(signal?: AbortSignal) { return getJSON<AgentHealth>("/
 export function getInfo(signal?: AbortSignal) { return getJSON<AgentInfo>("/v1/info", signal); }
 export function getConfig(signal?: AbortSignal) { return getJSON<AgentConfig>("/v1/config", signal); }
 export function getDatabaseStatus(signal?: AbortSignal) { return getJSON<DatabaseStatus>("/v1/database/status", signal); }
+export type DriveStats = { file_count: number; folder_count: number; total_bytes: number; };
+export function getDriveStats(signal?: AbortSignal) { return getJSON<DriveStats>("/v1/stats", signal); }
 export function getAuthStatus(signal?: AbortSignal) { return getJSON<AuthStatus>("/v1/auth/status", signal); }
 export function resetTelegramLogin() { return sendJSON<AuthStatus>("/v1/auth/reset", {}); }
 export function saveTelegramConfig(apiId: number, apiHash: string) { return putJSON<AuthStatus>("/v1/auth/config", { api_id: apiId, api_hash: apiHash }); }

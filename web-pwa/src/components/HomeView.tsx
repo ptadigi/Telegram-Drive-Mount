@@ -1,7 +1,7 @@
 ﻿import { Clock3, Download, FileText, Folder, HardDrive, KeyRound, Plus, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AgentInfo, AuthStatus, DatabaseStatus, DriveContents, DriveFile, Device, eventsUrl, listDevices, listDriveContents, listStarred, startDevicePairing, thumbnailUrl } from "../api/agent";
+import { AgentInfo, AuthStatus, DatabaseStatus, DriveContents, DriveFile, DriveStats, Device, eventsUrl, getDriveStats, listDevices, listDriveContents, listStarred, startDevicePairing, thumbnailUrl } from "../api/agent";
 import { useRevalidate } from "../state/revalidate";
 
 const DESKTOP_RELEASE_URL = "https://github.com/ptadigi/Telegram-Drive-Mount/releases/latest";
@@ -21,6 +21,7 @@ export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpen
   const [recent, setRecent] = useState<DriveContents>({ folders: [], files: [] });
   const [starred, setStarred] = useState<DriveContents>({ folders: [], files: [] });
   const [devices, setDevices] = useState<Device[]>([]);
+  const [stats, setStats] = useState<DriveStats | null>(null);
   const [pairCode, setPairCode] = useState<string | null>(null);
   const [pairLoading, setPairLoading] = useState(false);
   const [pairError, setPairError] = useState<string | null>(null);
@@ -31,6 +32,7 @@ export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpen
       setStarred(await listStarred());
       const deviceResult = await listDevices();
       setDevices(deviceResult.devices ?? []);
+      setStats(await getDriveStats());
     } catch {
       // ignore
     }
@@ -79,14 +81,10 @@ export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpen
         </div>
         <div className="dashboard-hero__panel">
           <div className="drive-stats drive-stats--stacked">
-            <Stat label="Trạng thái" value={agentState === "online" ? "Đang chạy" : "Chưa kết nối"} tone={agentState === "online" ? "good" : "warn"} />
-            <Stat label="Database" value={database?.exists ? "Sẵn sàng" : "Chưa sẵn sàng"} tone={database?.exists ? "good" : "warn"} />
-            <Stat label="Telegram" value={auth?.session_exists ? "Đã kết nối" : "Chưa đăng nhập"} tone={auth?.session_exists ? "good" : "warn"} />
-            <Stat label="Uptime" value={info ? `${info.uptime_sec}s` : "-"} tone="neutral" />
-          </div>
-          <div className="dashboard-hero__meta">
-            <span><HardDrive size={16} /> {database?.path || "-"}</span>
-            <span><Clock3 size={16} /> {info?.started_at ? new Date(info.started_at).toLocaleString() : "-"}</span>
+            <Stat label="Tệp" value={stats ? stats.file_count.toLocaleString("vi-VN") : "-"} tone="neutral" />
+            <Stat label="Thư mục" value={stats ? stats.folder_count.toLocaleString("vi-VN") : "-"} tone="neutral" />
+            <Stat label="Tổng dung lượng" value={stats ? formatBytes(stats.total_bytes) : "-"} tone="good" />
+            <Stat label="Uptime" value={info ? formatUptime(info.uptime_sec) : "-"} tone="neutral" />
           </div>
         </div>
       </section>
@@ -203,6 +201,17 @@ function StatusBlock({ label, value, tone }: { label: string; value: string; ton
 function kindLabel(kind: DriveFile["kind"]) {
   const labels: Record<string, string> = { image: "Hình ảnh", video: "Video", audio: "Âm thanh", document: "Tài liệu", archive: "Nén", other: "File" };
   return labels[kind] || "File";
+}
+
+function formatUptime(sec: number) {
+  if (!sec || sec < 0) return "-";
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${sec}s`;
 }
 
 function formatBytes(bytes: number) {
