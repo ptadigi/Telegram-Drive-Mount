@@ -1,0 +1,4 @@
+# Keep shell scripts LF so they run on Linux even when cloned on Windows.
+*.sh text eol=lf
+deploy/install.sh text eol=lf
+deploy/install-docker.sh text eol=lf
