@@ -136,6 +136,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/files/hls", s.handleHLSStream)
 	mux.HandleFunc("GET /v1/files/thumbnail", s.handleFileThumbnail)
 	mux.HandleFunc("POST /v1/files/upload", s.handleUploadFile)
+	mux.HandleFunc("POST /share-target", s.handleShareTarget)
 	mux.HandleFunc("POST /v1/files/sync", s.handleSyncFiles)
 	mux.HandleFunc("POST /v1/files/demo", s.handleSeedDemoFile)
 	mux.HandleFunc("GET /v1/auth/status", s.handleAuthStatus)
@@ -244,6 +245,9 @@ func isPublicPath(path string) bool {
 		return true
 	}
 	if strings.HasPrefix(path, "/share/") {
+		return true
+	}
+	if path == "/share-target" {
 		return true
 	}
 	switch path {
@@ -1316,6 +1320,37 @@ func (s *Server) handleUploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"file": file})
+}
+
+// handleShareTarget receives files shared into the PWA from the OS share sheet
+// (Web Share Target API). The manifest registers POST /share-target with
+// multipart/form-data; the browser sends the user's session cookie so this
+// runs under the authenticated user (the route is behind withAuth). Each shared
+// file is saved into the drive root, then we redirect back to the SPA. If the
+// user isn't logged in, withAuth returns 401 before reaching here.
+func (s *Server) handleShareTarget(w http.ResponseWriter, r *http.Request) {
+	// share-target is a public path (so an unauthenticated share lands on the
+	// login screen instead of a bare 401). Require a resolved user here.
+	if drive.UserFromContext(r.Context()) == "" {
+		http.Redirect(w, r, "/?view=drive&shared=login", http.StatusSeeOther)
+		return
+	}
+	if err := r.ParseMultipartForm(512 << 20); err != nil {
+		http.Redirect(w, r, "/?view=drive&shared=error", http.StatusSeeOther)
+		return
+	}
+	saved := 0
+	if r.MultipartForm != nil {
+		// Accept any field that carried files (manifest uses "files").
+		for _, headers := range r.MultipartForm.File {
+			for _, header := range headers {
+				if _, err := s.drive.SaveUploadedFile(r.Context(), header, "", ""); err == nil {
+					saved++
+				}
+			}
+		}
+	}
+	http.Redirect(w, r, fmt.Sprintf("/?view=drive&shared=%d", saved), http.StatusSeeOther)
 }
 
 func (s *Server) handleSyncFiles(w http.ResponseWriter, r *http.Request) {

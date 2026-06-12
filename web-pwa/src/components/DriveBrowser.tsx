@@ -1,4 +1,4 @@
-import { Archive, CheckCircle2, Download, FileAudio, FileText, FileVideo, Folder, FolderInput, Image, Info, LayoutGrid, Link2, List, MoreVertical, Pencil, RefreshCw, Star, Trash2 } from "lucide-react";
+import { Archive, CheckCircle2, Download, FileAudio, FileText, FileVideo, Folder, FolderInput, FolderPlus, FolderUp, Image, Info, LayoutGrid, Link2, List, MoreVertical, Pencil, RefreshCw, Star, Trash2, Upload } from "lucide-react";
 import React, { ChangeEvent, DragEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createFolder, downloadBundle, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, moveFile, moveFolder, renameFile, renameFolder, starFile, starFolder, thumbnailUrl, trashFile, trashFolder, zipFolderUrl } from "../api/agent";
@@ -470,19 +470,18 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
       <div className="drive-browser__header">
         <div>
           <h2>{rootLabel}</h2>
-          {description && <p>{description}</p>}
           <div className="breadcrumb">
             <button onClick={goRoot}>{t("files.root")}</button>
             {folderStack.map((folder, index) => <button key={folder.id} onClick={() => goBreadcrumb(index)}>/{folder.name}</button>)}
           </div>
         </div>
         <div className="drive-browser__actions">
-          <select className="select-control" value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
+          <select className="select-control" value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)} aria-label="Sắp xếp">
             <option value="updated_at">Mới nhất</option>
             <option value="name">Tên A-Z</option>
             <option value="size">Dung lượng</option>
           </select>
-          <select className="select-control" value={kindFilter} onChange={(event) => setKindFilter(event.target.value as KindFilter)}>
+          <select className="select-control" value={kindFilter} onChange={(event) => setKindFilter(event.target.value as KindFilter)} aria-label="Lọc loại">
             <option value="all">Tất cả loại</option>
             <option value="image">Hình ảnh</option>
             <option value="video">Video</option>
@@ -491,12 +490,14 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
             <option value="archive">File nén</option>
             <option value="other">Khác</option>
           </select>
-          <button className={`icon-button ${viewMode === "grid" ? "icon-button--active" : ""}`} onClick={() => setViewMode("grid")} aria-label="Lưới"><LayoutGrid size={16} /></button>
-          <button className={`icon-button ${viewMode === "list" ? "icon-button--active" : ""}`} onClick={() => setViewMode("list")} aria-label="Danh sách"><List size={16} /></button>
-          <button className="button button--primary" onClick={() => fileInputRef.current?.click()}>{t("files.upload")}</button>
-          <button className="button button--secondary" onClick={() => folderInputRef.current?.click()}>{t("files.uploadFolder")}</button>
-          <button className="button button--secondary" onClick={createNewFolder}>{t("files.createFolder")}</button>
-          <button className="button button--ghost" onClick={() => refresh()} disabled={loading}><RefreshCw size={15} /></button>
+          <div className="view-toggle" role="group" aria-label="Chế độ hiển thị">
+            <button className={`icon-button ${viewMode === "grid" ? "icon-button--active" : ""}`} onClick={() => setViewMode("grid")} aria-label="Lưới" title="Lưới"><LayoutGrid size={16} /></button>
+            <button className={`icon-button ${viewMode === "list" ? "icon-button--active" : ""}`} onClick={() => setViewMode("list")} aria-label="Danh sách" title="Danh sách"><List size={16} /></button>
+          </div>
+          <button className="icon-button" onClick={() => refresh()} disabled={loading} aria-label="Làm mới" title="Làm mới"><RefreshCw size={15} /></button>
+          <button className="icon-button" onClick={createNewFolder} aria-label={t("files.createFolder")} title={t("files.createFolder")}><FolderPlus size={16} /></button>
+          <button className="icon-button" onClick={() => folderInputRef.current?.click()} aria-label={t("files.uploadFolder")} title={t("files.uploadFolder")}><FolderUp size={16} /></button>
+          <button className="button button--primary" onClick={() => fileInputRef.current?.click()}><Upload size={15} /> {t("files.upload")}</button>
           <input ref={fileInputRef} className="visually-hidden" type="file" multiple onChange={handleFileInput} />
           <input ref={folderInputRef} className="visually-hidden" type="file" multiple onChange={handleFolderInput} {...({ webkitdirectory: "", directory: "" } as Record<string, string>)} />
         </div>

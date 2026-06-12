@@ -303,12 +303,16 @@ a.button { text-decoration: none; }
 .bulk-bar__actions { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 
 /* ===================== File grid & cards ===================== */
-.file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--s-3); }
+.file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: var(--s-3); }
 .file-list { display: grid; gap: var(--s-2); }
 
+.view-toggle { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--surface-2); }
+.view-toggle .icon-button { border: 0; background: transparent; width: 30px; height: 30px; }
+.view-toggle .icon-button--active { background: var(--surface); box-shadow: var(--sh-sm); }
+
 .drive-card {
-  display: grid; grid-template-rows: auto 1fr auto; gap: var(--s-2);
-  padding: var(--s-3);
+  display: grid; grid-template-rows: auto 1fr auto; gap: 6px;
+  padding: 10px;
   border: 1px solid var(--line); border-radius: var(--r-lg);
   background: var(--surface); box-shadow: var(--sh-sm);
   position: relative;
@@ -322,7 +326,7 @@ a.button { text-decoration: none; }
 .drive-card__open { display: contents; border: 0; background: transparent; padding: 0; text-align: left; }
 .drive-card__thumb {
   display: grid; place-items: center;
-  height: 72px; border-radius: var(--r-md);
+  height: 56px; border-radius: var(--r-md);
   background: var(--accent-soft); color: var(--accent-strong);
   overflow: hidden;
 }
@@ -739,10 +743,15 @@ a.button { text-decoration: none; }
   .drive-browser, .settings-view, .computers-view, .devices-view { padding: var(--s-4); }
   .drive-browser__header, .computers-view__header, .devices-view__header, .sync-panel__header { flex-direction: column; align-items: stretch; }
   .drive-browser__actions { justify-content: flex-start; }
-  .file-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--s-2); }
+  .file-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--s-2); }
+  .drive-card__thumb { height: 48px; }
+  .drive-card__name strong { font-size: 12.5px; }
   .upload-dock { right: 12px; left: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); width: auto; }
   .toast-stack { right: 12px; left: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); }
   .share-create { grid-template-columns: 1fr; }
+  .share-row { grid-template-columns: 1fr; }
+  .share-row__actions { justify-content: stretch; }
+  .share-row__actions .button { flex: 1 1 auto; justify-content: center; }
   .device-row { grid-template-columns: 40px minmax(0,1fr); }
   .device-row .button { grid-column: 1 / -1; justify-content: center; }
   .sync-root { grid-template-columns: 46px minmax(0,1fr); }

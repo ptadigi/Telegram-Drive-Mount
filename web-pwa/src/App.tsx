@@ -19,6 +19,7 @@ import { TelegramLoginPanel } from "./components/TelegramLoginPanel";
 import { TrashView } from "./components/TrashView";
 import { UploadDock } from "./components/UploadDock";
 import { useUploadQueue } from "./state/uploads";
+import { useToast } from "./state/ui";
 
 type AgentState = "checking" | "online" | "offline";
 type ViewKey = "home" | "drive" | "computers" | "shared" | "starred" | "trash" | "settings" | "search" | "activity" | "devices" | "debug";
@@ -55,6 +56,28 @@ function DriveApp({ currentUser, onLogout }: { currentUser: AppUser; onLogout: (
   const [searchQuery, setSearchQuery] = useState("");
   const newMenuRef = useRef<HTMLDivElement | null>(null);
   const queue = useUploadQueue();
+  const toast = useToast();
+
+  // Handle deep-links and Web Share Target results: ?view=<key> sets the view;
+  // ?shared=<n> means the OS share sheet just pushed files into the drive.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const v = params.get("view");
+    if (v && ["home", "drive", "computers", "shared", "starred", "trash", "settings", "search", "activity", "devices", "debug"].includes(v)) {
+      setView(v as ViewKey);
+    }
+    const shared = params.get("shared");
+    if (shared !== null) {
+      if (shared === "login") toast("Hãy đăng nhập rồi chia sẻ lại file", "info");
+      else if (shared === "error") toast("Không nhận được file chia sẻ", "error");
+      else if (Number(shared) > 0) toast(`Đã nhận ${shared} file được chia sẻ vào Drive`, "success");
+    }
+    if (v || shared !== null) {
+      // Clean the URL so a refresh doesn't repeat the action.
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
