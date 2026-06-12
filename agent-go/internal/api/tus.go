@@ -48,7 +48,26 @@ func (s *Server) newTusHandler(basePath string) (http.Handler, error) {
 		// client can PATCH chunks without mixed-content blocking.
 		RespectForwardedHeaders: true,
 		MaxSize:                 0,
+		// Bind the authenticated user (resolved by withAuth into the request
+		// context) onto the upload metadata at creation time. The PWA never
+		// sends user_id, and the completion hook runs on a background context,
+		// so without this the assembled file would be imported with an empty
+		// owner and never appear in the user's drive listing.
+		PreUploadCreateCallback: func(hook tushandler.HookEvent) (tushandler.HTTPResponse, tushandler.FileInfoChanges, error) {
+			var changes tushandler.FileInfoChanges
+			uid := drive.UserFromContext(hook.Context)
+			if uid != "" {
+				meta := tushandler.MetaData{}
+				for k, v := range hook.Upload.MetaData {
+					meta[k] = v
+				}
+				meta["user_id"] = uid
+				changes.MetaData = meta
+			}
+			return tushandler.HTTPResponse{}, changes, nil
+		},
 	})
+
 	if err != nil {
 		return nil, err
 	}
