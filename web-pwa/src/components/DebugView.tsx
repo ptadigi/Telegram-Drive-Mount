@@ -1,4 +1,4 @@
-import { Copy, RefreshCw } from "lucide-react";
+import { Copy, RefreshCw } from "../icons";
 import { useEffect, useMemo, useState } from "react";
 import { AGENT_BASE_URL, Transfer } from "../api/agent";
 

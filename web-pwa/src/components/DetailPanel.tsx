@@ -1,4 +1,4 @@
-import { CalendarClock, FileText, Folder, HardDrive, Link2, X } from "lucide-react";
+import { CalendarClock, FileText, Folder, HardDrive, Link2, X } from "../icons";
 import { AGENT_BASE_URL, DriveFile, DriveFolder, thumbnailUrl } from "../api/agent";
 
 type Props = {

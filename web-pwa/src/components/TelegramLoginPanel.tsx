@@ -1,4 +1,4 @@
-import { Lock, Phone, QrCode, ShieldCheck } from "lucide-react";
+import { Lock, Phone, QrCode, ShieldCheck } from "../icons";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {

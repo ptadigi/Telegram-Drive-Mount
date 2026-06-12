@@ -1,4 +1,4 @@
-import { Globe } from "lucide-react";
+import { Globe } from "../icons";
 import { useTranslation } from "react-i18next";
 
 const LANGS = [

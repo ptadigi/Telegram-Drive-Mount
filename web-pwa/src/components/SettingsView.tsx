@@ -1,4 +1,4 @@
-import { CheckCircle2, Cloud, Globe, HardDrive, Wifi, XCircle } from "lucide-react";
+import { CheckCircle2, Cloud, Globe, HardDrive, Wifi, XCircle } from "../icons";
 import { ReactNode, useEffect, useState } from "react";
 import { APIAuthConfig, CacheStats, cleanupCache, controlTunnel, createStorageChannel, eventsUrl, getAPIAuth, getCacheStats, getMountStatus, getShareConfig, getStorageSettings, MountStatus, setCacheConfig, ShareConfig, startMount, stopMount, StorageSettings, updateAPIAuth, updateShareConfig, updateStorageSettings } from "../api/agent";
 

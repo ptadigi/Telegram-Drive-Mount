@@ -1,4 +1,4 @@
-import { Cloud, Download, FileText, Lock } from "lucide-react";
+import { Cloud, Download, FileText, Lock } from "../icons";
 import { useEffect, useState } from "react";
 import { AGENT_BASE_URL } from "../api/agent";
 

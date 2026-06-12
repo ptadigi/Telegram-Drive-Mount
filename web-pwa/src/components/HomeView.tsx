@@ -1,4 +1,4 @@
-﻿import { Clock3, Download, FileText, Folder, HardDrive, KeyRound, Plus, RefreshCw, ShieldCheck } from "lucide-react";
+import { Clock3, Download, FileText, Folder, HardDrive, KeyRound, Plus, RefreshCw, ShieldCheck } from "../icons";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentInfo, AuthStatus, DatabaseStatus, DriveContents, DriveFile, Device, eventsUrl, listDevices, listDriveContents, listStarred, startDevicePairing, thumbnailUrl } from "../api/agent";
@@ -69,19 +69,19 @@ export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpen
     <div className="home-view">
       <section className="dashboard-hero">
         <div className="dashboard-hero__copy">
-          <span className="eyebrow">Cloud drive cá nhân</span>
-          <h1>Chào bạn, ổ đĩa cloud đã sẵn sàng</h1>
-          <p>Tải file lên, đồng bộ thư mục desktop và chia sẻ link an toàn qua domain riêng. Telegram là kho lưu trữ ẩn phía sau.</p>
+          <span className="eyebrow">Cloud drive c� nh�n</span>
+          <h1>Ch�o b?n, ? dia cloud d� s?n s�ng</h1>
+          <p>T?i file l�n, d?ng b? thu m?c desktop v� chia s? link an to�n qua domain ri�ng. Telegram l� kho luu tr? ?n ph�a sau.</p>
           <div className="dashboard-hero__actions">
-            <button className="button button--primary" onClick={onOpenDrive}><Plus size={18} /> Mở Drive của tôi</button>
-            <button className="button button--secondary" onClick={onOpenSettings}><ShieldCheck size={18} /> Cấu hình</button>
+            <button className="button button--primary" onClick={onOpenDrive}><Plus size={18} /> M? Drive c?a t�i</button>
+            <button className="button button--secondary" onClick={onOpenSettings}><ShieldCheck size={18} /> C?u h�nh</button>
           </div>
         </div>
         <div className="dashboard-hero__panel">
           <div className="drive-stats drive-stats--stacked">
-            <Stat label="Trạng thái" value={agentState === "online" ? "Đang chạy" : "Chưa kết nối"} tone={agentState === "online" ? "good" : "warn"} />
-            <Stat label="Database" value={database?.exists ? "Sẵn sàng" : "Chưa sẵn sàng"} tone={database?.exists ? "good" : "warn"} />
-            <Stat label="Telegram" value={auth?.session_exists ? "Đã kết nối" : "Chưa đăng nhập"} tone={auth?.session_exists ? "good" : "warn"} />
+            <Stat label="Tr?ng th�i" value={agentState === "online" ? "�ang ch?y" : "Chua k?t n?i"} tone={agentState === "online" ? "good" : "warn"} />
+            <Stat label="Database" value={database?.exists ? "S?n s�ng" : "Chua s?n s�ng"} tone={database?.exists ? "good" : "warn"} />
+            <Stat label="Telegram" value={auth?.session_exists ? "�� k?t n?i" : "Chua dang nh?p"} tone={auth?.session_exists ? "good" : "warn"} />
             <Stat label="Uptime" value={info ? `${info.uptime_sec}s` : "-"} tone="neutral" />
           </div>
           <div className="dashboard-hero__meta">
@@ -92,47 +92,47 @@ export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpen
       </section>
 
       <section className="home-actions home-actions--large">
-        <button className="home-action" onClick={onOpenDrive}><Plus size={18} /><span><strong>Mở Drive của tôi</strong><br /><small>Quản lý file và thư mục</small></span></button>
-        <button className="home-action" onClick={onOpenStarred}><span className="home-action__icon home-action__icon--star">★</span><span><strong>Đã đánh dấu sao</strong><br /><small>Truy cập nhanh các mục quan trọng</small></span></button>
-        <button className="home-action" onClick={onOpenComputers}><span className="home-action__icon">💻</span><span><strong>Đồng bộ máy tính</strong><br /><small>Thư mục local đang được watch</small></span></button>
-        <button className="home-action" onClick={onOpenSettings}><span className="home-action__icon">⚙</span><span><strong>Cấu hình chia sẻ</strong><br /><small>Domain, LAN hoặc Cloudflare Tunnel</small></span></button>
+        <button className="home-action" onClick={onOpenDrive}><Plus size={18} /><span><strong>M? Drive c?a t�i</strong><br /><small>Qu?n l� file v� thu m?c</small></span></button>
+        <button className="home-action" onClick={onOpenStarred}><span className="home-action__icon home-action__icon--star">?</span><span><strong>�� d�nh d?u sao</strong><br /><small>Truy c?p nhanh c�c m?c quan tr?ng</small></span></button>
+        <button className="home-action" onClick={onOpenComputers}><span className="home-action__icon">??</span><span><strong>�?ng b? m�y t�nh</strong><br /><small>Thu m?c local dang du?c watch</small></span></button>
+        <button className="home-action" onClick={onOpenSettings}><span className="home-action__icon">?</span><span><strong>C?u h�nh chia s?</strong><br /><small>Domain, LAN ho?c Cloudflare Tunnel</small></span></button>
       </section>
 
       <section className="home-grid">
         <article className="home-card home-card--pairing">
           <header className="home-card__header">
             <div>
-              <h2>Kết nối thiết bị mới</h2>
-              <p>Cài ứng dụng desktop để mount ổ ảo và đồng bộ. Làm theo 3 bước dưới đây.</p>
+              <h2>K?t n?i thi?t b? m?i</h2>
+              <p>C�i ?ng d?ng desktop d? mount ? ?o v� d?ng b?. L�m theo 3 bu?c du?i d�y.</p>
             </div>
             <KeyRound size={20} />
           </header>
           <div className="pairing-panel">
             <ol className="pair-steps">
               <li>
-                <strong>1. Tải &amp; cài ứng dụng</strong>
-                <a className="button button--secondary" href={DESKTOP_RELEASE_URL} target="_blank" rel="noreferrer"><Download size={15} /> Tải app desktop</a>
-                <span className="form-hint">Windows: tải <code>TelegramDriveSetup.exe</code> trên trang Releases.</span>
+                <strong>1. T?i &amp; c�i ?ng d?ng</strong>
+                <a className="button button--secondary" href={DESKTOP_RELEASE_URL} target="_blank" rel="noreferrer"><Download size={15} /> T?i app desktop</a>
+                <span className="form-hint">Windows: t?i <code>TelegramDriveSetup.exe</code> tr�n trang Releases.</span>
               </li>
               <li>
-                <strong>2. Mở app → chọn “Nối máy chủ có sẵn”</strong>
-                <span className="form-hint">Nhập địa chỉ máy chủ này: <code>{serverOrigin}</code></span>
+                <strong>2. M? app ? ch?n �N?i m�y ch? c� s?n�</strong>
+                <span className="form-hint">Nh?p d?a ch? m�y ch? n�y: <code>{serverOrigin}</code></span>
               </li>
               <li>
-                <strong>3. Tạo mã ghép rồi dán vào app</strong>
-                <button className="button button--primary" onClick={generatePairCode} disabled={pairLoading}>{pairLoading ? "Đang tạo mã..." : "Tạo mã ghép"}</button>
-                {pairCode && <div className="pair-code-display"><strong>{pairCode}</strong><span>Mã có hiệu lực 5 phút, dùng 1 lần.</span></div>}
+                <strong>3. T?o m� gh�p r?i d�n v�o app</strong>
+                <button className="button button--primary" onClick={generatePairCode} disabled={pairLoading}>{pairLoading ? "�ang t?o m�..." : "T?o m� gh�p"}</button>
+                {pairCode && <div className="pair-code-display"><strong>{pairCode}</strong><span>M� c� hi?u l?c 5 ph�t, d�ng 1 l?n.</span></div>}
                 {pairError && <div className="error-note">{pairError}</div>}
               </li>
             </ol>
             <div className="pair-summary">
-              <span><strong>{pairCount}</strong> thiết bị đang ghép</span>
-              <button className="button button--ghost" onClick={refresh}><RefreshCw size={14} /> Làm mới</button>
+              <span><strong>{pairCount}</strong> thi?t b? dang gh�p</span>
+              <button className="button button--ghost" onClick={refresh}><RefreshCw size={14} /> L�m m?i</button>
             </div>
             {connectedDevices.length > 0 && (
               <ul className="device-quick-list">
                 {connectedDevices.map((device) => (
-                  <li key={device.id}><strong>{device.name}</strong><span>{device.platform || "Không rõ"} · {device.last_seen_at ? new Date(device.last_seen_at * 1000).toLocaleString() : "Chưa từng"}</span></li>
+                  <li key={device.id}><strong>{device.name}</strong><span>{device.platform || "Kh�ng r�"} � {device.last_seen_at ? new Date(device.last_seen_at * 1000).toLocaleString() : "Chua t?ng"}</span></li>
                 ))}
               </ul>
             )}
@@ -142,27 +142,27 @@ export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpen
         <article className="home-card">
           <header className="home-card__header">
             <div>
-              <h2>Thiết bị và trạng thái</h2>
-              <p>Kiểm tra nhanh agent, database và Telegram.</p>
+              <h2>Thi?t b? v� tr?ng th�i</h2>
+              <p>Ki?m tra nhanh agent, database v� Telegram.</p>
             </div>
           </header>
           <div className="device-status-grid">
-            <StatusBlock label="Agent" value={agentState === "online" ? "Sống" : "Offline"} tone={agentState === "online" ? "good" : "warn"} />
-            <StatusBlock label="Database" value={database?.exists ? "Sẵn" : "Thiếu"} tone={database?.exists ? "good" : "warn"} />
-            <StatusBlock label="Telegram" value={auth?.authorized ? "Đã login" : "Chưa login"} tone={auth?.authorized ? "good" : "warn"} />
+            <StatusBlock label="Agent" value={agentState === "online" ? "S?ng" : "Offline"} tone={agentState === "online" ? "good" : "warn"} />
+            <StatusBlock label="Database" value={database?.exists ? "S?n" : "Thi?u"} tone={database?.exists ? "good" : "warn"} />
+            <StatusBlock label="Telegram" value={auth?.authorized ? "�� login" : "Chua login"} tone={auth?.authorized ? "good" : "warn"} />
             <StatusBlock label="Uptime" value={info ? `${Math.floor(info.uptime_sec / 60)}m` : "-"} tone="neutral" />
           </div>
         </article>
       </section>
 
       <section className="home-recent">
-        <header><Clock3 size={18} /> <h2>File cập nhật gần đây</h2></header>
-        {recentFiles.length === 0 ? <div className="muted-box">Chưa có file nào.</div> : (
+        <header><Clock3 size={18} /> <h2>File c?p nh?t g?n d�y</h2></header>
+        {recentFiles.length === 0 ? <div className="muted-box">Chua c� file n�o.</div> : (
           <div className="file-grid">
             {recentFiles.map((file) => (
               <div className="drive-card" key={file.id}>
                 <div className="drive-card__thumb">{file.preview_status === "ready" && file.kind === "image" ? <img src={thumbnailUrl(file.id)} alt="" /> : <FileText size={32} />}</div>
-                <div className="drive-card__name"><strong>{file.name}</strong><span>{kindLabel(file.kind)} · {formatBytes(file.size)}</span></div>
+                <div className="drive-card__name"><strong>{file.name}</strong><span>{kindLabel(file.kind)} � {formatBytes(file.size)}</span></div>
               </div>
             ))}
           </div>
@@ -170,19 +170,19 @@ export function HomeView({ info, database, auth, agentState, onOpenDrive, onOpen
       </section>
 
       <section className="home-recent">
-        <header>★ <h2>Mục có đánh dấu sao</h2></header>
-        {starredItems.length === 0 ? <div className="muted-box">Chưa có mục nào được đánh dấu sao.</div> : (
+        <header>? <h2>M?c c� d�nh d?u sao</h2></header>
+        {starredItems.length === 0 ? <div className="muted-box">Chua c� m?c n�o du?c d�nh d?u sao.</div> : (
           <div className="file-grid">
             {starred.folders.slice(0, 4).map((folder) => (
               <div className="drive-card drive-card--folder" key={folder.id}>
                 <div className="drive-card__thumb"><Folder size={32} /></div>
-                <div className="drive-card__name"><strong>{folder.name}</strong><span>Thư mục</span></div>
+                <div className="drive-card__name"><strong>{folder.name}</strong><span>Thu m?c</span></div>
               </div>
             ))}
             {starred.files.slice(0, 4).map((file) => (
               <div className="drive-card" key={file.id}>
                 <div className="drive-card__thumb">{file.preview_status === "ready" && file.kind === "image" ? <img src={thumbnailUrl(file.id)} alt="" /> : <FileText size={32} />}</div>
-                <div className="drive-card__name"><strong>{file.name}</strong><span>{kindLabel(file.kind)} · {formatBytes(file.size)}</span></div>
+                <div className="drive-card__name"><strong>{file.name}</strong><span>{kindLabel(file.kind)} � {formatBytes(file.size)}</span></div>
               </div>
             ))}
           </div>
@@ -201,7 +201,7 @@ function StatusBlock({ label, value, tone }: { label: string; value: string; ton
 }
 
 function kindLabel(kind: DriveFile["kind"]) {
-  const labels: Record<string, string> = { image: "Hình ảnh", video: "Video", audio: "Âm thanh", document: "Tài liệu", archive: "Nén", other: "File" };
+  const labels: Record<string, string> = { image: "H�nh ?nh", video: "Video", audio: "�m thanh", document: "T�i li?u", archive: "N�n", other: "File" };
   return labels[kind] || "File";
 }
 

@@ -1,4 +1,4 @@
-import { Folder, RefreshCw, RotateCcw } from "lucide-react";
+import { Folder, RefreshCw, RotateCcw } from "../icons";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DriveContents, eventsUrl, listTrash, restoreFile, restoreFolder } from "../api/agent";

@@ -1,4 +1,4 @@
-import { CheckCircle2, Cloud, KeyRound, Loader2, Server, XCircle } from "lucide-react";
+import { CheckCircle2, Cloud, KeyRound, Loader2, Server, XCircle } from "../icons";
 import { useEffect, useState } from "react";
 import { DesktopServerInfo, DesktopState, getDesktopState, pairDesktop, resetDesktop, setDesktopLocal, testDesktopServer } from "../api/agent";
 

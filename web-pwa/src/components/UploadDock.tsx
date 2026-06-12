@@ -1,4 +1,4 @@
-import { CheckCircle2, ChevronDown, ChevronUp, Loader2, RotateCw, X, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, Loader2, RotateCw, X, XCircle } from "../icons";
 import { useState } from "react";
 import { UploadQueue } from "../state/uploads";
 
