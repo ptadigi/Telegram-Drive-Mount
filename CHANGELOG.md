@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.7.5] - 2026-06-12
+
+### Fixed
+
+- **Large files invisible after upload (data isolation)**: resumable (tus) uploads imported the assembled file on a background context and only read `user_id` from client metadata, which the PWA never sent — so files >32MB were saved with an empty owner and never appeared in the user-scoped listing. The tus handler now binds the authenticated user (from the request context, since `/v1/tus` is behind the auth gate) onto the upload at creation time. Also closes a cross-user data-isolation gap on multi-user instances.
+- **Search leaked/showed orphaned files**: `Search()` did not filter by `user_id`, so empty-owner files appeared in search but not in the folder listing and could not be moved/renamed/trashed (those scope by user). Search now scopes by `user_id`, matching listing + operations.
+- **Orphan repair on login**: when exactly one account exists, login now adopts any empty-owner data, repairing files imported by older agent builds. Scoped to single-user so it can never reassign another user's files.
+- **Upload listing freshness**: the drive view now actively revalidates while uploads are in-flight (and once on settle), so imported files appear without waiting for SSE/poll.
+- **tus stale-resume `HEAD 404`**: large uploads start clean instead of resuming a stored upload URL whose server-side temp file may already be imported/cleaned up.
+
+### Security / Hardening
+
+- **Session tokens hashed at rest**: stored as SHA-256 instead of plaintext, so a DB leak does not yield usable sessions. Existing sessions invalidate once (one re-login).
+- **Duplicate folders on concurrent upload**: `getOrCreateFolder` lookup+insert is now serialized, so the 6-worker pool can't create duplicate folders with the same (parent, name, user) when uploading a folder.
+
+### Added
+
+- **tus temp janitor**: hourly sweep removes abandoned tus temp files older than 12h (interrupted uploads). Active uploads keep their mtime fresh and are never touched.
+
+---
+
 ## [1.7.x] - 2026-06-11
 
 ### Desktop client + onboarding

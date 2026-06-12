@@ -98,3 +98,35 @@ File đang chờ sync vẫn chiếm đĩa tạm trong `uploads/`. Xem docs/DEPLO
 - `GET /v1/debug/sync` (cần đăng nhập): log sync gần nhất + transfer lỗi.
 - Tab "Debug sync" trong PWA: xem log + transfer failed, nút Copy log.
 - File log: `<data_dir>/logs/sync.log` (JSON lines).
+
+
+## 13. Upload file lớn (>32MB) xong không thấy trong danh sách
+
+Triệu chứng: upload xong, file đã lên Telegram, tìm kiếm thì thấy nhưng danh sách
+không hiện và không thao tác được (đổi tên/di chuyển/xóa).
+Nguyên nhân: upload tus (file lớn) import file trên context nền và chỉ lấy
+`user_id` từ metadata client gửi lên — mà PWA không gửi → file lưu với owner rỗng.
+Danh sách + thao tác scope theo `user_id` nên không thấy; còn tìm kiếm trước đây
+không scope nên vẫn hiện.
+Fix (>= 1.7.5): tus gắn user đã đăng nhập (lấy từ request context) vào upload lúc
+tạo; tìm kiếm cũng scope theo `user_id`; đăng nhập lại sẽ tự nhận (adopt) các file
+owner rỗng cũ khi instance chỉ có 1 tài khoản.
+Sửa data cũ thủ công (self-host single-user):
+    UID=$(sqlite3 data/metadata.db "SELECT id FROM users LIMIT 1;")
+    for T in folders files shares sync_roots; do
+      sqlite3 data/metadata.db "UPDATE $T SET user_id='$UID' WHERE user_id IS NULL OR user_id='';"
+    done
+
+## 14. tus báo HEAD/POST 404 ERR_UPLOAD_NOT_FOUND
+
+Nguyên nhân: client tus cố resume một upload cũ mà file temp phía server đã được
+import/dọn dẹp; hoặc parallel-chunk concat bị lệch sau reverse proxy.
+Fix (>= 1.7.5): upload lớn start sạch (không auto-resume upload URL cũ), chạy đơn
+luồng (parallelUploads=1) vẫn giữ chunk + retry. Có janitor dọn temp tus cũ >12h.
+
+## 15. Bảo mật: session token & folder trùng
+
+- Session token lưu dạng SHA-256 (>= 1.7.5), không còn plaintext. Nâng cấp lên bản
+  này sẽ làm session cũ hết hiệu lực một lần (đăng nhập lại).
+- Tạo thư mục khi upload folder nhiều file song song đã được serialize để tránh
+  tạo trùng thư mục cùng (parent, name, user).
