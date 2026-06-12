@@ -131,19 +131,52 @@ function ViewerText({ content, loading, error, mono }: { content: string | null;
 }
 
 function OfficeFallback({ url, ext, mime }: { url: string; ext: string; mime: string; }) {
+  // .docx renders client-side via mammoth: we fetch the bytes WITH credentials
+  // (so it works behind auth) and convert to HTML — no dependency on the public
+  // Office Online viewer, which can't reach an authenticated download URL.
+  if (ext === ".docx") return <DocxViewer url={url} />;
+  // Other Office formats (.xlsx/.pptx/.doc/.xls/.ppt): use Office Online only on
+  // a public host (it must fetch the file itself), else offer download.
   if (isPublicHost()) {
-    const viewer = officeViewerUrl(url);
-    return (
-      <iframe title={`office-${ext}`} src={viewer}></iframe>
-    );
+    return <iframe title={`office-${ext}`} src={officeViewerUrl(url)}></iframe>;
   }
   return (
     <div className="viewer__office">
       <p>Loại file <strong>{ext.replace(".", "") || mime}</strong> chưa thể xem trực tiếp khi link Agent chỉ có trong LAN.</p>
-      <p>Bạn có thể tải xuống và mở bằng ứng dụng Office. Khi triển khai trên domain công khai (Cloudflare Tunnel hoặc tên miền riêng), Office Online viewer sẽ tự kích hoạt.</p>
+      <p>Bạn có thể tải xuống và mở bằng ứng dụng Office. Khi triển khai trên domain công khai, Office Online viewer sẽ tự kích hoạt.</p>
       <a className="button button--primary" href={url}><Download size={14} /> Tải xuống</a>
     </div>
   );
+}
+
+function DocxViewer({ url }: { url: string }) {
+  const [html, setHtml] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setHtml(null);
+    (async () => {
+      try {
+        const res = await fetch(url, { credentials: "include" });
+        if (!res.ok) throw new Error("Không tải được file");
+        const buf = await res.arrayBuffer();
+        const mammoth = await import("mammoth");
+        const result = await mammoth.convertToHtml({ arrayBuffer: buf });
+        if (!cancelled) setHtml(result.value || "<p>(Tài liệu trống)</p>");
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [url]);
+  if (loading) return <div className="viewer__notice">Đang mở tài liệu Word...</div>;
+  if (error) return <div className="viewer__notice viewer__notice--error">{error}</div>;
+  return <div className="viewer__doc" dangerouslySetInnerHTML={{ __html: html || "" }} />;
 }
 
 function UnsupportedFallback({ ext }: { ext: string }) {

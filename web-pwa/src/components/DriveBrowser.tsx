@@ -577,7 +577,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
               onDragEnd={() => setDragItem(null)}
             >
               <div className="drive-card__thumb">
-                {file.preview_status === "ready" ? <img src={thumbnailUrl(file.id)} alt="" loading="lazy" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} /> : kindIcon(file.kind)}
+                <CardThumb file={file} />
               </div>
               <div className="drive-card__name">
                 <strong>{file.name}{file.starred && <Star size={12} className="star-mark" />}</strong>
@@ -693,6 +693,21 @@ async function streamEntries(
   }
   await flush();
   return total;
+}
+
+function canHaveThumb(file: DriveFile): boolean {
+  const ext = (file.extension || "").toLowerCase();
+  return file.kind === "image" || file.kind === "video" || (file.kind === "document" && ext === ".pdf");
+}
+
+// CardThumb shows a bitmap thumbnail for images/videos/PDFs. It requests the
+// thumbnail even when preview_status isn't "ready" yet, which triggers the
+// agent's lazy (re)generation for files uploaded by older builds. On any error
+// (no thumbnail, missing ffmpeg/poppler) it falls back to the kind icon.
+function CardThumb({ file }: { file: DriveFile }) {
+  const [failed, setFailed] = useState(false);
+  if (!canHaveThumb(file) || failed) return <>{kindIcon(file.kind)}</>;
+  return <img src={thumbnailUrl(file.id)} alt="" loading="lazy" onError={() => setFailed(true)} />;
 }
 
 function kindIcon(kind: DriveFile["kind"]) {
