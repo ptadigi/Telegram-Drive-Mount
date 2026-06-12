@@ -140,6 +140,7 @@ type Service struct {
 	syncWatchMu    sync.Mutex
 	syncWatchers   map[string]syncWatcherEntry
 	channelOnce    sync.Mutex
+	folderCreateMu sync.Mutex
 	streamCoalesce *chunkCoalesce
 	chunks         *chunkCache
 }
@@ -1034,6 +1035,12 @@ func (s *Service) ensureRelativeFolderPath(ctx context.Context, parentID string,
 }
 
 func (s *Service) getOrCreateFolder(ctx context.Context, parentID string, name string) (Folder, error) {
+	// Serialize folder creation so concurrent uploads (the queue runs up to 6
+	// workers) into the same new relative path don't each INSERT a duplicate
+	// folder with the same (parent, name, user). The lookup+insert must be
+	// atomic relative to other creators.
+	s.folderCreateMu.Lock()
+	defer s.folderCreateMu.Unlock()
 	var folder Folder
 	err := s.db.QueryRowContext(ctx, `
 		SELECT id, COALESCE(parent_id, ''), name, created_at, updated_at

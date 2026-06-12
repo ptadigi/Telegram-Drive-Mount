@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -13,6 +14,14 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+// hashSessionToken hashes a session token for storage at rest. The raw token
+// only ever lives in the client cookie; the DB stores its SHA-256 so a DB leak
+// does not hand an attacker usable sessions.
+func hashSessionToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
 
 var (
 	ErrInvalidCredentials = errors.New("email hoặc mật khẩu không đúng")
@@ -98,7 +107,7 @@ func (s *Service) RegisterFirstAdmin(ctx context.Context, email, password, displ
 	}
 	created := time.Now()
 	expires := created.Add(sessionTTL)
-	if _, err := tx.ExecContext(ctx, `INSERT INTO user_sessions (token, user_id, created_at, expires_at, user_agent) VALUES (?, ?, ?, ?, NULLIF(?, ''))`, token, id, created.Unix(), expires.Unix(), userAgent); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO user_sessions (token, user_id, created_at, expires_at, user_agent) VALUES (?, ?, ?, ?, NULLIF(?, ''))`, hashSessionToken(token), id, created.Unix(), expires.Unix(), userAgent); err != nil {
 		return User{}, "", time.Time{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -158,7 +167,7 @@ func (s *Service) CreateSession(ctx context.Context, userID, userAgent string) (
 	}
 	created := time.Now()
 	expires := created.Add(sessionTTL)
-	_, err = s.db.ExecContext(ctx, `INSERT INTO user_sessions (token, user_id, created_at, expires_at, user_agent) VALUES (?, ?, ?, ?, NULLIF(?, ''))`, token, userID, created.Unix(), expires.Unix(), userAgent)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO user_sessions (token, user_id, created_at, expires_at, user_agent) VALUES (?, ?, ?, ?, NULLIF(?, ''))`, hashSessionToken(token), userID, created.Unix(), expires.Unix(), userAgent)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -169,7 +178,7 @@ func (s *Service) ResolveSession(ctx context.Context, token string) (User, error
 	if token == "" {
 		return User{}, ErrSessionInvalid
 	}
-	row := s.db.QueryRowContext(ctx, `SELECT u.id, u.email, COALESCE(u.display_name, ''), u.role, u.created_at FROM user_sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ?`, token, time.Now().Unix())
+	row := s.db.QueryRowContext(ctx, `SELECT u.id, u.email, COALESCE(u.display_name, ''), u.role, u.created_at FROM user_sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ?`, hashSessionToken(token), time.Now().Unix())
 	var user User
 	if err := row.Scan(&user.ID, &user.Email, &user.DisplayName, &user.Role, &user.CreatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -184,7 +193,7 @@ func (s *Service) DeleteSession(ctx context.Context, token string) error {
 	if token == "" {
 		return nil
 	}
-	_, err := s.db.ExecContext(ctx, `DELETE FROM user_sessions WHERE token = ?`, token)
+	_, err := s.db.ExecContext(ctx, `DELETE FROM user_sessions WHERE token = ?`, hashSessionToken(token))
 	return err
 }
 
