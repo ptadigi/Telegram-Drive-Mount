@@ -298,11 +298,10 @@ export function uploadFileResumable(
         },
       });
       aborter = () => upload.abort();
-      // Resume from a previous interrupted upload if a matching one exists.
-      upload.findPreviousUploads().then((prev) => {
-        if (prev.length > 0) upload.resumeFromPreviousUpload(prev[0]);
-        upload.start();
-      });
+      // Start clean instead of auto-resuming a stored upload URL. In practice
+      // stale tus fingerprints can point at server-side temp files already
+      // imported/cleaned up, causing HEAD 404 before the user can retry.
+      upload.start();
     }).catch(reject);
   });
   return { promise, abort: () => aborter?.() };

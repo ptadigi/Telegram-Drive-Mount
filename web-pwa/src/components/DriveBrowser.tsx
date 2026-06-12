@@ -110,13 +110,24 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     pollMs: 20000,
   });
 
-  // Refresh immediately when an upload finishes processing so the just-added
-  // file shows up without waiting for SSE/poll.
-  const syncedCount = uploadQueue.items.filter((i) => i.phase === "synced" || i.phase === "processing").length;
+  // While uploads are active or processing, keep revalidating the current
+  // folder so files appear as soon as the backend finishes importing them.
+  const uploadInFlight = uploadQueue.items.some((i) => i.phase === "queued" || i.phase === "uploading_agent" || i.phase === "processing");
   useEffect(() => {
-    if (syncedCount > 0) refresh(currentFolderId);
+    if (!uploadInFlight) return;
+    refresh(currentFolderId);
+    const timer = window.setInterval(() => refresh(currentFolderId), 2000);
+    return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncedCount]);
+  }, [uploadInFlight, currentFolderId]);
+
+  // Once the queue settles, do one final refresh to catch the last imported
+  // file if the backend finished just after the last interval tick.
+  const settledSyncedCount = uploadQueue.items.filter((i) => i.phase === "synced").length;
+  useEffect(() => {
+    if (settledSyncedCount > 0) refresh(currentFolderId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settledSyncedCount]);
 
   function openFolder(folder: DriveFolder) {
     setFolderStack((stack) => [...stack, folder]);
