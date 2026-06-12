@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.7.9] - 2026-06-12
+
+### Added
+
+- **File preview & viewing**: in-PWA viewer upgraded (image zoom/pan, video poster + seek, docx rendered via mammoth, "open in new tab"); share page now previews image/video/audio/pdf/docx inline behind the password gate.
+- **Right-click + long-press context menu**: file/folder actions open via right-click (desktop) and long-press (mobile), not just the 3-dot button; menu repositions to stay in the viewport.
+- **Dashboard stats**: home hero shows file count / folder count / total size / uptime (new `GET /v1/stats`), dropped the internal metadata.db path.
+- **Community release prep**: rewritten README (one-click install per platform), full `docs/INSTALL.md`, docs set (overview/PDR, architecture, codebase, code standards), and one-click installers: `deploy/install.sh` (Linux/systemd), `deploy/install-docker.sh` (Docker), `deploy/install.ps1` (Windows).
+
+### Fixed
+
+- **Share download 403**: `RecordShareAccess` mismatched NULL `expires_at`/`max_downloads`, returning "limit reached/expired" for unlimited links — now COALESCE'd.
+- **Share rate limit**: split a generous view limit (600/min) from the strict unlock limit (20/min) so viewing no longer trips "too many requests".
+- **Icons**: unified Phosphor set via build-time inline SVG (offline-safe) with coloured per-format file icons; fixed Vietnamese text corruption from an earlier bulk edit.
+
+---
+
 ## [1.7.8] - 2026-06-12
 
 ### Added
