@@ -38,6 +38,7 @@ type Server struct {
 	desktop     *desktop.Store
 	desktopMode bool
 	shareRate   *rateLimiter
+	viewRate    *rateLimiter
 	authMu      sync.RWMutex
 	authCfg     config.AuthConfig
 }
@@ -62,6 +63,7 @@ func NewServer(version string, cfg config.Config, authService *agentauth.Service
 		mounts:    mountManager,
 		desktop:   desktop.NewStore(cfg.DataDir),
 		shareRate: newRateLimiter(20, time.Minute),
+		viewRate:  newRateLimiter(600, time.Minute),
 		authCfg:   cfg.Auth,
 	}
 }
@@ -1075,7 +1077,7 @@ func (s *Server) handleShareHealthCheck(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleSharePage(w http.ResponseWriter, r *http.Request) {
-	if !s.shareRate.allow(clientIP(r)) {
+	if !s.viewRate.allow(clientIP(r)) {
 		writeError(w, http.StatusTooManyRequests, errBadRequest("quá nhiều yêu cầu, vui lòng thử lại sau"))
 		return
 	}
@@ -1143,7 +1145,7 @@ func (s *Server) handleShareUnlock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
-	if !s.shareRate.allow(clientIP(r)) {
+	if !s.viewRate.allow(clientIP(r)) {
 		writeError(w, http.StatusTooManyRequests, errBadRequest("quá nhiều yêu cầu, vui lòng thử lại sau"))
 		return
 	}
