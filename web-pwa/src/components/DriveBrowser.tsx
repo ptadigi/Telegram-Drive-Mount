@@ -46,6 +46,43 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const currentFolderId = folderStack.length > 0 ? folderStack[folderStack.length - 1].id : "";
 
+  // Long-press (mobile) → open context menu. Returns touch handlers bound to a
+  // card; a press held ~500ms without much movement opens the menu at the touch
+  // point. Right-click (onContextMenu) covers desktop.
+  const longPressRef = useRef<{ timer: number | null; x: number; y: number; fired: boolean }>({ timer: null, x: 0, y: 0, fired: false });
+  function makeLongPress(open: (x: number, y: number) => void) {
+    const clear = () => {
+      if (longPressRef.current.timer !== null) {
+        window.clearTimeout(longPressRef.current.timer);
+        longPressRef.current.timer = null;
+      }
+    };
+    return {
+      onTouchStart: (e: React.TouchEvent) => {
+        const t = e.touches[0];
+        longPressRef.current.x = t.clientX;
+        longPressRef.current.y = t.clientY;
+        longPressRef.current.fired = false;
+        clear();
+        longPressRef.current.timer = window.setTimeout(() => {
+          longPressRef.current.fired = true;
+          if (navigator.vibrate) navigator.vibrate(15);
+          open(longPressRef.current.x, longPressRef.current.y);
+        }, 500);
+      },
+      onTouchMove: (e: React.TouchEvent) => {
+        const t = e.touches[0];
+        if (Math.abs(t.clientX - longPressRef.current.x) > 10 || Math.abs(t.clientY - longPressRef.current.y) > 10) clear();
+      },
+      onTouchEnd: (e: React.TouchEvent) => {
+        clear();
+        // Swallow the click that follows a long-press so it doesn't also open/select.
+        if (longPressRef.current.fired) { e.preventDefault(); longPressRef.current.fired = false; }
+      },
+      onTouchCancel: clear,
+    };
+  }
+
   useEffect(() => {
     function onQuickAction(event: Event) {
       const action = (event as CustomEvent<{ action?: string }>).detail?.action;
@@ -362,13 +399,11 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     await uploadQueue.enqueue(files, { folderId: currentFolderId, preserveRelativePath: false });
   }
 
-  function handleFolderMenu(event: React.MouseEvent, folder: DriveFolder) {
-    event.preventDefault();
-    event.stopPropagation();
+  function openFolderMenu(x: number, y: number, folder: DriveFolder) {
     setSelection({ kind: "folder", data: folder });
     setMenu({
-      x: event.clientX,
-      y: event.clientY,
+      x,
+      y,
       items: [
         { key: "rename", label: t("files.rename"), icon: <Pencil size={14} />, onSelect: () => promptRenameFolder(folder) },
         { key: "move", label: "Di chuyển đến", icon: <FolderInput size={14} />, onSelect: () => setMoveTarget({ kind: "folder", id: folder.id, name: folder.name }) },
@@ -380,13 +415,17 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     });
   }
 
-  function handleFileMenu(event: React.MouseEvent, file: DriveFile) {
+  function handleFolderMenu(event: React.MouseEvent, folder: DriveFolder) {
     event.preventDefault();
     event.stopPropagation();
+    openFolderMenu(event.clientX, event.clientY, folder);
+  }
+
+  function openFileMenu(x: number, y: number, file: DriveFile) {
     setSelection({ kind: "file", data: file });
     setMenu({
-      x: event.clientX,
-      y: event.clientY,
+      x,
+      y,
       items: [
         { key: "details", label: t("files.viewDetails"), icon: <Info size={14} />, onSelect: () => setSelection({ kind: "file", data: file }) },
         { key: "view", label: "Mở xem trực tiếp", icon: <FileText size={14} />, onSelect: () => setViewerFile(file) },
@@ -398,6 +437,12 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
         { key: "trash", label: t("files.trash"), icon: <Trash2 size={14} />, danger: true, onSelect: () => promptTrashFile(file) },
       ],
     });
+  }
+
+  function handleFileMenu(event: React.MouseEvent, file: DriveFile) {
+    event.preventDefault();
+    event.stopPropagation();
+    openFileMenu(event.clientX, event.clientY, file);
   }
 
   function promptRenameFolder(folder: DriveFolder) {
@@ -539,6 +584,8 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
               onDragOver={(event) => { event.preventDefault(); setDropTargetFolder(folder.id); }}
               onDragLeave={() => setDropTargetFolder((current) => (current === folder.id ? null : current))}
               onDrop={(event) => handleDropOnFolder(folder.id, event)}
+              onContextMenu={(event) => handleFolderMenu(event, folder)}
+              {...makeLongPress((x, y) => openFolderMenu(x, y, folder))}
               onClick={(event) => {
                 if (event.shiftKey || event.ctrlKey || event.metaKey) {
                   toggleSelectFolder(folder.id, event.shiftKey || event.ctrlKey || event.metaKey);
@@ -561,6 +608,8 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
             <div
               className={`drive-card ${selectedIds.files.has(file.id) ? "drive-card--selected" : ""}`}
               key={file.id}
+              onContextMenu={(event) => handleFileMenu(event, file)}
+              {...makeLongPress((x, y) => openFileMenu(x, y, file))}
               onClick={(event) => {
                 if (event.shiftKey || event.ctrlKey || event.metaKey) {
                   toggleSelectFile(file.id, event.shiftKey || event.ctrlKey || event.metaKey);

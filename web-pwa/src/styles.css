@@ -767,6 +767,7 @@ a.button { text-decoration: none; }
   .drive-browser, .settings-view, .computers-view, .devices-view { padding: var(--s-4); }
   .drive-browser__header, .computers-view__header, .devices-view__header, .sync-panel__header { flex-direction: column; align-items: stretch; }
   .drive-browser__actions { justify-content: flex-start; }
+  .drive-card__menu { opacity: 1; }
   .file-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: var(--s-2); }
   .drive-card__thumb { height: 48px; }
   .drive-card__name strong { font-size: 12.5px; }

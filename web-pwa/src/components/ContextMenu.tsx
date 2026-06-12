@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 
 export type ContextMenuItem = {
   key: string;
@@ -16,6 +16,7 @@ type Props = {
 
 export function ContextMenu({ items, position, onClose }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const [pos, setPos] = useState(position);
 
   useEffect(() => {
     function onClick(event: MouseEvent) {
@@ -33,10 +34,23 @@ export function ContextMenu({ items, position, onClose }: Props) {
     };
   }, [onClose]);
 
+  // Keep the menu inside the viewport (right-click / long-press near an edge).
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const pad = 8;
+    let x = position.x;
+    let y = position.y;
+    if (x + rect.width + pad > window.innerWidth) x = Math.max(pad, window.innerWidth - rect.width - pad);
+    if (y + rect.height + pad > window.innerHeight) y = Math.max(pad, window.innerHeight - rect.height - pad);
+    setPos({ x, y });
+  }, [position.x, position.y]);
+
   const style: React.CSSProperties = {
     position: "fixed",
-    top: position.y,
-    left: position.x,
+    top: pos.y,
+    left: pos.x,
     zIndex: 90,
   };
 

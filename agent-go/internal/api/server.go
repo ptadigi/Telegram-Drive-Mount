@@ -1169,9 +1169,15 @@ func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err)
 		return
 	}
-	if err := s.drive.RecordShareAccess(r.Context(), resolved.Share.ID); err != nil {
-		writeError(w, http.StatusForbidden, err)
-		return
+	// Inline preview must NOT count as a download — otherwise viewing the file
+	// burns the download quota and the real Download button then fails. Only
+	// count actual downloads (attachment disposition).
+	inline := r.URL.Query().Get("disposition") == "inline"
+	if !inline {
+		if err := s.drive.RecordShareAccess(r.Context(), resolved.Share.ID); err != nil {
+			writeError(w, http.StatusForbidden, err)
+			return
+		}
 	}
 	w.Header().Set("Content-Type", file.MimeType)
 	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
@@ -1179,7 +1185,7 @@ func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
 	// disposition=inline lets the share page preview the file (image/video/pdf)
 	// in the browser; default is attachment (download). The password gate in
 	// ResolveShare has already been enforced above either way.
-	if r.URL.Query().Get("disposition") == "inline" {
+	if inline {
 		w.Header().Set("Content-Disposition", "inline; filename*=UTF-8''"+urlQueryEscape(file.Name))
 	} else {
 		w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+urlQueryEscape(file.Name))
