@@ -27,6 +27,13 @@ func renderSharePageHTML(slug string) string {
   header { display: flex; align-items: center; gap: 8px; padding: 22px 24px; color: #075985; font-weight: 600; }
   main { display: grid; place-items: center; padding: 24px; }
   .card { width: min(440px, 100%%); padding: 32px; background: #fff; border-radius: 24px; box-shadow: 0 24px 60px rgba(15, 23, 42, 0.1); display: grid; gap: 14px; text-align: center; }
+  .card:has(.preview), .card:has(.docx) { width: min(860px, 100%%); }
+  .preview { max-width: 100%%; max-height: 70vh; border-radius: 16px; box-shadow: 0 12px 30px rgba(15,23,42,0.12); background: #000; }
+  .preview-pdf { width: 100%%; height: 72vh; border: 0; background: #fff; }
+  .docx { width: 100%%; max-height: 70vh; overflow: auto; text-align: left; background: #fff; border: 1px solid rgba(15,23,42,0.08); border-radius: 16px; padding: 24px 28px; line-height: 1.6; }
+  .docx img { max-width: 100%%; height: auto; }
+  .docx table { border-collapse: collapse; width: 100%%; margin: 0.8em 0; }
+  .docx td, .docx th { border: 1px solid #ddd; padding: 6px 10px; }
   .card h1 { margin: 0; font-size: 22px; }
   .card p { margin: 0; color: #6b7a90; }
   .icon { display: grid; place-items: center; width: 70px; height: 70px; border-radius: 22px; background: #eef4ff; color: #0b66ef; margin: 0 auto; font-size: 28px; }
@@ -85,20 +92,69 @@ function renderFile(data) {
   status.innerHTML = "";
   const isFolder = data.share && data.share.target_kind === 'folder';
   const file = data.file || {};
-  const icon = document.createElement('div'); icon.className = 'icon'; icon.textContent = isFolder ? '📁' : '📄'; status.appendChild(icon);
+  const name = (file.name || "").toLowerCase();
+  const mime = (file.mime_type || "").toLowerCase();
+  const kind = file.kind || "";
+  const ext = name.indexOf('.') >= 0 ? name.slice(name.lastIndexOf('.')) : "";
+  const rawDownload = "/share/" + encodeURIComponent(slug) + "/raw" + (currentPassword ? "?password=" + encodeURIComponent(currentPassword) : "");
+  const rawInline = "/share/" + encodeURIComponent(slug) + "/raw?disposition=inline" + (currentPassword ? "&password=" + encodeURIComponent(currentPassword) : "");
+
+  // Render an inline preview for supported types before the title/download.
+  if (!isFolder) {
+    const isImage = kind === 'image' || mime.indexOf('image/') === 0;
+    const isVideo = kind === 'video' || mime.indexOf('video/') === 0;
+    const isAudio = kind === 'audio' || mime.indexOf('audio/') === 0;
+    const isPdf = ext === '.pdf' || mime === 'application/pdf';
+    if (isImage) {
+      const img = document.createElement('img'); img.className = 'preview'; img.src = rawInline; img.alt = file.name || ''; status.appendChild(img);
+    } else if (isVideo) {
+      const v = document.createElement('video'); v.className = 'preview'; v.src = rawInline; v.controls = true; v.playsInline = true; status.appendChild(v);
+    } else if (isAudio) {
+      const a = document.createElement('audio'); a.src = rawInline; a.controls = true; a.style.width = '100%%'; status.appendChild(a);
+    } else if (isPdf) {
+      const f = document.createElement('iframe'); f.className = 'preview preview-pdf'; f.src = rawInline; f.title = file.name || ''; status.appendChild(f);
+    } else if (ext === '.docx') {
+      renderDocx(rawInline);
+    } else {
+      const icon = document.createElement('div'); icon.className = 'icon'; icon.textContent = '📄'; status.appendChild(icon);
+    }
+  } else {
+    const icon = document.createElement('div'); icon.className = 'icon'; icon.textContent = '📁'; status.appendChild(icon);
+  }
+
   const title = document.createElement('h1'); title.textContent = isFolder ? 'Thư mục chia sẻ' : (file.name || 'File chia sẻ'); status.appendChild(title);
   if (!isFolder && file.size) {
     const meta = document.createElement('p'); meta.textContent = bytes(file.size) + ' · ' + (file.mime_type || file.kind || 'File'); status.appendChild(meta);
   }
   const link = document.createElement('a'); link.className = 'button'; link.textContent = isFolder ? '⬇ Tải ZIP' : '⬇ Tải xuống';
-  const rawUrl = "/share/" + encodeURIComponent(slug) + "/raw" + (currentPassword ? "?password=" + encodeURIComponent(currentPassword) : "");
-  link.href = rawUrl; link.target = '_blank'; status.appendChild(link);
+  link.href = rawDownload; link.target = '_blank'; status.appendChild(link);
   if (data.share) {
     const meta = document.createElement('p');
     const parts = [];
     if (data.share.expires_at && data.share.expires_at > 0) parts.push('Hết hạn: ' + new Date(data.share.expires_at * 1000).toLocaleString('vi-VN'));
     if (data.share.max_downloads && data.share.max_downloads > 0) parts.push('Đã tải ' + (data.share.access_count || 0) + '/' + data.share.max_downloads);
     if (parts.length) { meta.textContent = parts.join(' · '); status.appendChild(meta); }
+  }
+}
+
+async function renderDocx(url) {
+  const holder = document.createElement('div'); holder.className = 'docx'; holder.textContent = 'Đang mở tài liệu Word…'; status.appendChild(holder);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('fetch failed');
+    const buf = await res.arrayBuffer();
+    if (!window.mammoth) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js';
+        s.onload = resolve; s.onerror = reject; document.head.appendChild(s);
+      });
+    }
+    const result = await window.mammoth.convertToHtml({ arrayBuffer: buf });
+    holder.innerHTML = result.value || '<p>(Tài liệu trống)</p>';
+  } catch (e) {
+    holder.remove();
+    const icon = document.createElement('div'); icon.className = 'icon'; icon.textContent = '📄'; status.insertBefore(icon, status.firstChild);
   }
 }
 
