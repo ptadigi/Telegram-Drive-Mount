@@ -180,7 +180,13 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     const selected = Array.from(event.target.files || []);
     event.target.value = "";
     if (selected.length === 0) return;
-    await uploadQueue.enqueue(selected, { folderId: currentFolderId, preserveRelativePath: true });
+    // Enqueue in batches so picking a folder with tens of thousands of files
+    // doesn't build one giant queue update or block the UI in a single tick.
+    const BATCH = 200;
+    for (let i = 0; i < selected.length; i += BATCH) {
+      await uploadQueue.enqueue(selected.slice(i, i + BATCH), { folderId: currentFolderId, preserveRelativePath: true });
+      await new Promise((r) => setTimeout(r, 0));
+    }
   }
 
   function clearSelection() {
@@ -271,21 +277,24 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     setDropping(false);
     if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
       const items = event.dataTransfer.items;
-      const collected: { file: File; relativePath: string }[] = [];
       if (items && items.length > 0 && typeof items[0].webkitGetAsEntry === "function") {
         const entries = Array.from(items).map((item) => item.webkitGetAsEntry()).filter(Boolean) as FileSystemEntry[];
-        for (const entry of entries) await collectEntry(entry, "", collected);
+        const hasDir = entries.some((e) => e.isDirectory);
+        if (hasDir) toast("Đang quét thư mục và tải lên…", "info");
+        const total = await streamEntries(entries, async (batch) => {
+          const usePath = batch.some((item) => item.relativePath.includes("/"));
+          if (usePath) {
+            const withPath = batch.map((item) => attachRelativePath(item.file, item.relativePath));
+            await uploadQueue.enqueue(withPath, { folderId, preserveRelativePath: true });
+          } else {
+            await uploadQueue.enqueue(batch.map((item) => item.file), { folderId, preserveRelativePath: false });
+          }
+        });
+        if (hasDir) toast(`Đã đưa ${total} file vào hàng đợi tải lên`, "success");
       } else {
         const fileList = Array.from(event.dataTransfer.files || []);
-        for (const file of fileList) collected.push({ file, relativePath: file.name });
-      }
-      if (collected.length === 0) return;
-      const usePath = collected.some((item) => item.relativePath.includes("/"));
-      if (usePath) {
-        const filesWithPath = collected.map((item) => attachRelativePath(item.file, item.relativePath));
-        await uploadQueue.enqueue(filesWithPath, { folderId, preserveRelativePath: true });
-      } else {
-        await uploadQueue.enqueue(collected.map((item) => item.file), { folderId, preserveRelativePath: false });
+        if (fileList.length === 0) return;
+        await uploadQueue.enqueue(fileList, { folderId, preserveRelativePath: false });
       }
       return;
     }
@@ -329,27 +338,27 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
     setDropping(false);
     setDropTargetFolder(null);
     const items = event.dataTransfer.items;
-    const collected: { file: File; relativePath: string }[] = [];
     if (items && items.length > 0 && typeof items[0].webkitGetAsEntry === "function") {
       const entries = Array.from(items).map((item) => item.webkitGetAsEntry()).filter(Boolean) as FileSystemEntry[];
       const hasDir = entries.some((e) => e.isDirectory);
-      if (hasDir) toast("Đang quét thư mục, vui lòng đợi…", "info");
-      for (const entry of entries) {
-        await collectEntry(entry, "", collected);
-      }
-      if (hasDir) toast(`Đã quét ${collected.length} file, bắt đầu tải lên`, "success");
-    } else {
-      const files = Array.from(event.dataTransfer.files || []);
-      for (const file of files) collected.push({ file, relativePath: file.name });
+      if (hasDir) toast("Đang quét thư mục và tải lên…", "info");
+      // Stream batches straight into the upload queue so uploads start while
+      // the (possibly huge) tree is still being scanned, with bounded memory.
+      const total = await streamEntries(entries, async (batch) => {
+        const usePath = batch.some((item) => item.relativePath.includes("/"));
+        if (usePath) {
+          const withPath = batch.map((item) => attachRelativePath(item.file, item.relativePath));
+          await uploadQueue.enqueue(withPath, { folderId: currentFolderId, preserveRelativePath: true });
+        } else {
+          await uploadQueue.enqueue(batch.map((item) => item.file), { folderId: currentFolderId, preserveRelativePath: false });
+        }
+      });
+      if (hasDir) toast(`Đã đưa ${total} file vào hàng đợi tải lên`, "success");
+      return;
     }
-    if (collected.length === 0) return;
-    const usePath = collected.some((item) => item.relativePath.includes("/"));
-    if (usePath) {
-      const filesWithPath = collected.map((item) => attachRelativePath(item.file, item.relativePath));
-      await uploadQueue.enqueue(filesWithPath, { folderId: currentFolderId, preserveRelativePath: true });
-    } else {
-      await uploadQueue.enqueue(collected.map((item) => item.file), { folderId: currentFolderId, preserveRelativePath: false });
-    }
+    const files = Array.from(event.dataTransfer.files || []);
+    if (files.length === 0) return;
+    await uploadQueue.enqueue(files, { folderId: currentFolderId, preserveRelativePath: false });
   }
 
   function handleFolderMenu(event: React.MouseEvent, folder: DriveFolder) {
@@ -630,33 +639,59 @@ function fileComparator(sortKey: SortKey) {
   };
 }
 
-async function collectEntry(entry: FileSystemEntry, parentPath: string, collected: { file: File; relativePath: string }[]) {
-  if (entry.isFile) {
-    await new Promise<void>((resolve, reject) => {
-      (entry as FileSystemFileEntry).file((file) => {
-        const relative = parentPath ? `${parentPath}/${file.name}` : file.name;
-        collected.push({ file, relativePath: relative });
-        resolve();
-      }, reject);
-    });
-    return;
-  }
-  if (entry.isDirectory) {
-    const reader = (entry as FileSystemDirectoryEntry).createReader();
-    const children: FileSystemEntry[] = await new Promise((resolve) => {
-      const list: FileSystemEntry[] = [];
-      const read = () => reader.readEntries((items) => {
-        if (items.length === 0) { resolve(list); return; }
-        list.push(...items);
-        read();
+// streamEntries walks dropped FileSystem entries and flushes files to onBatch
+// in chunks instead of collecting everything into one array first. This keeps
+// memory bounded and lets uploads start while the tree is still being scanned —
+// essential for folders with tens of thousands of files (the old "collect all
+// then enqueue" approach held every File in memory and blocked the UI). It also
+// yields to the event loop between batches so the tab stays responsive.
+async function streamEntries(
+  entries: FileSystemEntry[],
+  onBatch: (batch: { file: File; relativePath: string }[]) => Promise<void> | void,
+  batchSize = 200,
+): Promise<number> {
+  let total = 0;
+  let buffer: { file: File; relativePath: string }[] = [];
+
+  const flush = async () => {
+    if (buffer.length === 0) return;
+    const batch = buffer;
+    buffer = [];
+    await onBatch(batch);
+    // Yield so the browser can paint/respond between batches.
+    await new Promise((r) => setTimeout(r, 0));
+  };
+
+  // Iterative DFS with an explicit stack to avoid deep recursion on large trees.
+  const stack: { entry: FileSystemEntry; parentPath: string }[] = entries.map((entry) => ({ entry, parentPath: "" }));
+  while (stack.length > 0) {
+    const { entry, parentPath } = stack.pop()!;
+    if (entry.isFile) {
+      const file = await new Promise<File>((resolve, reject) => {
+        (entry as FileSystemFileEntry).file(resolve, reject);
       });
-      read();
-    });
-    const dirPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
-    for (const child of children) {
-      await collectEntry(child, dirPath, collected);
+      const relative = parentPath ? `${parentPath}/${file.name}` : file.name;
+      buffer.push({ file, relativePath: relative });
+      total += 1;
+      if (buffer.length >= batchSize) await flush();
+    } else if (entry.isDirectory) {
+      const reader = (entry as FileSystemDirectoryEntry).createReader();
+      const dirPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+      // readEntries returns at most ~100 entries per call; loop until empty.
+      // Push children onto the stack so we never recurse and never hold the
+      // whole tree in memory at once.
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const items: FileSystemEntry[] = await new Promise((resolve, reject) => {
+          reader.readEntries((res) => resolve(res), reject);
+        });
+        if (items.length === 0) break;
+        for (const child of items) stack.push({ entry: child, parentPath: dirPath });
+      }
     }
   }
+  await flush();
+  return total;
 }
 
 function kindIcon(kind: DriveFile["kind"]) {

@@ -193,10 +193,12 @@ export function useUploadQueue(): UploadQueue {
       orderRef.current.push(id);
       pendingRef.current.push(id);
     }
+    // Mark dirty and let the throttled flush loop (UI_FLUSH_MS) push a single
+    // snapshot to React. Avoids an O(n^2) rebuild when many batches enqueue in
+    // quick succession (e.g. a folder with tens of thousands of files).
     dirtyRef.current = true;
-    setItems(snapshot());
     pump();
-  }, [pump, snapshot]);
+  }, [pump]);
 
   const clearCompleted = useCallback(() => {
     for (const id of [...orderRef.current]) {
