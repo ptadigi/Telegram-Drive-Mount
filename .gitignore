@@ -40,3 +40,8 @@ agent-go/td-agent.exe
 
 # local session encryption key (server)
 .session-key
+
+# internal dev planning notes (not for public repo)
+plans/
+installer-out/
+Screenshort/

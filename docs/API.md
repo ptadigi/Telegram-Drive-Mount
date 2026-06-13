@@ -97,6 +97,61 @@ curl -s "$BASE/v1/shares" -H "Authorization: Device $TOKEN"
 
 Toàn bộ endpoint khác (folders rename/move/star/trash/restore, shares update/delete, storage, audit, transfers, events SSE…) đều theo cùng quy ước và cùng header auth. Mở mục **API** trong PWA để xem danh sách + cURL sinh theo domain của bạn.
 
+## Endpoint đầy đủ theo nhóm
+
+> Tất cả dùng chung header `Authorization: Device $TOKEN`. `$BASE` = domain của bạn.
+
+### Thư mục (folders)
+```bash
+curl -s -X PUT  "$BASE/v1/folders/rename" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"FOLDER_ID","name":"Tên mới"}'
+curl -s -X PUT  "$BASE/v1/folders/move"   -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"FOLDER_ID","new_parent_id":"DEST_ID"}'
+curl -s -X PUT  "$BASE/v1/folders/star"   -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"FOLDER_ID","starred":true}'
+curl -s -X POST "$BASE/v1/folders/trash"  -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"FOLDER_ID"}'
+curl -s -X POST "$BASE/v1/folders/restore" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"FOLDER_ID"}'
+curl -s -L "$BASE/v1/folders/zip?id=FOLDER_ID" -H "Authorization: Device $TOKEN" -o folder.zip
+curl -s -X DELETE "$BASE/v1/folders?id=FOLDER_ID" -H "Authorization: Device $TOKEN"   # xóa hẳn
+```
+
+### File (bổ sung)
+```bash
+curl -s -X PUT  "$BASE/v1/files/star"    -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"FILE_ID","starred":true}'
+curl -s -X POST "$BASE/v1/files/restore" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"FILE_ID"}'
+curl -s -X DELETE "$BASE/v1/files?id=FILE_ID" -H "Authorization: Device $TOKEN"        # xóa hẳn
+curl -s "$BASE/v1/files/thumbnail?id=FILE_ID" -H "Authorization: Device $TOKEN" -o thumb.jpg
+curl -s "$BASE/v1/starred" -H "Authorization: Device $TOKEN"
+curl -s "$BASE/v1/trash"   -H "Authorization: Device $TOKEN"
+curl -s -X POST "$BASE/v1/bundle/zip" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"file_ids":["FILE_ID"],"folder_ids":["FOLDER_ID"]}' -o bundle.zip
+```
+
+### Chia sẻ (bổ sung)
+```bash
+curl -s -X PUT    "$BASE/v1/shares" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"SHARE_ID","revoked":true}'
+curl -s -X DELETE "$BASE/v1/shares?id=SHARE_ID" -H "Authorization: Device $TOKEN"
+curl -s "$BASE/v1/share/config" -H "Authorization: Device $TOKEN"
+```
+
+### Storage (kênh Telegram)
+```bash
+curl -s "$BASE/v1/storage" -H "Authorization: Device $TOKEN"
+curl -s -X POST "$BASE/v1/storage/channel" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"title":"Kho lưu trữ"}'
+```
+
+### Đồng bộ thư mục desktop (sync roots)
+```bash
+curl -s "$BASE/v1/sync/roots" -H "Authorization: Device $TOKEN"
+curl -s -X POST "$BASE/v1/sync/roots" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"local_path":"/duong-dan","mode":"upload_only"}'
+curl -s -X POST "$BASE/v1/sync/roots/scan" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"ROOT_ID"}'
+```
+
+### Hệ thống & theo dõi
+```bash
+curl -s "$BASE/v1/transfers" -H "Authorization: Device $TOKEN"   # tiến trình upload/sync
+curl -s "$BASE/v1/audit?limit=50" -H "Authorization: Device $TOKEN"
+curl -s "$BASE/v1/cache" -H "Authorization: Device $TOKEN"
+curl -s -X POST "$BASE/v1/cache/cleanup" -H "Authorization: Device $TOKEN"
+curl -s -N "$BASE/v1/events" -H "Authorization: Device $TOKEN"   # SSE realtime (file.created, transfer.updated…)
+```
+
 ## Mã lỗi thường gặp
 
 | HTTP | Ý nghĩa |
