@@ -1,162 +1,129 @@
 # REST API — Ổ Đĩa Cloud Ảo (Telegram Drive)
 
-API để tự động hóa (N8N, script, tích hợp khác). Mọi endpoint chạy trên chính domain bạn đã cấu hình, vd `https://drive.cuaban.com`.
+Toàn bộ chức năng drive đều có REST API, dùng được từ N8N, script, hoặc app khác. Tài liệu này tóm tắt cách xác thực + các endpoint thường dùng kèm ví dụ cURL.
 
-> Tạo & quản lý token trong PWA: vào mục **API** ở menu trái. Trang đó còn có lệnh cURL **copy-ready** theo đúng domain của bạn.
+> Base URL = domain bạn deploy, ví dụ `https://drive.tencuaban.com`. Trong PWA, mở mục **API** để lấy lệnh cURL đã điền sẵn đúng domain + token (copy là chạy).
 
-## Xác thực
+## 1. Xác thực
 
-Dùng header (auth máy-máy, không cần cookie):
+API dùng **token máy-máy** qua header:
 
 ```
 Authorization: Device <token>
 ```
 
-Token tạo trong PWA → mục **API** → *Tạo token*. Token chỉ hiện **một lần**, hãy lưu lại. Có thể thu hồi bất cứ lúc nào.
+Lấy token: mở PWA → **API** → **Tạo token** (token chỉ hiện 1 lần, hãy lưu lại). Token có thể **thu hồi** bất cứ lúc nào trong cùng trang.
 
-> ⚠️ Token có **toàn quyền** với dữ liệu tài khoản — giữ kín. Ghi/đọc tần suất cao có thể bị Telegram giới hạn (FLOOD_WAIT). File lớn nên upload qua tus `/v1/tus/`.
+> ⚠️ Token = toàn quyền tài khoản của bạn. Giữ kín. Không commit vào code/repo.
 
-## Dùng với N8N
+Endpoint công khai không cần token: `GET /health`, trang `/share/{slug}`.
 
-1. Node **HTTP Request**.
-2. Authentication → **Generic Credential Type** → **Header Auth**.
-3. Name `Authorization`, Value `Device <token>`.
-4. URL = `https://drive.cuaban.com` + đường dẫn endpoint.
+## 2. Dùng với N8N
 
-## Endpoint thông dụng
+1. Thêm node **HTTP Request**.
+2. **Authentication → Generic Credential → Header Auth**.
+3. **Name:** `Authorization` — **Value:** `Device <token>`.
+4. **URL:** `https://drive.tencuaban.com` + đường dẫn endpoint.
 
-Đặt `BASE=https://drive.cuaban.com` và `TOKEN=...` cho gọn.
+## 3. Endpoint thường dùng
 
-### Cơ bản
+Đặt biến cho gọn:
 ```bash
-# Thống kê tệp/thư mục/dung lượng
-curl -s "$BASE/v1/stats" -H "Authorization: Device $TOKEN"
-
-# Thông tin agent
-curl -s "$BASE/v1/info" -H "Authorization: Device $TOKEN"
+BASE="https://drive.tencuaban.com"
+TOKEN="dán-token-của-bạn"
+AUTH="-H \"Authorization: Device $TOKEN\""
 ```
 
-### File & thư mục
+### Thông tin & thống kê
 ```bash
-# Liệt kê nội dung thư mục (folder_id rỗng = gốc)
-curl -s "$BASE/v1/drive/contents?folder_id=" -H "Authorization: Device $TOKEN"
+curl $BASE/health
+curl -H "Authorization: Device $TOKEN" $BASE/v1/stats
+curl -H "Authorization: Device $TOKEN" $BASE/v1/transfers
+```
 
-# Liệt kê file
-curl -s "$BASE/v1/files" -H "Authorization: Device $TOKEN"
+### Duyệt file & thư mục
+```bash
+# Nội dung thư mục (folder_id rỗng = gốc)
+curl -H "Authorization: Device $TOKEN" "$BASE/v1/drive/contents?folder_id="
+
+# Liệt kê file (phân trang/lọc/sắp xếp)
+curl -H "Authorization: Device $TOKEN" "$BASE/v1/files?page=1&limit=50"
 
 # Tìm kiếm
-curl -s "$BASE/v1/search?q=hop-dong" -H "Authorization: Device $TOKEN"
+curl -H "Authorization: Device $TOKEN" "$BASE/v1/search?q=hop-dong"
 
 # Tạo thư mục
-curl -s -X POST "$BASE/v1/folders" -H "Authorization: Device $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Thư mục mới","parent_id":""}'
+curl -X POST -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"Thư mục mới","parent_id":""}' \
+  $BASE/v1/folders
 ```
 
-### Upload / Download
+### Tải lên & tải xuống
 ```bash
-# Upload (multipart, field "file")
-curl -s -X POST "$BASE/v1/files/upload" -H "Authorization: Device $TOKEN" \
-  -F "file=@/duong-dan/file.pdf" -F "folder_id="
+# Upload (multipart). folder_id rỗng = gốc; relative_path để giữ cây thư mục
+curl -X POST -H "Authorization: Device $TOKEN" \
+  -F "file=@/duong-dan/file.pdf" \
+  -F "folder_id=" \
+  $BASE/v1/files/upload
 
-# Download theo id
-curl -s -L "$BASE/v1/files/download?id=FILE_ID" -H "Authorization: Device $TOKEN" -o file.bin
+# Tải về theo id
+curl -H "Authorization: Device $TOKEN" -OJ "$BASE/v1/files/download?id=<FILE_ID>"
 
-# Stream (hỗ trợ Range)
-curl -s "$BASE/v1/files/stream?id=FILE_ID" -H "Authorization: Device $TOKEN" -o stream.bin
+# Stream (hỗ trợ Range — tua video)
+curl -H "Authorization: Device $TOKEN" "$BASE/v1/files/stream?id=<FILE_ID>"
 ```
 
-> File lớn: dùng giao thức **tus** tại `/v1/tus/` (chunk + resume) thay cho `/v1/files/upload`.
+> **File lớn:** nên dùng giao thức **tus** ở `/v1/tus/` (chunk + resume) thay vì multipart, để không vướng giới hạn reverse proxy. N8N có thể gọi tus qua HTTP Request nhiều bước, hoặc upload multipart cho file nhỏ/vừa.
 
 ### Thao tác file
 ```bash
 # Đổi tên
-curl -s -X PUT "$BASE/v1/files/rename" -H "Authorization: Device $TOKEN" \
-  -H "Content-Type: application/json" -d '{"id":"FILE_ID","name":"ten-moi.pdf"}'
+curl -X PUT -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" \
+  -d '{"id":"<FILE_ID>","name":"ten-moi.pdf"}' $BASE/v1/files/rename
 
 # Di chuyển
-curl -s -X PUT "$BASE/v1/files/move" -H "Authorization: Device $TOKEN" \
-  -H "Content-Type: application/json" -d '{"id":"FILE_ID","new_parent_id":"FOLDER_ID"}'
+curl -X PUT -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" \
+  -d '{"id":"<FILE_ID>","new_parent_id":"<FOLDER_ID>"}' $BASE/v1/files/move
+
+# Đánh dấu sao
+curl -X PUT -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" \
+  -d '{"id":"<FILE_ID>","starred":true}' $BASE/v1/files/star
 
 # Vào thùng rác
-curl -s -X POST "$BASE/v1/files/trash" -H "Authorization: Device $TOKEN" \
-  -H "Content-Type: application/json" -d '{"id":"FILE_ID"}'
+curl -X POST -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" \
+  -d '{"id":"<FILE_ID>"}' $BASE/v1/files/trash
 ```
 
-### Chia sẻ
+### Chia sẻ link
 ```bash
-# Tạo link chia sẻ file
-curl -s -X POST "$BASE/v1/shares" -H "Authorization: Device $TOKEN" \
-  -H "Content-Type: application/json" -d '{"target_kind":"file","target_id":"FILE_ID"}'
+# Liệt kê link của 1 file
+curl -H "Authorization: Device $TOKEN" "$BASE/v1/shares?target_kind=file&target_id=<FILE_ID>"
 
-# Liệt kê link
-curl -s "$BASE/v1/shares" -H "Authorization: Device $TOKEN"
+# Tạo link (mật khẩu/hết hạn/giới hạn tùy chọn; 0 = không giới hạn)
+curl -X POST -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" \
+  -d '{"target_kind":"file","target_id":"<FILE_ID>","password":"","expires_in":0,"max_downloads":0}' \
+  $BASE/v1/shares
+
+# Xóa link
+curl -X DELETE -H "Authorization: Device $TOKEN" "$BASE/v1/shares?id=<SHARE_ID>"
 ```
 
-## Tham khảo thêm
+## 4. Quản lý token (qua API)
 
-Toàn bộ endpoint khác (folders rename/move/star/trash/restore, shares update/delete, storage, audit, transfers, events SSE…) đều theo cùng quy ước và cùng header auth. Mở mục **API** trong PWA để xem danh sách + cURL sinh theo domain của bạn.
-
-## Endpoint đầy đủ theo nhóm
-
-> Tất cả dùng chung header `Authorization: Device $TOKEN`. `$BASE` = domain của bạn.
-
-### Thư mục (folders)
 ```bash
-curl -s -X PUT  "$BASE/v1/folders/rename" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"FOLDER_ID","name":"Tên mới"}'
-curl -s -X PUT  "$BASE/v1/folders/move"   -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"FOLDER_ID","new_parent_id":"DEST_ID"}'
-curl -s -X PUT  "$BASE/v1/folders/star"   -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"FOLDER_ID","starred":true}'
-curl -s -X POST "$BASE/v1/folders/trash"  -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"FOLDER_ID"}'
-curl -s -X POST "$BASE/v1/folders/restore" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"FOLDER_ID"}'
-curl -s -L "$BASE/v1/folders/zip?id=FOLDER_ID" -H "Authorization: Device $TOKEN" -o folder.zip
-curl -s -X DELETE "$BASE/v1/folders?id=FOLDER_ID" -H "Authorization: Device $TOKEN"   # xóa hẳn
+# Tạo token mới (cần phiên PWA — thường tạo trong giao diện)
+curl -X POST -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"n8n"}' $BASE/v1/api-tokens
+
+# Liệt kê token
+curl -H "Authorization: Device $TOKEN" $BASE/v1/api-tokens
+
+# Thu hồi
+curl -X DELETE -H "Authorization: Device $TOKEN" "$BASE/v1/api-tokens?id=<TOKEN_ID>"
 ```
 
-### File (bổ sung)
-```bash
-curl -s -X PUT  "$BASE/v1/files/star"    -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"FILE_ID","starred":true}'
-curl -s -X POST "$BASE/v1/files/restore" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"FILE_ID"}'
-curl -s -X DELETE "$BASE/v1/files?id=FILE_ID" -H "Authorization: Device $TOKEN"        # xóa hẳn
-curl -s "$BASE/v1/files/thumbnail?id=FILE_ID" -H "Authorization: Device $TOKEN" -o thumb.jpg
-curl -s "$BASE/v1/starred" -H "Authorization: Device $TOKEN"
-curl -s "$BASE/v1/trash"   -H "Authorization: Device $TOKEN"
-curl -s -X POST "$BASE/v1/bundle/zip" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"file_ids":["FILE_ID"],"folder_ids":["FOLDER_ID"]}' -o bundle.zip
-```
+## 5. Lưu ý
 
-### Chia sẻ (bổ sung)
-```bash
-curl -s -X PUT    "$BASE/v1/shares" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"SHARE_ID","revoked":true}'
-curl -s -X DELETE "$BASE/v1/shares?id=SHARE_ID" -H "Authorization: Device $TOKEN"
-curl -s "$BASE/v1/share/config" -H "Authorization: Device $TOKEN"
-```
-
-### Storage (kênh Telegram)
-```bash
-curl -s "$BASE/v1/storage" -H "Authorization: Device $TOKEN"
-curl -s -X POST "$BASE/v1/storage/channel" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"title":"Kho lưu trữ"}'
-```
-
-### Đồng bộ thư mục desktop (sync roots)
-```bash
-curl -s "$BASE/v1/sync/roots" -H "Authorization: Device $TOKEN"
-curl -s -X POST "$BASE/v1/sync/roots" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"local_path":"/duong-dan","mode":"upload_only"}'
-curl -s -X POST "$BASE/v1/sync/roots/scan" -H "Authorization: Device $TOKEN" -H "Content-Type: application/json" -d '{"id":"ROOT_ID"}'
-```
-
-### Hệ thống & theo dõi
-```bash
-curl -s "$BASE/v1/transfers" -H "Authorization: Device $TOKEN"   # tiến trình upload/sync
-curl -s "$BASE/v1/audit?limit=50" -H "Authorization: Device $TOKEN"
-curl -s "$BASE/v1/cache" -H "Authorization: Device $TOKEN"
-curl -s -X POST "$BASE/v1/cache/cleanup" -H "Authorization: Device $TOKEN"
-curl -s -N "$BASE/v1/events" -H "Authorization: Device $TOKEN"   # SSE realtime (file.created, transfer.updated…)
-```
-
-## Mã lỗi thường gặp
-
-| HTTP | Ý nghĩa |
-|------|---------|
-| 401 | Thiếu/sai token (`Authorization: Device <token>`) |
-| 403 | Không đủ quyền / vượt giới hạn (vd share hết lượt) |
-| 404 | Không tìm thấy tài nguyên |
-| 429 | Quá nhiều yêu cầu (rate limit) |
+- Mọi dữ liệu được phân tách theo người dùng — token chỉ thấy file của chủ token.
+- **Rate-limit Telegram:** ghi (upload) nhiều/nhanh có thể bị FLOOD_WAIT. Phù hợp tự động hóa vừa phải, không nên dùng làm storage ghi nặng.
+- Response là JSON (trừ download/stream trả nội dung file). Lỗi trả `{"error":"..."}` kèm HTTP status tương ứng.

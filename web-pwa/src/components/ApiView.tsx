@@ -1,199 +1,179 @@
 import { Copy, KeyRound, Plus, RefreshCw, Trash2 } from "../icons";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiToken, createApiToken, listApiTokens, revokeApiToken } from "../api/agent";
-import { useToast } from "../state/ui";
+import { useConfirm, useToast } from "../state/ui";
+
+// The base URL the user should call. In the browser this is the same origin the
+// PWA is served from (the user's domain), so every curl example is copy-ready.
+const BASE = typeof window !== "undefined" ? window.location.origin : "";
 
 type Endpoint = {
-  group: string;
   method: string;
   path: string;
   desc: string;
-  // builds the curl command body (after the auth header)
-  curl: (base: string, token: string) => string;
+  curl: (token: string) => string;
 };
 
-const TOKEN_PLACEHOLDER = "<TOKEN>";
+const TOKEN_PH = "<TOKEN>";
 
-const ENDPOINTS: Endpoint[] = [
-  { group: "Cơ bản", method: "GET", path: "/v1/stats", desc: "Số liệu tệp/thư mục/dung lượng", curl: (b, t) => `curl -s "${b}/v1/stats" -H "Authorization: Device ${t}"` },
-  { group: "Cơ bản", method: "GET", path: "/v1/info", desc: "Thông tin agent (version, uptime)", curl: (b, t) => `curl -s "${b}/v1/info" -H "Authorization: Device ${t}"` },
-  { group: "File & thư mục", method: "GET", path: "/v1/drive/contents", desc: "Liệt kê nội dung thư mục (folder_id rỗng = gốc)", curl: (b, t) => `curl -s "${b}/v1/drive/contents?folder_id=" -H "Authorization: Device ${t}"` },
-  { group: "File & thư mục", method: "GET", path: "/v1/files", desc: "Liệt kê file", curl: (b, t) => `curl -s "${b}/v1/files" -H "Authorization: Device ${t}"` },
-  { group: "File & thư mục", method: "GET", path: "/v1/search", desc: "Tìm file/thư mục theo tên", curl: (b, t) => `curl -s "${b}/v1/search?q=hop-dong" -H "Authorization: Device ${t}"` },
-  { group: "File & thư mục", method: "POST", path: "/v1/folders", desc: "Tạo thư mục", curl: (b, t) => `curl -s -X POST "${b}/v1/folders" -H "Authorization: Device ${t}" -H "Content-Type: application/json" -d '{"name":"Thư mục mới","parent_id":""}'` },
-  { group: "Upload", method: "POST", path: "/v1/files/upload", desc: "Tải file lên (multipart, field: file)", curl: (b, t) => `curl -s -X POST "${b}/v1/files/upload" -H "Authorization: Device ${t}" -F "file=@/duong-dan/file.pdf" -F "folder_id="` },
-  { group: "Download", method: "GET", path: "/v1/files/download", desc: "Tải file về theo id", curl: (b, t) => `curl -s -L "${b}/v1/files/download?id=FILE_ID" -H "Authorization: Device ${t}" -o file.bin` },
-  { group: "Download", method: "GET", path: "/v1/files/stream", desc: "Stream file (hỗ trợ Range)", curl: (b, t) => `curl -s "${b}/v1/files/stream?id=FILE_ID" -H "Authorization: Device ${t}" -o stream.bin` },
-  { group: "Thao tác", method: "PUT", path: "/v1/files/rename", desc: "Đổi tên file", curl: (b, t) => `curl -s -X PUT "${b}/v1/files/rename" -H "Authorization: Device ${t}" -H "Content-Type: application/json" -d '{"id":"FILE_ID","name":"ten-moi.pdf"}'` },
-  { group: "Thao tác", method: "PUT", path: "/v1/files/move", desc: "Di chuyển file sang thư mục khác", curl: (b, t) => `curl -s -X PUT "${b}/v1/files/move" -H "Authorization: Device ${t}" -H "Content-Type: application/json" -d '{"id":"FILE_ID","new_parent_id":"FOLDER_ID"}'` },
-  { group: "Thao tác", method: "POST", path: "/v1/files/trash", desc: "Đưa file vào thùng rác", curl: (b, t) => `curl -s -X POST "${b}/v1/files/trash" -H "Authorization: Device ${t}" -H "Content-Type: application/json" -d '{"id":"FILE_ID"}'` },
-  { group: "Chia sẻ", method: "POST", path: "/v1/shares", desc: "Tạo link chia sẻ", curl: (b, t) => `curl -s -X POST "${b}/v1/shares" -H "Authorization: Device ${t}" -H "Content-Type: application/json" -d '{"target_kind":"file","target_id":"FILE_ID"}'` },
-  { group: "Chia sẻ", method: "GET", path: "/v1/shares", desc: "Liệt kê link chia sẻ", curl: (b, t) => `curl -s "${b}/v1/shares" -H "Authorization: Device ${t}"` },
+function auth(token: string) {
+  const t = token || TOKEN_PH;
+  return `-H "Authorization: Device ${t}"`;
+}
+
+const GROUPS: { title: string; items: Endpoint[] }[] = [
+  {
+    title: "Thông tin & thống kê",
+    items: [
+      { method: "GET", path: "/health", desc: "Kiểm tra agent sống (không cần token).", curl: () => `curl ${BASE}/health` },
+      { method: "GET", path: "/v1/stats", desc: "Số tệp, thư mục, tổng dung lượng.", curl: (t) => `curl ${auth(t)} ${BASE}/v1/stats` },
+      { method: "GET", path: "/v1/transfers", desc: "Danh sách tác vụ đồng bộ Telegram.", curl: (t) => `curl ${auth(t)} ${BASE}/v1/transfers` },
+    ],
+  },
+  {
+    title: "Duyệt file & thư mục",
+    items: [
+      { method: "GET", path: "/v1/drive/contents", desc: "Nội dung 1 thư mục. ?folder_id= rỗng = gốc.", curl: (t) => `curl ${auth(t)} "${BASE}/v1/drive/contents?folder_id="` },
+      { method: "GET", path: "/v1/files", desc: "Liệt kê file (phân trang, lọc, sắp xếp).", curl: (t) => `curl ${auth(t)} "${BASE}/v1/files?page=1&limit=50"` },
+      { method: "GET", path: "/v1/search", desc: "Tìm file/thư mục theo tên.", curl: (t) => `curl ${auth(t)} "${BASE}/v1/search?q=hop-dong"` },
+      { method: "GET", path: "/v1/starred", desc: "Các mục đã đánh dấu sao.", curl: (t) => `curl ${auth(t)} ${BASE}/v1/starred` },
+      { method: "POST", path: "/v1/folders", desc: "Tạo thư mục mới.", curl: (t) => `curl -X POST ${auth(t)} -H "Content-Type: application/json" \\\n  -d '{"name":"Thư mục mới","parent_id":""}' \\\n  ${BASE}/v1/folders` },
+    ],
+  },
+  {
+    title: "Tải lên & tải xuống",
+    items: [
+      { method: "POST", path: "/v1/files/upload", desc: "Upload file (multipart). folder_id rỗng = gốc.", curl: (t) => `curl -X POST ${auth(t)} \\\n  -F "file=@/duong-dan/file.pdf" \\\n  -F "folder_id=" \\\n  ${BASE}/v1/files/upload` },
+      { method: "GET", path: "/v1/files/download", desc: "Tải file về theo id.", curl: (t) => `curl ${auth(t)} -OJ "${BASE}/v1/files/download?id=<FILE_ID>"` },
+      { method: "GET", path: "/v1/files/stream", desc: "Stream file (hỗ trợ Range, tua video).", curl: (t) => `curl ${auth(t)} "${BASE}/v1/files/stream?id=<FILE_ID>"` },
+      { method: "GET", path: "/v1/files/thumbnail", desc: "Ảnh thu nhỏ theo id.", curl: (t) => `curl ${auth(t)} -o thumb.jpg "${BASE}/v1/files/thumbnail?id=<FILE_ID>"` },
+    ],
+  },
+  {
+    title: "Thao tác file",
+    items: [
+      { method: "PUT", path: "/v1/files/rename", desc: "Đổi tên file.", curl: (t) => `curl -X PUT ${auth(t)} -H "Content-Type: application/json" \\\n  -d '{"id":"<FILE_ID>","name":"ten-moi.pdf"}' \\\n  ${BASE}/v1/files/rename` },
+      { method: "PUT", path: "/v1/files/move", desc: "Di chuyển file sang thư mục khác.", curl: (t) => `curl -X PUT ${auth(t)} -H "Content-Type: application/json" \\\n  -d '{"id":"<FILE_ID>","new_parent_id":"<FOLDER_ID>"}' \\\n  ${BASE}/v1/files/move` },
+      { method: "PUT", path: "/v1/files/star", desc: "Đánh dấu sao / bỏ sao.", curl: (t) => `curl -X PUT ${auth(t)} -H "Content-Type: application/json" \\\n  -d '{"id":"<FILE_ID>","starred":true}' \\\n  ${BASE}/v1/files/star` },
+      { method: "POST", path: "/v1/files/trash", desc: "Đưa file vào thùng rác.", curl: (t) => `curl -X POST ${auth(t)} -H "Content-Type: application/json" \\\n  -d '{"id":"<FILE_ID>"}' \\\n  ${BASE}/v1/files/trash` },
+    ],
+  },
+  {
+    title: "Chia sẻ link",
+    items: [
+      { method: "GET", path: "/v1/shares", desc: "Liệt kê link chia sẻ.", curl: (t) => `curl ${auth(t)} "${BASE}/v1/shares?target_kind=file&target_id=<FILE_ID>"` },
+      { method: "POST", path: "/v1/shares", desc: "Tạo link (mật khẩu/hết hạn/giới hạn tùy chọn).", curl: (t) => `curl -X POST ${auth(t)} -H "Content-Type: application/json" \\\n  -d '{"target_kind":"file","target_id":"<FILE_ID>","password":"","expires_in":0,"max_downloads":0}' \\\n  ${BASE}/v1/shares` },
+      { method: "DELETE", path: "/v1/shares", desc: "Xóa link chia sẻ.", curl: (t) => `curl -X DELETE ${auth(t)} "${BASE}/v1/shares?id=<SHARE_ID>"` },
+    ],
+  },
 ];
 
 export function ApiView() {
-  const toast = useToast();
   const [tokens, setTokens] = useState<ApiToken[]>([]);
+  const [newName, setNewName] = useState("n8n");
+  const [created, setCreated] = useState<string | null>(null);
+  const [active, setActive] = useState(""); // token typed/created, used to fill curl
   const [loading, setLoading] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [freshToken, setFreshToken] = useState<string | null>(null);
-  // The token typed/pasted to render runnable curl. Defaults to the freshly
-  // created token; stays client-side only.
-  const [activeToken, setActiveToken] = useState("");
-
-  const base = window.location.origin;
-  const effectiveToken = activeToken.trim() || TOKEN_PLACEHOLDER;
+  const toast = useToast();
+  const confirm = useConfirm();
 
   async function refresh() {
-    setLoading(true);
-    try {
-      setTokens((await listApiTokens()).tokens);
-    } catch (err) {
-      toast(err instanceof Error ? err.message : String(err), "error");
-    } finally {
-      setLoading(false);
-    }
+    try { setTokens((await listApiTokens()).tokens); } catch { /* ignore */ }
   }
-
   useEffect(() => { refresh(); }, []);
 
-  async function handleCreate() {
-    setCreating(true);
+  async function create() {
+    setLoading(true);
     try {
-      const res = await createApiToken(newName.trim() || "n8n");
-      setFreshToken(res.token);
-      setActiveToken(res.token);
-      setNewName("");
-      toast("Đã tạo token. Hãy sao chép & lưu lại — chỉ hiện 1 lần!", "success");
-      refresh();
+      const res = await createApiToken(newName || "API token");
+      setCreated(res.token);
+      setActive(res.token);
+      await refresh();
+      toast("Đã tạo token. Hãy sao chép ngay, token chỉ hiện 1 lần!", "success");
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err), "error");
-    } finally {
-      setCreating(false);
-    }
+    } finally { setLoading(false); }
   }
 
-  async function handleRevoke(id: string, name: string) {
-    if (!window.confirm(`Thu hồi token "${name}"? Mọi nơi đang dùng token này sẽ mất quyền.`)) return;
-    try {
-      await revokeApiToken(id);
-      toast("Đã thu hồi token", "success");
-      refresh();
-    } catch (err) {
-      toast(err instanceof Error ? err.message : String(err), "error");
-    }
+  async function revoke(id: string) {
+    const ok = await confirm({ title: "Thu hồi token", message: "Token này sẽ ngừng hoạt động ngay. Tiếp tục?", tone: "error" });
+    if (!ok) return;
+    try { await revokeApiToken(id); await refresh(); toast("Đã thu hồi token", "success"); }
+    catch (err) { toast(err instanceof Error ? err.message : String(err), "error"); }
   }
 
-  async function copy(text: string, label = "Đã sao chép") {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast(label, "success");
-    } catch {
-      window.prompt("Sao chép:", text);
-    }
+  function copy(text: string, label = "Đã sao chép") {
+    navigator.clipboard.writeText(text).then(() => toast(label, "success")).catch(() => window.prompt("Sao chép:", text));
   }
-
-  const grouped = useMemo(() => {
-    const map = new Map<string, Endpoint[]>();
-    for (const e of ENDPOINTS) {
-      if (!map.has(e.group)) map.set(e.group, []);
-      map.get(e.group)!.push(e);
-    }
-    return [...map.entries()];
-  }, []);
 
   return (
     <section className="api-view">
       <header className="api-view__header">
         <div>
-          <h2><KeyRound size={20} /> API & Automation</h2>
-          <p>REST API cho N8N, script, hay tích hợp khác. Xác thực bằng header <code>Authorization: Device &lt;token&gt;</code>.</p>
+          <h2>API & Tích hợp (N8N)</h2>
+          <p>Tạo token để gọi REST API từ N8N, script hay app khác. Mọi lệnh dưới đây dùng đúng domain: <code>{BASE}</code></p>
         </div>
+        <button className="button button--ghost" onClick={refresh}><RefreshCw size={15} /> Làm mới</button>
       </header>
 
-      <div className="api-base">
-        <span>Base URL</span>
-        <code>{base}</code>
-        <button className="icon-button" title="Sao chép" onClick={() => copy(base)}><Copy size={15} /></button>
-      </div>
-
-      {/* Token management */}
       <div className="api-card">
-        <div className="api-card__head">
-          <strong>Token truy cập</strong>
-          <button className="icon-button" title="Làm mới" onClick={refresh} disabled={loading}><RefreshCw size={15} /></button>
-        </div>
-        <div className="api-create">
+        <h3><KeyRound size={16} /> Token truy cập</h3>
+        <div className="api-token-create">
           <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Tên token (vd: n8n)" />
-          <button className="button button--primary" onClick={handleCreate} disabled={creating}><Plus size={15} /> {creating ? "Đang tạo..." : "Tạo token"}</button>
+          <button className="button button--primary" onClick={create} disabled={loading}><Plus size={15} /> Tạo token</button>
         </div>
-        {freshToken && (
-          <div className="api-fresh">
-            <span>⚠️ Token chỉ hiện 1 lần. Hãy sao chép & lưu lại an toàn:</span>
-            <div className="api-fresh__token">
-              <code>{freshToken}</code>
-              <button className="icon-button" title="Sao chép" onClick={() => copy(freshToken, "Đã sao chép token")}><Copy size={15} /></button>
-            </div>
+        {created && (
+          <div className="api-token-new">
+            <span>Token mới (chỉ hiện 1 lần):</span>
+            <code>{created}</code>
+            <button className="icon-button" onClick={() => copy(created, "Đã sao chép token")} aria-label="Sao chép"><Copy size={15} /></button>
           </div>
         )}
-        {tokens.length === 0 ? (
-          <div className="muted-box">Chưa có token nào. Tạo một cái để dùng cho N8N/script.</div>
-        ) : (
+        {tokens.length > 0 && (
           <ul className="api-token-list">
             {tokens.map((t) => (
               <li key={t.id}>
                 <div><strong>{t.name}</strong><span>Tạo {new Date(t.created_at * 1000).toLocaleString("vi-VN")}</span></div>
-                <button className="button button--ghost" onClick={() => handleRevoke(t.id, t.name)}><Trash2 size={14} /> Thu hồi</button>
+                <button className="button button--ghost" onClick={() => revoke(t.id)}><Trash2 size={14} /> Thu hồi</button>
               </li>
             ))}
           </ul>
         )}
+        <p className="api-hint">⚠️ Token = chìa khóa toàn quyền tài khoản của bạn. Giữ kín, chỉ dán vào nơi tin cậy, có thể thu hồi bất cứ lúc nào.</p>
       </div>
 
-      {/* N8N guide */}
       <div className="api-card">
-        <strong>Dùng với N8N</strong>
+        <h3>Dùng với N8N</h3>
         <ol className="api-n8n">
-          <li>Thêm node <b>HTTP Request</b>.</li>
-          <li>Authentication → <b>Generic Credential Type</b> → <b>Header Auth</b>.</li>
-          <li>Name: <code>Authorization</code> — Value: <code>Device &lt;token&gt;</code> (dán token ở trên).</li>
-          <li>URL: ghép từ Base URL + endpoint bên dưới. Xong!</li>
+          <li>Thêm node <strong>HTTP Request</strong>.</li>
+          <li>Authentication → <strong>Generic Credential → Header Auth</strong>.</li>
+          <li>Name: <code>Authorization</code> — Value: <code>Device &lt;token&gt;</code></li>
+          <li>URL: ghép <code>{BASE}</code> + đường dẫn endpoint bên dưới.</li>
         </ol>
+        <div className="api-fill">
+          <label>Dán token để các lệnh cURL hiện sẵn token:</label>
+          <input value={active} onChange={(e) => setActive(e.target.value)} placeholder="Dán token vào đây (không lưu lên server)" />
+        </div>
       </div>
 
-      {/* Endpoint catalog with copy-ready curl */}
-      <div className="api-card">
-        <div className="api-card__head">
-          <strong>Danh sách endpoint (cURL ăn-ngay)</strong>
+      {GROUPS.map((g) => (
+        <div className="api-card" key={g.title}>
+          <h3>{g.title}</h3>
+          {g.items.map((ep) => (
+            <div className="api-endpoint" key={ep.method + ep.path}>
+              <div className="api-endpoint__head">
+                <span className={`api-method api-method--${ep.method.toLowerCase()}`}>{ep.method}</span>
+                <code className="api-path">{ep.path}</code>
+              </div>
+              <p className="api-endpoint__desc">{ep.desc}</p>
+              <div className="api-curl">
+                <pre>{ep.curl(active)}</pre>
+                <button className="icon-button" onClick={() => copy(ep.curl(active), "Đã sao chép lệnh cURL")} aria-label="Sao chép cURL"><Copy size={15} /></button>
+              </div>
+            </div>
+          ))}
         </div>
-        <div className="api-token-input">
-          <input value={activeToken} onChange={(e) => setActiveToken(e.target.value)} placeholder="Dán token vào đây để cURL hiển thị token thật (chỉ ở máy bạn)" />
-        </div>
-        {grouped.map(([group, items]) => (
-          <div className="api-group" key={group}>
-            <h3>{group}</h3>
-            {items.map((e) => {
-              const cmd = e.curl(base, effectiveToken);
-              return (
-                <div className="api-endpoint" key={e.method + e.path}>
-                  <div className="api-endpoint__head">
-                    <span className={`api-method api-method--${e.method.toLowerCase()}`}>{e.method}</span>
-                    <code className="api-endpoint__path">{e.path}</code>
-                    <span className="api-endpoint__desc">{e.desc}</span>
-                  </div>
-                  <div className="api-curl">
-                    <pre>{cmd}</pre>
-                    <button className="icon-button" title="Sao chép cURL" onClick={() => copy(cmd, "Đã sao chép lệnh cURL")}><Copy size={15} /></button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-
-      <p className="api-note">⚠️ Token có toàn quyền với dữ liệu tài khoản của bạn — giữ kín, có thể thu hồi bất cứ lúc nào. Ghi/đọc tần suất cao có thể bị Telegram giới hạn (FLOOD_WAIT); file lớn nên dùng tus <code>/v1/tus/</code>.</p>
+      ))}
     </section>
   );
 }

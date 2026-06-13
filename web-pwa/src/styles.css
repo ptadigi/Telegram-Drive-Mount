@@ -839,3 +839,16 @@ a.button { text-decoration: none; }
 @media (max-width: 640px) {
   .api-view { padding: var(--s-2); }
 }
+
+/* API view — extra classes used by ApiView.tsx */
+.api-view__header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+.api-card h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; color: var(--ink-soft); }
+.api-token-create { display: flex; gap: 8px; flex-wrap: wrap; }
+.api-token-create input { flex: 1; min-width: 220px; border: 1px solid var(--line-strong); border-radius: var(--r-md); padding: 9px 12px; background: var(--surface); }
+.api-token-new { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px; border-radius: var(--r-md); background: var(--amber-50, #fffbeb); border: 1px solid var(--amber-200, #fde68a); font-size: 13px; }
+.api-token-new code { flex: 1; min-width: 200px; }
+.api-fill { display: grid; gap: 6px; }
+.api-fill label { font-size: 13px; color: var(--ink-soft); }
+.api-fill input { border: 1px solid var(--line-strong); border-radius: var(--r-md); padding: 9px 12px; background: var(--surface); }
+.api-hint { color: var(--muted); font-size: 12.5px; margin: 0; }
+.api-path { font-weight: 600; }
