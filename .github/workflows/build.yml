@@ -1,10 +1,15 @@
-name: build
+﻿name: build
 
 on:
   push:
     branches: [main]
     tags: ["v*"]
   pull_request:
+
+# Run JavaScript actions on Node 24 now (Node 20 is deprecated on runners from
+# 2026-06-16). This opts in ahead of the forced switch and silences the warning.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   agent:
@@ -24,7 +29,7 @@ jobs:
             target: darwin-arm64
             ext: ""
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with:
           go-version: "1.23"
@@ -50,7 +55,7 @@ jobs:
     name: Build Windows Agent (tray)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with:
           go-version: "1.23"
@@ -73,7 +78,7 @@ jobs:
     env:
       CODE_SIGN_PFX_BASE64: ${{ secrets.CODE_SIGN_PFX_BASE64 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-go@v5
         with:
           go-version: "1.23"
@@ -130,7 +135,7 @@ jobs:
     name: Build PWA
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -176,3 +181,4 @@ jobs:
             artifacts/TelegramDriveSetup/*
             artifacts/web-pwa-dist/**
             release/SHA256SUMS.txt
+
