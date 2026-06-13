@@ -91,6 +91,95 @@ type UploadedObject struct {
 	AccessHash int64
 }
 
+// ChannelFile is one media message discovered when scanning the storage
+// channel's history (used to import files uploaded directly from a native
+// Telegram client into the "Telegram Folder").
+type ChannelFile struct {
+	MessageID int
+	Name      string
+	Size      int64
+	MimeType  string
+}
+
+// ChannelScanner reads the storage channel history. Implemented by
+// telegramstorage; kept as a separate interface so drive doesn't depend on the
+// Telegram client directly.
+type ChannelScanner interface {
+	// ScanChannelHistory returns media messages in the channel with ID greater
+	// than afterMessageID (0 = from the beginning), oldest-first, up to limit.
+	ScanChannelHistory(ctx context.Context, peer StoragePeer, afterMessageID int, limit int) ([]ChannelFile, error)
+}
+
+// ChannelScanWorker periodically imports files uploaded directly from a native
+// Telegram client into the "Telegram Folder". It runs only when a storage
+// channel is configured and exactly one user exists (the Telegram session
+// owner), so imported files are attributed correctly without guessing. First
+// run does a fuller scan; subsequent runs are incremental via the saved cursor.
+func (s *Service) ChannelScanWorker(ctx context.Context, scanner ChannelScanner, interval time.Duration) {
+	if scanner == nil {
+		return
+	}
+	if interval <= 0 {
+		interval = 5 * time.Minute
+	}
+	// Small initial delay so the agent finishes booting / Telegram auth settles.
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(20 * time.Second):
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		s.runChannelScan(ctx, scanner)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (s *Service) runChannelScan(ctx context.Context, scanner ChannelScanner) {
+	uid, ok := s.singleUserID(ctx)
+	if !ok {
+		return // 0 or >1 users: skip auto-import to avoid wrong attribution
+	}
+	scanCtx := WithUser(ctx, uid)
+	settings, err := s.GetStorageSettings(scanCtx)
+	if err != nil || settings.PeerKind != "channel" || settings.ChannelID == 0 {
+		return // no storage channel yet
+	}
+	if n, err := s.ImportChannelFiles(scanCtx, scanner); err != nil {
+		s.LogSyncError("channel_scan_failed", "", 0, err)
+	} else if n > 0 {
+		s.events.Publish("file.created", map[string]any{"imported": n, "source": "telegram_folder"})
+	}
+}
+
+// singleUserID returns the only user's id when the instance has exactly one
+// account (the common self-host case). Returns false otherwise.
+func (s *Service) singleUserID(ctx context.Context) (string, bool) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM users LIMIT 2`)
+	if err != nil {
+		return "", false
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return "", false
+		}
+		ids = append(ids, id)
+	}
+	if len(ids) == 1 {
+		return ids[0], true
+	}
+	return "", false
+}
+
+
 type SyncResult struct {
 	Uploaded int    `json:"uploaded"`
 	Failed   int    `json:"failed"`

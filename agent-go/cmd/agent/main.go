@@ -175,6 +175,9 @@ func main() {
 	go driveService.SyncRootWatcher(ctx)
 	go driveService.CacheWorker(ctx, 30*time.Second)
 	go driveService.BackupWorker(ctx, 6*time.Hour)
+	// Auto-import files uploaded directly from a native Telegram client into the
+	// "Telegram Folder". telegramStorage implements drive.ChannelScanner.
+	go driveService.ChannelScanWorker(ctx, telegramStorage, 5*time.Minute)
 
 	srv := &http.Server{
 		Addr:    cfg.Addr(),

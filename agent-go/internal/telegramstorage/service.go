@@ -478,3 +478,134 @@ func locationFromMessages(messages []tg.MessageClass, messageID int) tg.InputFil
 	}
 	return nil
 }
+
+// ScanChannelHistory reads the storage channel history and returns media
+// messages whose ID is greater than afterMessageID (0 = from the beginning),
+// oldest-first, up to limit. Used to import files uploaded directly from a
+// native Telegram client. Read-only; respects FLOOD_WAIT via the gotd client.
+func (s *Service) ScanChannelHistory(ctx context.Context, peer drive.StoragePeer, afterMessageID int, limit int) ([]drive.ChannelFile, error) {
+	if peer.Kind != "channel" || peer.ChannelID == 0 {
+		return nil, nil // only channel storage supports scanning
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	var out []drive.ChannelFile
+	err := s.runClient(ctx, func(runCtx context.Context, client *telegram.Client) error {
+		status, err := client.Auth().Status(runCtx)
+		if err != nil {
+			return fmt.Errorf("kiểm tra session Telegram: %w", err)
+		}
+		if !status.Authorized {
+			return ErrUnauthorized
+		}
+		api := client.API()
+		inputPeer := &tg.InputPeerChannel{ChannelID: peer.ChannelID, AccessHash: peer.AccessHash}
+		// MinID returns messages with ID strictly greater than afterMessageID.
+		// AddOffset=-limit + OffsetID make Telegram return the *oldest* unseen
+		// page first, so we import in chronological order.
+		resp, err := api.MessagesGetHistory(runCtx, &tg.MessagesGetHistoryRequest{
+			Peer:      inputPeer,
+			OffsetID:  afterMessageID + 1,
+			AddOffset: -limit,
+			Limit:     limit,
+			MinID:     afterMessageID,
+		})
+		if err != nil {
+			return fmt.Errorf("đọc lịch sử channel: %w", err)
+		}
+		out = channelFilesFromHistory(resp, afterMessageID)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func channelFilesFromHistory(resp tg.MessagesMessagesClass, afterMessageID int) []drive.ChannelFile {
+	var msgs []tg.MessageClass
+	switch m := resp.(type) {
+	case *tg.MessagesMessages:
+		msgs = m.Messages
+	case *tg.MessagesMessagesSlice:
+		msgs = m.Messages
+	case *tg.MessagesChannelMessages:
+		msgs = m.Messages
+	default:
+		return nil
+	}
+	var files []drive.ChannelFile
+	for _, raw := range msgs {
+		msg, ok := raw.(*tg.Message)
+		if !ok || msg.ID <= afterMessageID {
+			continue
+		}
+		cf, ok := channelFileFromMessage(msg)
+		if !ok {
+			continue
+		}
+		files = append(files, cf)
+	}
+	// Telegram returns newest-first; import oldest-first for stable ordering.
+	for i, j := 0, len(files)-1; i < j; i, j = i+1, j-1 {
+		files[i], files[j] = files[j], files[i]
+	}
+	return files
+}
+
+// channelFileFromMessage extracts a downloadable media file (document, photo,
+// video, audio…) from a channel message. Documents carry a filename; photos
+// and other media get a generated name.
+func channelFileFromMessage(msg *tg.Message) (drive.ChannelFile, bool) {
+	switch media := msg.Media.(type) {
+	case *tg.MessageMediaDocument:
+		doc, ok := media.Document.AsNotEmpty()
+		if !ok {
+			return drive.ChannelFile{}, false
+		}
+		name := ""
+		for _, attr := range doc.Attributes {
+			if fn, ok := attr.(*tg.DocumentAttributeFilename); ok && fn.FileName != "" {
+				name = fn.FileName
+				break
+			}
+		}
+		if name == "" {
+			name = fmt.Sprintf("telegram-%d%s", msg.ID, extFromMime(doc.MimeType))
+		}
+		return drive.ChannelFile{MessageID: msg.ID, Name: name, Size: doc.Size, MimeType: doc.MimeType}, true
+	case *tg.MessageMediaPhoto:
+		photo, ok := media.Photo.AsNotEmpty()
+		if !ok {
+			return drive.ChannelFile{}, false
+		}
+		var size int64
+		for _, ps := range photo.Sizes {
+			if s, ok := ps.(*tg.PhotoSize); ok && int64(s.Size) > size {
+				size = int64(s.Size)
+			}
+		}
+		return drive.ChannelFile{MessageID: msg.ID, Name: fmt.Sprintf("telegram-photo-%d.jpg", msg.ID), Size: size, MimeType: "image/jpeg"}, true
+	}
+	return drive.ChannelFile{}, false
+}
+
+func extFromMime(mime string) string {
+	switch mime {
+	case "application/pdf":
+		return ".pdf"
+	case "image/jpeg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "video/mp4":
+		return ".mp4"
+	case "audio/mpeg":
+		return ".mp3"
+	case "application/zip":
+		return ".zip"
+	}
+	return ".bin"
+}
+
