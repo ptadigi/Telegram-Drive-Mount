@@ -10,6 +10,11 @@ export type SyncResult = { uploaded: number; failed: number; message: string; };
 export type Transfer = { id: string; file_id: string; kind: string; phase: string; percent: number; bytes_done: number; bytes_total: number; last_error?: string; created_at: number; updated_at: number; };
 export type Share = { id: string; slug: string; target_kind: string; target_id: string; has_password: boolean; expires_at?: number; revoked: boolean; max_downloads: number; access_count: number; last_accessed_at?: number; created_at: number; updated_at: number; };
 export type ShareConfig = { mode: string; domain?: string; base_url?: string; local_base_url: string; port: number; health_ok: boolean; health_message?: string; tunnel_url?: string; tunnel_active?: boolean; updated_at?: number; };
+export type ShareWithTarget = Share & { target_name: string };
+export type ShareAccessEntry = { action: string; ip?: string; user_agent?: string; referer?: string; created_at: number };
+export type ShareAccessStats = { share_id: string; views: number; downloads: number; recent: ShareAccessEntry[] };
+export function listMyShares(signal?: AbortSignal) { return getJSON<{ shares: ShareWithTarget[] }>("/v1/shares", signal); }
+export function getShareAccess(id: string, limit = 50, signal?: AbortSignal) { return getJSON<ShareAccessStats>(`/v1/shares/access?id=${encodeURIComponent(id)}&limit=${limit}`, signal); }
 export type CacheStats = { mode: string; max_bytes: number; used_bytes: number; files: number; };
 export type StorageSettings = { peer_kind: string; channel_id: number; access_hash: number; title?: string; updated_at?: number; };
 export type APIAuthConfig = { mode: string; username: string; has_password: boolean; };

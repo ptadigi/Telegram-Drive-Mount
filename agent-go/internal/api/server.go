@@ -109,6 +109,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/folders/zip", s.handleZipFolder)
 	mux.HandleFunc("POST /v1/bundle/zip", s.handleZipBundle)
 	mux.HandleFunc("GET /v1/shares", s.handleListShares)
+	mux.HandleFunc("GET /v1/shares/access", s.handleShareAccess)
 	mux.HandleFunc("POST /v1/shares", s.handleCreateShare)
 	mux.HandleFunc("PUT /v1/shares", s.handleUpdateShare)
 	mux.HandleFunc("DELETE /v1/shares", s.handleDeleteShare)
@@ -858,12 +859,45 @@ func (s *Server) handleListTrash(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListShares(w http.ResponseWriter, r *http.Request) {
-	shares, err := s.drive.ListShares(r.Context(), r.URL.Query().Get("target_kind"), r.URL.Query().Get("target_id"))
+	kind := r.URL.Query().Get("target_kind")
+	id := r.URL.Query().Get("target_id")
+	// No target filter → return every share owned by the current user, with
+	// the target name attached (used by the "Đã chia sẻ" page).
+	if kind == "" && id == "" {
+		shares, err := s.drive.ListSharesForUser(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"shares": shares})
+		return
+	}
+	shares, err := s.drive.ListShares(r.Context(), kind, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"shares": shares})
+}
+
+func (s *Server) handleShareAccess(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errBadRequest("thiếu id link"))
+		return
+	}
+	limit := 50
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			limit = n
+		}
+	}
+	stats, err := s.drive.GetShareAccess(r.Context(), id, limit)
+	if err != nil {
+		writeError(w, http.StatusForbidden, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
 }
 
 func (s *Server) handleCreateShare(w http.ResponseWriter, r *http.Request) {
@@ -1114,6 +1148,8 @@ func (s *Server) handleSharePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	share := resolved.Share
+	// Track this view (best-effort, async — don't slow the public response).
+	go s.drive.LogShareAccess(share.ID, "view", clientIP(r), r.Header.Get("User-Agent"), r.Header.Get("Referer"))
 	payload := map[string]any{
 		"share": map[string]any{
 			"slug":          share.Slug,
@@ -1174,6 +1210,7 @@ func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, err)
 			return
 		}
+		go s.drive.LogShareAccess(resolved.Share.ID, "download", clientIP(r), r.Header.Get("User-Agent"), r.Header.Get("Referer"))
 		if err := s.drive.StreamFolderShareZip(r.Context(), resolved.Share, w); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 		}
@@ -1193,6 +1230,7 @@ func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, err)
 			return
 		}
+		go s.drive.LogShareAccess(resolved.Share.ID, "download", clientIP(r), r.Header.Get("User-Agent"), r.Header.Get("Referer"))
 	}
 	w.Header().Set("Content-Type", file.MimeType)
 	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))

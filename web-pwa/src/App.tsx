@@ -14,6 +14,7 @@ import { SearchView } from "./components/SearchView";
 import { SettingsView } from "./components/SettingsView";
 import { SetupWizard } from "./components/SetupWizard";
 import { SharePage } from "./components/SharePage";
+import { SharedView } from "./components/SharedView";
 import { StarredView } from "./components/StarredView";
 import { SyncRootsPanel } from "./components/SyncRootsPanel";
 import { TelegramLoginPanel } from "./components/TelegramLoginPanel";
@@ -182,7 +183,7 @@ function DriveApp({ currentUser, onLogout }: { currentUser: AppUser; onLogout: (
         {view === "home" && <HomeView info={info} database={database} auth={auth} agentState={agentState} onOpenDrive={() => setView("drive")} onOpenStarred={() => setView("starred")} onOpenSettings={() => setView("settings")} onOpenComputers={() => setView("computers")} />}
         {view === "drive" && <DriveBrowser uploadQueue={queue} rootLabel={t("drive.myDrive")} description={t("drive.myDriveDesc")} />}
         {view === "computers" && <ComputersView t={t} />}
-        {view === "shared" && <PlaceholderView title={t("drive.shared")} text={t("drive.sharedSoon")} />}
+        {view === "shared" && <SharedView />}
         {view === "starred" && <StarredView />}
         {view === "search" && <SearchView query={searchQuery} />}
         {view === "trash" && <TrashView />}

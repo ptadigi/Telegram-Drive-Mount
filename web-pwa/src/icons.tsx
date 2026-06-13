@@ -64,6 +64,8 @@ import PhCloudArrowUp from "~icons/ph/cloud-arrow-up-duotone";
 import PhWifi from "~icons/ph/wifi-high-duotone";
 import PhX from "~icons/ph/x-duotone";
 import PhXCircle from "~icons/ph/x-circle-duotone";
+import PhChartBar from "~icons/ph/chart-bar-duotone";
+import PhEye from "~icons/ph/eye-duotone";
 import PhZoomIn from "~icons/ph/magnifying-glass-plus-duotone";
 import PhZoomOut from "~icons/ph/magnifying-glass-minus-duotone";
 
@@ -139,7 +141,8 @@ export const X = wrap(PhX);
 export const XCircle = wrap(PhXCircle);
 export const ZoomIn = wrap(PhZoomIn);
 export const ZoomOut = wrap(PhZoomOut);
-
+export const BarChart2 = wrap(PhChartBar);
+export const Eye = wrap(PhEye);
 // ===================== Coloured file-type icons =====================
 // Google-Drive-style: each format gets a distinct duotone glyph + colour.
 import PhFileDoc from "~icons/ph/file-doc-duotone";

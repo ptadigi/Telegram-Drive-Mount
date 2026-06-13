@@ -852,3 +852,31 @@ a.button { text-decoration: none; }
 .api-fill input { border: 1px solid var(--line-strong); border-radius: var(--r-md); padding: 9px 12px; background: var(--surface); }
 .api-hint { color: var(--muted); font-size: 12.5px; margin: 0; }
 .api-path { font-weight: 600; }
+
+/* Shared view — share list + access tracking */
+.shared-view { display: grid; gap: var(--s-4); }
+.shared-view__header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+.shared-view__header h2 { margin: 0 0 4px; font-size: 22px; }
+.shared-view__header p { margin: 0; color: var(--muted); }
+.shared-empty { display: grid; place-items: center; gap: 10px; text-align: center; padding: var(--s-8); }
+.shared-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.shared-item { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--sh-sm); overflow: hidden; }
+.shared-item--revoked { opacity: 0.6; }
+.shared-item__main { display: flex; align-items: center; gap: var(--s-3); padding: 12px 14px; flex-wrap: wrap; }
+.shared-item__info { display: grid; min-width: 0; flex: 1; }
+.shared-item__info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shared-item__meta { color: var(--muted); font-size: 12px; }
+.shared-item__stats { display: flex; gap: 12px; color: var(--ink-soft); font-size: 13px; }
+.shared-item__stats span { display: inline-flex; align-items: center; gap: 4px; }
+.shared-item__actions { display: flex; gap: 4px; }
+.shared-track { border-top: 1px solid var(--line); padding: 12px 14px; background: var(--surface-2); display: grid; gap: 10px; }
+.shared-track__summary { display: flex; gap: 16px; font-weight: 600; color: var(--ink-soft); }
+.shared-track__summary span { display: inline-flex; align-items: center; gap: 6px; }
+.shared-track__table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.shared-track__table th, .shared-track__table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.shared-track__table th { color: var(--muted); font-weight: 600; }
+.shared-track__note { color: var(--muted); font-size: 12px; margin: 0; }
+@media (max-width: 640px) {
+  .shared-item__main { align-items: flex-start; }
+  .shared-track__table { display: block; overflow-x: auto; }
+}
