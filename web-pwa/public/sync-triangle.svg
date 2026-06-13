@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b3a8f"/>
+      <stop offset="55%" stop-color="#0b66ef"/>
+      <stop offset="100%" stop-color="#14b8a6"/>
+    </linearGradient>
+    <linearGradient id="node" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#eaf3ff"/>
+    </linearGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="18" flood-color="#021b40" flood-opacity="0.35"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="6" refY="6" orient="auto">
+      <path d="M1 1 L11 6 L1 11 Z" fill="#ffffff"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="675" fill="url(#bg)"/>
+  <circle cx="1080" cy="90" r="240" fill="#ffffff" opacity="0.05"/>
+  <circle cx="120" cy="620" r="200" fill="#ffffff" opacity="0.04"/>
+
+  <!-- title -->
+  <text x="600" y="86" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="46" font-weight="800" fill="#ffffff">Đồng bộ 3 chiều</text>
+  <text x="600" y="126" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="500" fill="#bfe0ff">Up ở đâu cũng tự thấy ở 2 nơi còn lại</text>
+
+  <!-- triangle edges (double-headed arrows) -->
+  <g stroke="#ffffff" stroke-width="4" opacity="0.85" marker-start="url(#arrow)" marker-end="url(#arrow)">
+    <line x1="600" y1="285" x2="320" y2="500"/>   <!-- top <-> bottom-left -->
+    <line x1="600" y1="285" x2="880" y2="500"/>   <!-- top <-> bottom-right -->
+    <line x1="395" y1="540" x2="805" y2="540"/>   <!-- bottom-left <-> bottom-right -->
+  </g>
+
+  <!-- NODE: Web / PWA (top) -->
+  <g filter="url(#sh)">
+    <rect x="465" y="195" width="270" height="110" rx="22" fill="url(#node)"/>
+  </g>
+  <text x="600" y="245" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700" fill="#0b3a8f">🌐  Web / PWA</text>
+  <text x="600" y="280" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="19" fill="#5b6b86">Trình duyệt &amp; điện thoại</text>
+
+  <!-- NODE: Ổ đĩa T: (bottom-left) -->
+  <g filter="url(#sh)">
+    <rect x="150" y="500" width="290" height="110" rx="22" fill="url(#node)"/>
+  </g>
+  <text x="295" y="550" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700" fill="#0b3a8f">💽  Ổ đĩa T:</text>
+  <text x="295" y="585" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="19" fill="#5b6b86">Mount trên máy tính</text>
+
+  <!-- NODE: Telegram (bottom-right) -->
+  <g filter="url(#sh)">
+    <rect x="760" y="500" width="290" height="110" rx="22" fill="url(#node)"/>
+  </g>
+  <text x="905" y="550" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="30" font-weight="700" fill="#0b3a8f">✈️  Telegram</text>
+  <text x="905" y="585" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="19" fill="#5b6b86">Kho lưu trữ ẩn</text>
+
+  <!-- center brand -->
+  <text x="600" y="430" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" fill="#ffffff" opacity="0.95">Ổ Đĩa Cloud Ảo</text>
+  <text x="600" y="458" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="#cfe6ff" opacity="0.85">mã nguồn mở · tự host</text>
+</svg>

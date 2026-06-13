@@ -16,6 +16,12 @@ Giao diện như Google Drive, mount ổ ảo `T:` trên máy tính, chia sẻ l
 
 <img src="web-pwa/public/og-image.png" alt="Telegram Drive — Ổ Đĩa Cloud Ảo" width="720" />
 
+<br/><br/>
+
+<img src="docs/screenshots/sync-triangle.png" alt="Đồng bộ 3 chiều: Web/PWA · Ổ đĩa T: · Telegram" width="640" />
+
+<sub><b>Đồng bộ 3 chiều</b> — up ở đâu cũng tự thấy ở 2 nơi còn lại: Web/PWA · Ổ đĩa T: · Telegram</sub>
+
 </div>
 
 ```text
