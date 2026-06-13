@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.9.0] - 2026-06-13
+
+### Added
+
+- **REST API + automation tokens (N8N-ready)**: the full drive REST API is now usable from N8N, scripts, or other apps via machine auth `Authorization: Device <token>`.
+  - New `POST/GET/DELETE /v1/api-tokens` to create/list/revoke long-lived automation tokens from the PWA (reuses the device-token system: hashed at rest, revocable).
+  - New **"API" page** in the PWA: create/manage tokens, plus a grouped endpoint catalog (stats, browse, upload/download, file ops, share) with **copy-ready cURL** that uses your live domain as the base URL, and an N8N Header-Auth guide.
+  - `docs/API.md`: endpoints, cURL examples, and N8N setup.
+
+---
+
 ## [1.8.0] - 2026-06-13
 
 ### Added
