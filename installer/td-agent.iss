@@ -6,7 +6,7 @@
 ;   - winfsp-2.0.23075.msi  (tải từ https://winfsp.dev)
 
 #define AppName "Ổ Đĩa Cloud Ảo - Telegram Drive"
-#define AppVersion "1.7.9"
+#define AppVersion "1.8.0"
 #define AppPublisher "Innonet Agency - Automation AI Company"
 #define AppURL "https://github.com/ptadigi/Telegram-Drive-Mount"
 #define WinFspMsi "winfsp-2.0.23075.msi"

@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.8.0] - 2026-06-13
+
+### Added
+
+- **"Telegram Folder" — auto-import from native Telegram**: files uploaded directly into the configured storage channel from a native Telegram client (mobile/desktop) now appear automatically in a "Telegram Folder" in the drive. No toggle, no manual action — a background worker scans the channel every 5 minutes.
+  - Imports are metadata-only (no download; streamed on-demand like any file), idempotent by `(channel_id, message_id)`, with a per-user cursor so incremental scans stay cheap.
+  - Scans only the configured storage channel; read-only on Telegram; paced + FLOOD_WAIT-safe. Runs only when a channel is set and exactly one account exists (correct attribution to the Telegram session owner).
+  - Doubles as recovery: if `metadata.db` is lost, re-scanning the channel brings the files back into the drive.
+
+---
+
 ## [1.7.9] - 2026-06-12
 
 ### Added

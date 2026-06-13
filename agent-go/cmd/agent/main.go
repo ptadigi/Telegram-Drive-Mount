@@ -32,7 +32,7 @@ import (
 	"telegram-drive-agent/internal/vfs"
 )
 
-const version = "1.7.9"
+const version = "1.8.0"
 
 var errSetupWindowUnavailable = errors.New("cửa sổ thiết lập không khả dụng trên bản build này")
 
