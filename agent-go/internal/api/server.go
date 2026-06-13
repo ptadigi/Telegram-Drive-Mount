@@ -159,6 +159,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/devices/pair/exchange", s.handleDevicePairExchange)
 	mux.HandleFunc("GET /v1/devices", s.handleDeviceList)
 	mux.HandleFunc("DELETE /v1/devices", s.handleDeviceRevoke)
+	mux.HandleFunc("GET /v1/api-tokens", s.handleListApiTokens)
+	mux.HandleFunc("POST /v1/api-tokens", s.handleCreateApiToken)
+	mux.HandleFunc("DELETE /v1/api-tokens", s.handleRevokeApiToken)
 	if dir := strings.TrimSpace(s.config.PWADir); dir != "" {
 		mux.Handle("/", spaHandler(dir))
 	}

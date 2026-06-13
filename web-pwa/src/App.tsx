@@ -1,10 +1,11 @@
-import { Cloud, Database, FolderOpen, HardDrive, Home, Link2, Search, Settings, Share2, Star, Trash2, UploadCloud } from "./icons";
+import { Cloud, Database, FolderOpen, HardDrive, Home, KeyRound, Link2, Search, Settings, Share2, Star, Trash2, UploadCloud } from "./icons";
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentConfig, AgentInfo, AppUser, AuthStatus, DatabaseStatus, getAuthStatus, getConfig, getDatabaseStatus, getHealth, getInfo, appLogout } from "./api/agent";
 import { ActivityView } from "./components/ActivityView";
 import { AuthGate } from "./components/AuthGate";
 import { DevicesView } from "./components/DevicesView";
+import { ApiView } from "./components/ApiView";
 import { DebugView } from "./components/DebugView";
 import { DriveBrowser } from "./components/DriveBrowser";
 import { HomeView } from "./components/HomeView";
@@ -22,7 +23,7 @@ import { useUploadQueue } from "./state/uploads";
 import { useToast } from "./state/ui";
 
 type AgentState = "checking" | "online" | "offline";
-type ViewKey = "home" | "drive" | "computers" | "shared" | "starred" | "trash" | "settings" | "search" | "activity" | "devices" | "debug";
+type ViewKey = "home" | "drive" | "computers" | "shared" | "starred" | "trash" | "settings" | "search" | "activity" | "devices" | "debug" | "api";
 
 export function App() {
   const sharedPath = window.location.pathname.match(/^\/share\/(.+)$/);
@@ -63,7 +64,7 @@ function DriveApp({ currentUser, onLogout }: { currentUser: AppUser; onLogout: (
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const v = params.get("view");
-    if (v && ["home", "drive", "computers", "shared", "starred", "trash", "settings", "search", "activity", "devices", "debug"].includes(v)) {
+    if (v && ["home", "drive", "computers", "shared", "starred", "trash", "settings", "search", "activity", "devices", "debug", "api"].includes(v)) {
       setView(v as ViewKey);
     }
     const shared = params.get("shared");
@@ -156,6 +157,7 @@ function DriveApp({ currentUser, onLogout }: { currentUser: AppUser; onLogout: (
           <a className="drive-nav__item drive-nav__item--ghost" onClick={() => setView("activity")}><Link2 size={18} /> Hoạt động</a>
           <a className="drive-nav__item drive-nav__item--ghost" onClick={() => setView("debug")}><Database size={18} /> Debug sync</a>
           <a className="drive-nav__item drive-nav__item--ghost" onClick={() => setView("devices")}><HardDrive size={18} /> {t("devices.title")}</a>
+          <a className="drive-nav__item drive-nav__item--ghost" onClick={() => setView("api")}><KeyRound size={18} /> API</a>
         </nav>
         <div className="storage-card">
           <HardDrive size={18} />
@@ -188,6 +190,7 @@ function DriveApp({ currentUser, onLogout }: { currentUser: AppUser; onLogout: (
         {view === "activity" && <ActivityView />}
         {view === "debug" && <DebugView />}
         {view === "devices" && <DevicesView />}
+        {view === "api" && <ApiView />}
 
         <section className="agent-drawer">
           <Database size={18} />

@@ -158,6 +158,7 @@ Quy ước code & đóng góp: **[docs/code-standards.md](docs/code-standards.md
 | Tài liệu | Nội dung |
 |----------|----------|
 | [docs/INSTALL.md](docs/INSTALL.md) | Cài đặt mọi môi trường + 1-click |
+| [docs/API.md](docs/API.md) | REST API + cURL + hướng dẫn N8N |
 | [docs/project-overview-pdr.md](docs/project-overview-pdr.md) | Tổng quan sản phẩm & PDR |
 | [docs/system-architecture.md](docs/system-architecture.md) | Kiến trúc hệ thống |
 | [docs/codebase-summary.md](docs/codebase-summary.md) | Tổng quan mã nguồn |

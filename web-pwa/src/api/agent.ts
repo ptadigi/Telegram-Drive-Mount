@@ -58,6 +58,16 @@ export function getConfig(signal?: AbortSignal) { return getJSON<AgentConfig>("/
 export function getDatabaseStatus(signal?: AbortSignal) { return getJSON<DatabaseStatus>("/v1/database/status", signal); }
 export type DriveStats = { file_count: number; folder_count: number; total_bytes: number; };
 export function getDriveStats(signal?: AbortSignal) { return getJSON<DriveStats>("/v1/stats", signal); }
+
+export type ApiToken = { id: string; name: string; created_at: number; last_seen_at?: number; };
+export type ApiTokenCreated = { id: string; name: string; token: string; created_at: number; };
+export function listApiTokens(signal?: AbortSignal) { return getJSON<{ tokens: ApiToken[] }>("/v1/api-tokens", signal); }
+export function createApiToken(name: string) { return sendJSON<ApiTokenCreated>("/v1/api-tokens", { name }); }
+export async function revokeApiToken(id: string) {
+  const response = await fetch(`${AGENT_BASE_URL}/v1/api-tokens?id=${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" });
+  if (!response.ok) throw new Error(safeError(await response.text(), "Không thu hồi được token"));
+  return response.json();
+}
 export function getAuthStatus(signal?: AbortSignal) { return getJSON<AuthStatus>("/v1/auth/status", signal); }
 export function resetTelegramLogin() { return sendJSON<AuthStatus>("/v1/auth/reset", {}); }
 export function saveTelegramConfig(apiId: number, apiHash: string) { return putJSON<AuthStatus>("/v1/auth/config", { api_id: apiId, api_hash: apiHash }); }

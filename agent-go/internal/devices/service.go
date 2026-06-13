@@ -1,8 +1,11 @@
 package devices
 
 import (
+	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -52,4 +55,46 @@ type PairingCode struct {
 type PairingResult struct {
 	Device Device `json:"device"`
 	Token  string `json:"token"`
+}
+
+// CreateApiToken mints a long-lived API/automation token for a user WITHOUT a
+// pairing code (the PWA session is already authenticated). It reuses the
+// device + device_tokens tables so the token works exactly like a paired
+// device token (Authorization: Device <token>) and can be revoked. The raw
+// token is returned once; only its hash is stored.
+func (s *Service) CreateApiToken(ctx context.Context, userID, name string) (PairingResult, error) {
+	if userID == "" {
+		return PairingResult{}, ErrInvalidPayload
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "API token"
+	}
+	if len(name) > maxNameLen {
+		name = name[:maxNameLen]
+	}
+	now := time.Now().Unix()
+	deviceID := newID()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return PairingResult{}, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO devices (id, user_id, name, platform, created_at, last_seen_at, last_ip) VALUES (?, ?, ?, 'api', ?, ?, NULL)`, deviceID, userID, name, now, now); err != nil {
+		return PairingResult{}, fmt.Errorf("ghi device: %w", err)
+	}
+	token, err := newToken()
+	if err != nil {
+		return PairingResult{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO device_tokens (token_hash, device_id, created_at, expires_at, last_used_at) VALUES (?, ?, ?, 0, 0)`, hashToken(token), deviceID, now); err != nil {
+		return PairingResult{}, fmt.Errorf("ghi token: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return PairingResult{}, err
+	}
+	return PairingResult{
+		Device: Device{ID: deviceID, UserID: userID, Name: name, Platform: "api", CreatedAt: now, LastSeenAt: now},
+		Token:  token,
+	}, nil
 }

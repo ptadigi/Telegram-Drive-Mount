@@ -130,3 +130,87 @@ func (s *Server) handleDeviceRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
+
+// handleCreateApiToken mints an automation token (Authorization: Device <token>)
+// for the logged-in user. Returns the raw token once.
+func (s *Server) handleCreateApiToken(w http.ResponseWriter, r *http.Request) {
+	if s.devices == nil {
+		writeError(w, http.StatusServiceUnavailable, errBadRequest("device service chua san sang"))
+		return
+	}
+	userID := drive.UserFromContext(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, errors.New("cần đăng nhập PWA"))
+		return
+	}
+	var input struct {
+		Name string `json:"name"`
+	}
+	_ = decodeJSON(w, r, &input) // name optional
+	res, err := s.devices.CreateApiToken(r.Context(), userID, input.Name)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":         res.Device.ID,
+		"name":       res.Device.Name,
+		"token":      res.Token, // shown once
+		"created_at": res.Device.CreatedAt,
+	})
+}
+
+// handleListApiTokens lists the user's automation tokens (platform = "api").
+// Never returns the raw token.
+func (s *Server) handleListApiTokens(w http.ResponseWriter, r *http.Request) {
+	if s.devices == nil {
+		writeError(w, http.StatusServiceUnavailable, errBadRequest("device service chua san sang"))
+		return
+	}
+	userID := drive.UserFromContext(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, errors.New("cần đăng nhập PWA"))
+		return
+	}
+	list, err := s.devices.ListDevices(r.Context(), userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	tokens := make([]map[string]any, 0)
+	for _, d := range list {
+		if d.Platform != "api" || d.RevokedAt != 0 {
+			continue
+		}
+		tokens = append(tokens, map[string]any{
+			"id":         d.ID,
+			"name":       d.Name,
+			"created_at": d.CreatedAt,
+			"last_seen_at": d.LastSeenAt,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tokens": tokens})
+}
+
+// handleRevokeApiToken revokes an automation token by its device id.
+func (s *Server) handleRevokeApiToken(w http.ResponseWriter, r *http.Request) {
+	if s.devices == nil {
+		writeError(w, http.StatusServiceUnavailable, errBadRequest("device service chua san sang"))
+		return
+	}
+	userID := drive.UserFromContext(r.Context())
+	if userID == "" {
+		writeError(w, http.StatusUnauthorized, errors.New("cần đăng nhập PWA"))
+		return
+	}
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		writeError(w, http.StatusBadRequest, errBadRequest("thiếu id token"))
+		return
+	}
+	if err := s.devices.RevokeDevice(r.Context(), userID, id); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
