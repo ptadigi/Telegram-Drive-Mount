@@ -48,8 +48,36 @@
     "unlock": "Mở khóa",
     "loading": "Đang xử lý...",
     "done": "Đăng nhập Telegram thành công. Session đã được lưu cục bộ.",
+    "qrTab": "Quét QR Telegram",
+    "phoneTab": "Số điện thoại",
+    "qrCreate": "Tạo mã QR Telegram",
+    "qrCreating": "Đang tạo mã...",
+    "qrScanHint": "Mở Telegram trên điện thoại → Cài đặt → Thiết bị → Liên kết thiết bị → Quét mã.",
+    "qrExpiresAt": "Mã hết hạn lúc {{time}}.",
+    "qrExpired": "Mã QR đã hết hạn. Bấm tạo mã mới.",
+    "cancel": "Huỷ",
+    "extraAuthTitle": "Mật khẩu Telegram",
+    "extraAuthHint": "Telegram đang yêu cầu xác thực bổ sung sau khi quét QR. Nếu tài khoản không bật 2FA, hãy nhập mật khẩu đăng nhập Telegram đang dùng.",
+    "config": {
+      "title": "Cấu hình API Telegram",
+      "description": "Go Agent cần api_id và api_hash của riêng bạn để kết nối Telegram. Lấy miễn phí tại my.telegram.org → API development tools.",
+      "apiIdLabel": "api_id",
+      "apiHashLabel": "api_hash",
+      "save": "Lưu cấu hình",
+      "saving": "Đang lưu...",
+      "getCredentials": "Lấy api_id / api_hash tại my.telegram.org",
+      "saved": "Đã lưu cấu hình API Telegram. Giờ bạn có thể đăng nhập."
+    },
+    "codeSent": {
+      "app": "Telegram báo mã đã được gửi vào app Telegram của số này.",
+      "sms": "Telegram báo mã đã được gửi qua SMS.",
+      "call": "Telegram báo mã sẽ được gửi qua cuộc gọi.",
+      "generic": "Telegram đã chấp nhận yêu cầu gửi mã ({{type}}).",
+      "wait": " Nếu chưa thấy, hãy chờ khoảng {{seconds}} giây rồi thử lại."
+    },
     "errors": {
-      "connection": "Chưa thể kết nối Telegram. Vui lòng kiểm tra Go Agent hoặc thử lại sau."
+      "connection": "Chưa thể kết nối Telegram. Vui lòng kiểm tra Go Agent hoặc thử lại sau.",
+      "notConfigured": "Go Agent chưa có api_id/api_hash. Hãy nhập cấu hình API Telegram bên dưới rồi thử lại."
     }
   },
   "drive": {

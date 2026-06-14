@@ -48,8 +48,36 @@
     "unlock": "Unlock",
     "loading": "Working...",
     "done": "Telegram login successful. Session is stored locally.",
+    "qrTab": "Scan Telegram QR",
+    "phoneTab": "Phone number",
+    "qrCreate": "Create Telegram QR code",
+    "qrCreating": "Creating code...",
+    "qrScanHint": "On your phone open Telegram → Settings → Devices → Link Desktop Device → scan the code.",
+    "qrExpiresAt": "Code expires at {{time}}.",
+    "qrExpired": "The QR code has expired. Tap to create a new one.",
+    "cancel": "Cancel",
+    "extraAuthTitle": "Telegram password",
+    "extraAuthHint": "Telegram is requesting extra authentication after the QR scan. If the account has no 2FA, enter the Telegram password you currently use.",
+    "config": {
+      "title": "Telegram API configuration",
+      "description": "The Go Agent needs your own api_id and api_hash to connect to Telegram. Get them for free at my.telegram.org → API development tools.",
+      "apiIdLabel": "api_id",
+      "apiHashLabel": "api_hash",
+      "save": "Save configuration",
+      "saving": "Saving...",
+      "getCredentials": "Get api_id / api_hash at my.telegram.org",
+      "saved": "Telegram API configuration saved. You can sign in now."
+    },
+    "codeSent": {
+      "app": "Telegram says the code was sent to the Telegram app for this number.",
+      "sms": "Telegram says the code was sent via SMS.",
+      "call": "Telegram says the code will be delivered by phone call.",
+      "generic": "Telegram accepted the code request ({{type}}).",
+      "wait": " If you don't see it, wait about {{seconds}} seconds and try again."
+    },
     "errors": {
-      "connection": "Telegram could not be reached. Check the Go Agent or try again."
+      "connection": "Telegram could not be reached. Check the Go Agent or try again.",
+      "notConfigured": "The Go Agent has no api_id/api_hash yet. Enter your Telegram API configuration below and try again."
     }
   },
   "drive": {

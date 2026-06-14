@@ -5,6 +5,7 @@ import {
   AuthStatus,
   cancelTelegramQR,
   getTelegramQRStatus,
+  saveTelegramConfig,
   startTelegramLogin,
   startTelegramQR,
   submitTelegramCode,
@@ -32,6 +33,9 @@ export function TelegramLoginPanel({ auth }: Props) {
   const [codeInfo, setCodeInfo] = useState<string | null>(null);
   const [qr, setQr] = useState<TelegramQRStatus | null>(null);
   const [qrPassword, setQrPassword] = useState("");
+  const [apiId, setApiId] = useState("");
+  const [apiHash, setApiHash] = useState("");
+  const [configSaved, setConfigSaved] = useState(false);
   const pollRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -59,7 +63,7 @@ export function TelegramLoginPanel({ auth }: Props) {
           stopPolling();
         }
       } catch (err) {
-        setError(readableLoginError(err));
+        setError(readableLoginError(err, t));
         stopPolling();
       }
     }, 2000);
@@ -73,7 +77,7 @@ export function TelegramLoginPanel({ auth }: Props) {
       setQr(status);
       pollQRStatus();
     } catch (err) {
-      setError(readableLoginError(err));
+      setError(readableLoginError(err, t));
     } finally {
       setLoading(false);
     }
@@ -88,7 +92,7 @@ export function TelegramLoginPanel({ auth }: Props) {
       setQr(status);
       setQrPassword("");
     } catch (err) {
-      setError(readableLoginError(err));
+      setError(readableLoginError(err, t));
     } finally {
       setLoading(false);
     }
@@ -112,10 +116,10 @@ export function TelegramLoginPanel({ auth }: Props) {
       const normalizedPhone = normalizePhone(phone);
       setPhone(normalizedPhone);
       const result = await startTelegramLogin(normalizedPhone);
-      setCodeInfo(describeCodeType(result.code_type, result.timeout_sec));
+      setCodeInfo(describeCodeType(result.code_type, result.timeout_sec, t));
       setStep("code");
     } catch (err) {
-      setError(readableLoginError(err));
+      setError(readableLoginError(err, t));
     } finally {
       setLoading(false);
     }
@@ -133,7 +137,7 @@ export function TelegramLoginPanel({ auth }: Props) {
         setStep("done");
       }
     } catch (err) {
-      setError(readableLoginError(err));
+      setError(readableLoginError(err, t));
     } finally {
       setLoading(false);
     }
@@ -147,7 +151,27 @@ export function TelegramLoginPanel({ auth }: Props) {
       await submitTelegramPassword(password);
       setStep("done");
     } catch (err) {
-      setError(readableLoginError(err));
+      setError(readableLoginError(err, t));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitConfig(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const id = parseInt(apiId.trim(), 10);
+      if (!id || !apiHash.trim()) {
+        setError(t("login.errors.notConfigured"));
+        return;
+      }
+      await saveTelegramConfig(id, apiHash.trim());
+      setApiHash("");
+      setConfigSaved(true);
+    } catch (err) {
+      setError(readableLoginError(err, t));
     } finally {
       setLoading(false);
     }
@@ -178,12 +202,30 @@ export function TelegramLoginPanel({ auth }: Props) {
         </div>
       </div>
 
+      {auth && !auth.configured && (
+        <form className="form" onSubmit={submitConfig}>
+          <h3>{t("login.config.title")}</h3>
+          <p className="form-hint">{t("login.config.description")}</p>
+          <label>
+            {t("login.config.apiIdLabel")}
+            <div className="input-wrap"><input value={apiId} onChange={(e) => setApiId(e.target.value)} inputMode="numeric" placeholder="123456" /></div>
+          </label>
+          <label>
+            {t("login.config.apiHashLabel")}
+            <div className="input-wrap"><Lock size={17} /><input value={apiHash} onChange={(e) => setApiHash(e.target.value)} placeholder="0123456789abcdef0123456789abcdef" /></div>
+          </label>
+          <button className="button button--primary" disabled={loading}>{loading ? t("login.config.saving") : t("login.config.save")}</button>
+          <a className="link-button" href="https://my.telegram.org/apps" target="_blank" rel="noreferrer">{t("login.config.getCredentials")}</a>
+          {configSaved && <p className="success-note">{t("login.config.saved")}</p>}
+        </form>
+      )}
+
       <div className="login-tabs">
         <button type="button" className={mode === "qr" ? "active" : ""} onClick={() => { setMode("qr"); setError(null); }}>
-          <QrCode size={16} /> Quét QR Telegram
+          <QrCode size={16} /> {t("login.qrTab")}
         </button>
         <button type="button" className={mode === "phone" ? "active" : ""} onClick={() => { setMode("phone"); setError(null); cancelQR(); }}>
-          <Phone size={16} /> Số điện thoại
+          <Phone size={16} /> {t("login.phoneTab")}
         </button>
       </div>
 
@@ -191,7 +233,7 @@ export function TelegramLoginPanel({ auth }: Props) {
         <div className="qr-login">
           {!qr || qr.state === "idle" ? (
             <button className="button button--primary" onClick={startQR} disabled={loading}>
-              {loading ? "Đang tạo mã..." : "Tạo mã QR Telegram"}
+              {loading ? t("login.qrCreating") : t("login.qrCreate")}
             </button>
           ) : null}
 
@@ -199,26 +241,26 @@ export function TelegramLoginPanel({ auth }: Props) {
             <div className="qr-block">
               <img alt="Telegram QR" src={qrImageUrl(qr.token_url)} />
               <p className="form-hint">
-                Mở Telegram trên điện thoại → Cài đặt → Thiết bị → Liên kết thiết bị → Quét mã.
+                {t("login.qrScanHint")}
               </p>
-              {qr.expires_at ? <p className="form-hint">Mã hết hạn lúc {new Date(qr.expires_at * 1000).toLocaleTimeString()}.</p> : null}
-              <button type="button" className="link-button" onClick={cancelQR}>Huỷ</button>
+              {qr.expires_at ? <p className="form-hint">{t("login.qrExpiresAt", { time: new Date(qr.expires_at * 1000).toLocaleTimeString() })}</p> : null}
+              <button type="button" className="link-button" onClick={cancelQR}>{t("login.cancel")}</button>
             </div>
           )}
 
           {qr && qr.state === "awaiting_password" && (
             <form className="form" onSubmit={submitQRPassword}>
               <label>
-                Mật khẩu xác minh hai bước
+                {t("login.extraAuthTitle")}
                 <div className="input-wrap"><Lock size={17} /><input value={qrPassword} onChange={(e) => setQrPassword(e.target.value)} type="password" placeholder={t("login.passwordPlaceholder")} /></div>
-                <span className="form-hint">Telegram đang yêu cầu xác thực bổ sung sau khi quét QR. Nếu tài khoản không bật 2FA, hãy nhập mật khẩu đăng nhập Telegram đang dùng.</span>
+                <span className="form-hint">{t("login.extraAuthHint")}</span>
               </label>
               <button className="button button--primary" disabled={loading}>{loading ? t("login.loading") : t("login.unlock")}</button>
             </form>
           )}
 
           {qr && qr.state === "expired" && (
-            <div className="error-note">Mã QR đã hết hạn. Bấm tạo mã mới.</div>
+            <div className="error-note">{t("login.qrExpired")}</div>
           )}
           {qr && qr.state === "error" && qr.error && (
             <div className="error-note">{qr.error}</div>
@@ -281,18 +323,20 @@ function normalizePhone(value: string) {
   return `+${trimmed}`;
 }
 
-function describeCodeType(codeType: string, timeout: number) {
-  const waitText = timeout > 0 ? ` Nếu chưa thấy, hãy chờ khoảng ${timeout} giây rồi thử lại.` : "";
-  if (codeType.includes("App")) return `Telegram báo mã đã được gửi vào app Telegram của số này.${waitText}`;
-  if (codeType.includes("SMS")) return `Telegram báo mã đã được gửi qua SMS.${waitText}`;
-  if (codeType.includes("Call")) return `Telegram báo mã sẽ được gửi qua cuộc gọi.${waitText}`;
-  return `Telegram đã chấp nhận yêu cầu gửi mã (${codeType}).${waitText}`;
+type TFn = (key: string, opts?: Record<string, unknown>) => string;
+
+function describeCodeType(codeType: string, timeout: number, t: TFn) {
+  const waitText = timeout > 0 ? t("login.codeSent.wait", { seconds: timeout }) : "";
+  if (codeType.includes("App")) return `${t("login.codeSent.app")}${waitText}`;
+  if (codeType.includes("SMS")) return `${t("login.codeSent.sms")}${waitText}`;
+  if (codeType.includes("Call")) return `${t("login.codeSent.call")}${waitText}`;
+  return `${t("login.codeSent.generic", { type: codeType })}${waitText}`;
 }
 
-function readableLoginError(err: unknown) {
+function readableLoginError(err: unknown, t: TFn) {
   const message = err instanceof Error ? err.message : String(err);
   if (message.includes("chưa cấu hình API Telegram")) {
-    return "Go Agent chưa có cấu hình Telegram nội bộ. Vui lòng khởi động lại Agent bằng cấu hình local của dự án.";
+    return t("login.errors.notConfigured");
   }
   return message;
 }
