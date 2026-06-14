@@ -14,20 +14,33 @@ type rateBucket struct {
 }
 
 type rateLimiter struct {
-	mu      sync.Mutex
-	buckets map[string]*rateBucket
-	limit   int
-	window  time.Duration
+	mu          sync.Mutex
+	buckets     map[string]*rateBucket
+	limit       int
+	window      time.Duration
+	lastCleanup time.Time
 }
 
 func newRateLimiter(limit int, window time.Duration) *rateLimiter {
-	return &rateLimiter{buckets: map[string]*rateBucket{}, limit: limit, window: window}
+	return &rateLimiter{buckets: map[string]*rateBucket{}, limit: limit, window: window, lastCleanup: time.Now()}
 }
 
 func (l *rateLimiter) allow(key string) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := time.Now()
+	// Opportunistically evict expired buckets so the map can't grow without
+	// bound on a public, internet-facing endpoint (one entry per distinct
+	// client key would otherwise live forever). Sweeping at most once per
+	// window keeps this O(n) work rare.
+	if now.Sub(l.lastCleanup) >= l.window {
+		for k, b := range l.buckets {
+			if now.After(b.reset) {
+				delete(l.buckets, k)
+			}
+		}
+		l.lastCleanup = now
+	}
 	bucket, ok := l.buckets[key]
 	if !ok || now.After(bucket.reset) {
 		l.buckets[key] = &rateBucket{count: 1, reset: now.Add(l.window)}

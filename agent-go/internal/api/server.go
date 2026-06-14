@@ -1221,6 +1221,14 @@ func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err)
 		return
 	}
+	// Same path-traversal guard the authenticated download path uses. This is
+	// an unauthenticated, internet-facing endpoint, so the servable check
+	// (path must live under the data dir or a registered sync root) matters
+	// even more here than on /v1/files/download.
+	if !s.drive.IsLocalPathServable(file.LocalPath) {
+		writeError(w, http.StatusNotFound, errBadRequest("file không khả dụng"))
+		return
+	}
 	// Inline preview must NOT count as a download — otherwise viewing the file
 	// burns the download quota and the real Download button then fails. Only
 	// count actual downloads (attachment disposition).
