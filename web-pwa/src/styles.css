@@ -70,6 +70,23 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; min-height: 100dvh; background: var(--bg); color: var(--ink); }
+
+/* App-wide: disable accidental text selection so tap/drag/multi-select feels
+   native (especially on mobile). Inputs and explicitly selectable content
+   re-enable it. -webkit-touch-callout suppresses the iOS long-press menu so our
+   own long-press select/context-menu can fire cleanly. */
+body {
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input, textarea, select, [contenteditable="true"], .selectable, .selectable * {
+  -webkit-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 a { color: var(--accent-strong); }

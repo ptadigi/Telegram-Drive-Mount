@@ -1,8 +1,8 @@
-import { Archive, CheckCircle2, Download, FileAudio, FileText, FileVideo, Folder, FolderInput, FolderPlus, FolderUp, Image, Info, LayoutGrid, Link2, List, MoreVertical, Pencil, RefreshCw, Star, Trash2, Upload } from "lucide-react";
+import { Archive, CheckCircle2, CheckSquare, Download, FileAudio, FileText, FileVideo, Folder, FolderInput, FolderPlus, FolderUp, Image, Info, LayoutGrid, Link2, List, MoreVertical, Pencil, RefreshCw, Star, Trash2, Upload } from "lucide-react";
 import { FileIcon } from "../icons";
 import React, { ChangeEvent, DragEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { createFolder, downloadBundle, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, moveFile, moveFolder, renameFile, renameFolder, starFile, starFolder, thumbnailUrl, trashFile, trashFolder, zipFolderUrl } from "../api/agent";
+import { createFolder, createShare, downloadBundle, downloadFileUrl, DriveContents, DriveFile, DriveFolder, eventsUrl, listDriveContents, moveFile, moveFolder, renameFile, renameFolder, starFile, starFolder, thumbnailUrl, trashFile, trashFolder, zipFolderUrl } from "../api/agent";
 import { useConfirm, useToast } from "../state/ui";
 import { useRevalidate } from "../state/revalidate";
 import { ContextMenu, ContextMenuItem } from "./ContextMenu";
@@ -30,7 +30,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [dropping, setDropping] = useState(false);
   const [shareTarget, setShareTarget] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null);
-  const [moveTarget, setMoveTarget] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null);
+  const [moveTargets, setMoveTargets] = useState<{ kind: "file" | "folder"; id: string; name: string }[]>([]);
   const [dropTargetFolder, setDropTargetFolder] = useState<string | null>(null);
   const [dragItem, setDragItem] = useState<{ kind: "file" | "folder"; id: string; name: string } | null>(null);
   const [selectedIds, setSelectedIds] = useState<{ files: Set<string>; folders: Set<string> }>({ files: new Set(), folders: new Set() });
@@ -279,23 +279,51 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
   }
 
   function bulkMove() {
-    const fileCount = selectedIds.files.size;
-    const folderCount = selectedIds.folders.size;
-    if (fileCount + folderCount === 0) return;
-    const total = fileCount + folderCount;
+    const targets: { kind: "file" | "folder"; id: string; name: string }[] = [];
+    for (const id of selectedIds.folders) {
+      const folder = contents.folders.find((item) => item.id === id);
+      if (folder) targets.push({ kind: "folder", id: folder.id, name: folder.name });
+    }
+    for (const id of selectedIds.files) {
+      const file = contents.files.find((item) => item.id === id);
+      if (file) targets.push({ kind: "file", id: file.id, name: file.name });
+    }
+    if (targets.length === 0) return;
+    setMoveTargets(targets);
+  }
+
+  async function bulkShare() {
+    const fileIds = [...selectedIds.files];
+    const folderIds = [...selectedIds.folders];
+    const total = fileIds.length + folderIds.length;
+    if (total === 0) return;
     if (total === 1) {
-      const fileId = selectedIds.files.values().next().value as string | undefined;
-      const folderId = selectedIds.folders.values().next().value as string | undefined;
-      if (fileId) {
-        const file = contents.files.find((item) => item.id === fileId);
-        if (file) setMoveTarget({ kind: "file", id: file.id, name: file.name });
-      } else if (folderId) {
-        const folder = contents.folders.find((item) => item.id === folderId);
-        if (folder) setMoveTarget({ kind: "folder", id: folder.id, name: folder.name });
+      // Single item: keep the rich ShareDialog (password, expiry, link copy).
+      if (fileIds.length === 1) {
+        const file = contents.files.find((f) => f.id === fileIds[0]);
+        if (file) setShareTarget({ kind: "file", id: file.id, name: file.name });
+      } else {
+        const folder = contents.folders.find((f) => f.id === folderIds[0]);
+        if (folder) setShareTarget({ kind: "folder", id: folder.id, name: folder.name });
       }
       return;
     }
-    toast("Hiện chỉ hỗ trợ di chuyển từng mục, hãy chọn 1 mục", "info");
+    // Multiple items: create one public link per item sequentially (a single
+    // share link can't span multiple targets). Surface a summary toast.
+    let ok = 0;
+    let failed = 0;
+    for (const id of fileIds) {
+      try { await createShare("file", id); ok += 1; } catch { failed += 1; }
+      await new Promise((r) => setTimeout(r, 120));
+    }
+    for (const id of folderIds) {
+      try { await createShare("folder", id); ok += 1; } catch { failed += 1; }
+      await new Promise((r) => setTimeout(r, 120));
+    }
+    clearSelection();
+    if (failed === 0) toast(`Đã tạo ${ok} link chia sẻ`, "success");
+    else toast(`Tạo ${ok} link, lỗi ${failed}`, failed === total ? "error" : "info");
+    refresh();
   }
 
   function handleDragOver(event: DragEvent<HTMLDivElement>) {
@@ -405,8 +433,9 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
       x,
       y,
       items: [
+        { key: "select", label: "Chọn", icon: <CheckSquare size={14} />, onSelect: () => toggleSelectFolder(folder.id, true) },
         { key: "rename", label: t("files.rename"), icon: <Pencil size={14} />, onSelect: () => promptRenameFolder(folder) },
-        { key: "move", label: "Di chuyển đến", icon: <FolderInput size={14} />, onSelect: () => setMoveTarget({ kind: "folder", id: folder.id, name: folder.name }) },
+        { key: "move", label: "Di chuyển đến", icon: <FolderInput size={14} />, onSelect: () => setMoveTargets([{ kind: "folder", id: folder.id, name: folder.name }]) },
         { key: "share", label: t("files.share"), icon: <Link2 size={14} />, onSelect: () => setShareTarget({ kind: "folder", id: folder.id, name: folder.name }) },
         { key: "star", label: folder.starred ? "Bỏ đánh dấu sao" : "Đánh dấu sao", icon: <Star size={14} />, onSelect: () => toggleStarFolder(folder) },
         { key: "zip", label: "Tải xuống dạng ZIP", icon: <Download size={14} />, onSelect: () => window.location.assign(zipFolderUrl(folder.id)) },
@@ -427,12 +456,13 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
       x,
       y,
       items: [
+        { key: "select", label: "Chọn", icon: <CheckSquare size={14} />, onSelect: () => toggleSelectFile(file.id, true) },
         { key: "details", label: t("files.viewDetails"), icon: <Info size={14} />, onSelect: () => setSelection({ kind: "file", data: file }) },
         { key: "view", label: "Mở xem trực tiếp", icon: <FileText size={14} />, onSelect: () => setViewerFile(file) },
         { key: "share", label: t("files.share"), icon: <Link2 size={14} />, onSelect: () => setShareTarget({ kind: "file", id: file.id, name: file.name }) },
         { key: "star", label: file.starred ? "Bỏ đánh dấu sao" : "Đánh dấu sao", icon: <Star size={14} />, onSelect: () => toggleStarFile(file) },
         { key: "rename", label: t("files.rename"), icon: <Pencil size={14} />, onSelect: () => promptRenameFile(file) },
-        { key: "move", label: "Di chuyển đến", icon: <FolderInput size={14} />, onSelect: () => setMoveTarget({ kind: "file", id: file.id, name: file.name }) },
+        { key: "move", label: "Di chuyển đến", icon: <FolderInput size={14} />, onSelect: () => setMoveTargets([{ kind: "file", id: file.id, name: file.name }]) },
         { key: "download", label: t("files.download"), icon: <Download size={14} />, onSelect: () => window.location.assign(downloadFileUrl(file.id)) },
         { key: "trash", label: t("files.trash"), icon: <Trash2 size={14} />, danger: true, onSelect: () => promptTrashFile(file) },
       ],
@@ -552,6 +582,7 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
         <div className="bulk-bar">
           <span>Đã chọn {selectedIds.files.size + selectedIds.folders.size} mục</span>
           <div className="bulk-bar__actions">
+            <button className="button button--ghost" onClick={bulkShare}>Chia sẻ</button>
             <button className="button button--ghost" onClick={() => bulkStar(true)}>★ Sao</button>
             <button className="button button--ghost" onClick={() => bulkStar(false)}>Bỏ sao</button>
             <button className="button button--ghost" onClick={bulkMove}>Di chuyển</button>
@@ -654,10 +685,10 @@ export function DriveBrowser({ uploadQueue, rootLabel, description }: Props) {
         targetName={shareTarget?.name || ""}
       />
       <MoveDialog
-        open={!!moveTarget}
-        onClose={() => setMoveTarget(null)}
-        target={moveTarget}
-        onMoved={refresh}
+        open={moveTargets.length > 0}
+        onClose={() => setMoveTargets([])}
+        targets={moveTargets}
+        onMoved={() => { refresh(); clearSelection(); }}
       />
       </section>
       <DetailPanel selection={selection} onClose={() => setSelection(null)} onShare={() => {

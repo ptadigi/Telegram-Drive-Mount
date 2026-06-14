@@ -11,6 +11,7 @@ import type { ComponentType, SVGProps } from "react";
 import PhArchive from "~icons/ph/archive-duotone";
 import PhCalendar from "~icons/ph/calendar-dots-duotone";
 import PhCheckCircle from "~icons/ph/check-circle-duotone";
+import PhCheckSquare from "~icons/ph/check-square-duotone";
 import PhCaretDown from "~icons/ph/caret-down-duotone";
 import PhCaretRight from "~icons/ph/caret-right-duotone";
 import PhCaretUp from "~icons/ph/caret-up-duotone";
@@ -85,6 +86,7 @@ function wrap(Comp: SvgComp) {
 export const Archive = wrap(PhArchive);
 export const CalendarClock = wrap(PhCalendar);
 export const CheckCircle2 = wrap(PhCheckCircle);
+export const CheckSquare = wrap(PhCheckSquare);
 export const ChevronDown = wrap(PhCaretDown);
 export const ChevronRight = wrap(PhCaretRight);
 export const ChevronUp = wrap(PhCaretUp);
