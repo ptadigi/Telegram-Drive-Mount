@@ -6,11 +6,6 @@ on:
     tags: ["v*"]
   pull_request:
 
-# Run JavaScript actions on Node 24 now (Node 20 is deprecated on runners from
-# 2026-06-16). This opts in ahead of the forced switch and silences the warning.
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 jobs:
   agent:
     name: Build Go Agent (default)
@@ -22,15 +17,15 @@ jobs:
           - os: ubuntu-latest
             target: linux-amd64
             ext: ""
-          - os: windows-latest
+          - os: windows-2025
             target: windows-amd64
             ext: ".exe"
           - os: macos-latest
             target: darwin-arm64
             ext: ""
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.23"
           cache: true
@@ -46,17 +41,17 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: go test ./...
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: td-agent-${{ matrix.target }}
           path: dist/td-agent-${{ matrix.target }}${{ matrix.ext }}
 
   windows-tray:
     name: Build Windows Agent (tray)
-    runs-on: windows-latest
+    runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.23"
           cache: true
@@ -66,20 +61,20 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: go build -tags "tray" -trimpath -ldflags "-s -w -H windowsgui" -o ../dist/td-agent-windows-amd64-tray.exe ./cmd/agent
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: td-agent-windows-amd64-tray
           path: dist/td-agent-windows-amd64-tray.exe
 
   windows-installer:
     name: Build Windows Installer
-    runs-on: windows-latest
+    runs-on: windows-2025
     needs: [pwa]
     env:
       CODE_SIGN_PFX_BASE64: ${{ secrets.CODE_SIGN_PFX_BASE64 }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.23"
           cache: true
@@ -97,7 +92,7 @@ jobs:
           CGO_ENABLED: "0"
         run: go build -tags "fuse tray" -trimpath -ldflags "-s -w -H windowsgui" -o ../installer/td-agent.exe ./cmd/agent
       - name: Download PWA dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: web-pwa-dist
           path: installer/pwa
@@ -126,7 +121,7 @@ jobs:
         run: |
           $st = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
           & $st.FullName sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:CODE_SIGN_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 installer/Output/TelegramDriveSetup.exe
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: TelegramDriveSetup
           path: installer/Output/TelegramDriveSetup.exe
@@ -135,10 +130,10 @@ jobs:
     name: Build PWA
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: web-pwa/package-lock.json
       - name: npm install
@@ -147,7 +142,7 @@ jobs:
       - name: npm run build
         working-directory: web-pwa
         run: npm run build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: web-pwa-dist
           path: web-pwa/dist
@@ -160,7 +155,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v6
         with:
           path: artifacts
       - name: Generate SHA256 checksums
@@ -171,7 +166,7 @@ jobs:
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             artifacts/td-agent-linux-amd64/*
