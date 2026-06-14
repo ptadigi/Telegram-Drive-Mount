@@ -41,7 +41,7 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: go test ./...
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: td-agent-${{ matrix.target }}
           path: dist/td-agent-${{ matrix.target }}${{ matrix.ext }}
@@ -61,7 +61,7 @@ jobs:
         env:
           CGO_ENABLED: "0"
         run: go build -tags "tray" -trimpath -ldflags "-s -w -H windowsgui" -o ../dist/td-agent-windows-amd64-tray.exe ./cmd/agent
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: td-agent-windows-amd64-tray
           path: dist/td-agent-windows-amd64-tray.exe
@@ -92,7 +92,7 @@ jobs:
           CGO_ENABLED: "0"
         run: go build -tags "fuse tray" -trimpath -ldflags "-s -w -H windowsgui" -o ../installer/td-agent.exe ./cmd/agent
       - name: Download PWA dist
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: web-pwa-dist
           path: installer/pwa
@@ -121,7 +121,7 @@ jobs:
         run: |
           $st = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1
           & $st.FullName sign /f "$env:RUNNER_TEMP\cert.pfx" /p $env:CODE_SIGN_PFX_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 installer/Output/TelegramDriveSetup.exe
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: TelegramDriveSetup
           path: installer/Output/TelegramDriveSetup.exe
@@ -142,7 +142,7 @@ jobs:
       - name: npm run build
         working-directory: web-pwa
         run: npm run build
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: web-pwa-dist
           path: web-pwa/dist
@@ -155,7 +155,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v7
         with:
           path: artifacts
       - name: Generate SHA256 checksums
