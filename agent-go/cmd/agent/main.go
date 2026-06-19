@@ -271,6 +271,7 @@ func main() {
 
 	fmt.Println()
 	log.Println("shutting down telegram-drive-agent...")
+	apiServer.Shutdown()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("graceful HTTP shutdown failed: %v", err)
 	}

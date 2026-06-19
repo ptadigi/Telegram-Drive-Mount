@@ -81,7 +81,8 @@ body {
   user-select: none;
   -webkit-touch-callout: none;
 }
-input, textarea, select, [contenteditable="true"], .selectable, .selectable * {
+input, textarea, select, [contenteditable="true"], .selectable, .selectable *,
+.viewer__text, .viewer__doc, .viewer__doc * {
   -webkit-user-select: text;
   -ms-user-select: text;
   user-select: text;

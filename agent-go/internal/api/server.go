@@ -41,6 +41,18 @@ type Server struct {
 	viewRate    *rateLimiter
 	authMu      sync.RWMutex
 	authCfg     config.AuthConfig
+	shutdownCh  chan struct{}
+	shutdownMu  sync.Once
+}
+
+// Shutdown signals long-lived handlers (SSE event streams) to return so the
+// HTTP server can shut down gracefully instead of waiting out ShutdownTimeout.
+func (s *Server) Shutdown() {
+	s.shutdownMu.Do(func() {
+		if s.shutdownCh != nil {
+			close(s.shutdownCh)
+		}
+	})
 }
 
 // SetDesktopMode enables desktop onboarding endpoints. Only the local tray
@@ -65,6 +77,7 @@ func NewServer(version string, cfg config.Config, authService *agentauth.Service
 		shareRate: newRateLimiter(20, time.Minute),
 		viewRate:  newRateLimiter(600, time.Minute),
 		authCfg:   cfg.Auth,
+		shutdownCh: make(chan struct{}),
 	}
 }
 
@@ -352,6 +365,10 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-r.Context().Done():
+			return
+		case <-s.shutdownCh:
+			// Server is shutting down; close the stream so http.Server.Shutdown
+			// doesn't have to wait out the full ShutdownTimeout.
 			return
 		case <-ticker.C:
 			if _, err := w.Write([]byte(": keep-alive\n\n")); err != nil {
