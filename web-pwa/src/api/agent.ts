@@ -73,6 +73,15 @@ export async function revokeApiToken(id: string) {
   if (!response.ok) throw new Error(safeError(await response.text(), "Không thu hồi được token"));
   return response.json();
 }
+// Photo backup (phone -> Telegram Drive "Camera" folder).
+export function photosMissing(hashes: string[]) { return sendJSON<{ missing: string[] }>("/v1/photos/missing", { hashes }); }
+export function uploadPhoto(file: File | Blob, name: string) {
+  const form = new FormData();
+  form.append("file", file, name);
+  return fetch(`${AGENT_BASE_URL}/v1/photos/upload`, { method: "POST", credentials: "include", body: form })
+    .then(async (r) => { if (!r.ok) throw new Error(safeError(await r.text(), "Tải ảnh lên thất bại")); return r.json() as Promise<{ file: DriveFile; folder_id: string }>; });
+}
+
 export function getAuthStatus(signal?: AbortSignal) { return getJSON<AuthStatus>("/v1/auth/status", signal); }
 export function resetTelegramLogin() { return sendJSON<AuthStatus>("/v1/auth/reset", {}); }
 export function saveTelegramConfig(apiId: number, apiHash: string) { return putJSON<AuthStatus>("/v1/auth/config", { api_id: apiId, api_hash: apiHash }); }

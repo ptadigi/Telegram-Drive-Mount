@@ -153,6 +153,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/files/hls", s.handleHLSStream)
 	mux.HandleFunc("GET /v1/files/thumbnail", s.handleFileThumbnail)
 	mux.HandleFunc("POST /v1/files/upload", s.handleUploadFile)
+	mux.HandleFunc("POST /v1/photos/missing", s.handlePhotosMissing)
+	mux.HandleFunc("POST /v1/photos/upload", s.handlePhotosUpload)
 	mux.HandleFunc("POST /share-target", s.handleShareTarget)
 	mux.HandleFunc("POST /v1/files/sync", s.handleSyncFiles)
 	mux.HandleFunc("POST /v1/files/demo", s.handleSeedDemoFile)

@@ -898,3 +898,14 @@ a.button { text-decoration: none; }
   .shared-item__main { align-items: flex-start; }
   .shared-track__table { display: block; overflow-x: auto; }
 }
+
+
+/* Photo backup panel */
+.photo-backup { margin-bottom: var(--s-4); }
+.photo-backup__body { display: flex; flex-direction: column; gap: var(--s-3); }
+.photo-backup__opt { display: flex; align-items: center; gap: var(--s-2); font-size: 0.9rem; color: var(--ink-soft); }
+.photo-backup__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.photo-backup__steps { margin: 0; padding-left: 1.2em; color: var(--ink-soft); font-size: 0.9rem; line-height: 1.6; }
+.photo-backup__progress { margin-top: var(--s-3); display: flex; flex-direction: column; gap: var(--s-2); }
+.photo-backup__bar { height: 8px; border-radius: var(--r-full); background: var(--neutral-100); overflow: hidden; }
+.photo-backup__bar span { display: block; height: 100%; background: var(--accent); border-radius: var(--r-full); transition: width 200ms ease-out; }

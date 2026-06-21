@@ -1,5 +1,6 @@
 import { CheckCircle2, Cloud, Globe, HardDrive, Wifi, XCircle } from "lucide-react";
 import { ReactNode, useEffect, useState } from "react";
+import { PhotoBackupPanel } from "./PhotoBackupPanel";
 import { APIAuthConfig, CacheStats, cleanupCache, controlTunnel, createStorageChannel, eventsUrl, getAPIAuth, getCacheStats, getMountStatus, getShareConfig, getStorageSettings, MountStatus, setCacheConfig, ShareConfig, startMount, stopMount, StorageSettings, updateAPIAuth, updateShareConfig, updateStorageSettings } from "../api/agent";
 
 type Mode = "lan" | "domain" | "tunnel";
@@ -200,6 +201,8 @@ export function SettingsView() {
           <p>Chọn cách hệ thống tạo link chia sẻ. Mọi thứ kỹ thuật do app tự lo phía sau.</p>
         </div>
       </header>
+
+      <PhotoBackupPanel />
 
       <div className="settings-modes">
         <ModeCard
