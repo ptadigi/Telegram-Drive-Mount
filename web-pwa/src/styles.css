@@ -909,3 +909,9 @@ a.button { text-decoration: none; }
 .photo-backup__progress { margin-top: var(--s-3); display: flex; flex-direction: column; gap: var(--s-2); }
 .photo-backup__bar { height: 8px; border-radius: var(--r-full); background: var(--neutral-100); overflow: hidden; }
 .photo-backup__bar span { display: block; height: 100%; background: var(--accent); border-radius: var(--r-full); transition: width 200ms ease-out; }
+
+.photo-backup__ios-block { border: 1px solid var(--neutral-200); border-radius: var(--r-md); padding: var(--s-3); display: flex; flex-direction: column; gap: var(--s-2); }
+.photo-backup__shortcut { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-2); }
+.photo-backup__copyrow { display: flex; align-items: center; gap: var(--s-2); margin-top: 4px; }
+.photo-backup__copyrow code { flex: 1; overflow-x: auto; white-space: nowrap; background: var(--neutral-100); padding: 6px 8px; border-radius: var(--r-sm); font-size: 0.8rem; }
+.photo-backup__token { letter-spacing: 0.02em; }
